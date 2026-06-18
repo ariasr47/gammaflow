@@ -7,6 +7,11 @@ logger = logging.getLogger("GammaFlowAsync")
 
 
 class QuantEngine:
+    # Floor on time-to-expiry (years) for the analytical greeks. Charm ~ 1/t and
+    # gamma ~ 1/sqrt(t) diverge as t -> 0, so 0DTE/expiring contracts are clamped to
+    # ~1 trading day to keep the aggregates finite and meaningful.
+    MIN_GREEK_T = 1.0 / 365.0
+
     def __init__(self, risk_free_rate: float = 0.045, dividend_yield: float = 0.0):
         self.r = risk_free_rate
         # Default continuous dividend yield; can be overridden per-ticker at call time.
@@ -213,9 +218,19 @@ class QuantEngine:
         total_call_oi = 0
         total_put_oi = 0
 
+        # Exchange "today" (UTC date is close enough; the t-floor below covers the
+        # midnight edge). Contracts expiring before today are dropped entirely.
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
         for contract in contracts:
             try:
                 expiry = contract.get("expiration_date", "")
+
+                # Drop already-expired contracts: they carry no forward risk and their
+                # analytical greeks (charm ~ 1/t) diverge near expiry.
+                if not expiry or expiry[:10] < today_str:
+                    continue
+
                 t_years = self._calculate_time_to_expiry(str(expiry))
                 days_to_expiry = t_years * 365.0
 
@@ -259,11 +274,13 @@ class QuantEngine:
 
                 # IV arrives as a decimal from the data layer (e.g. 0.486).
                 sigma = max(iv, 0.0001)
-                d1, d2 = self._d1_d2(current_spot, strike, t_years, self.r, sigma, q)
+                # Clamp time so near-expiry greeks (esp. charm ~ 1/t) stay finite.
+                t_greek = max(t_years, self.MIN_GREEK_T)
+                d1, d2 = self._d1_d2(current_spot, strike, t_greek, self.r, sigma, q)
 
-                vanna = self._calc_vanna(d1, d2, sigma, t_years, q)
-                charm = self._calc_charm(contract_type, t_years, self.r, sigma, d1, d2, q)
-                volga = self._calc_volga(current_spot, t_years, d1, d2, sigma, q)
+                vanna = self._calc_vanna(d1, d2, sigma, t_greek, q)
+                charm = self._calc_charm(contract_type, t_greek, self.r, sigma, d1, d2, q)
+                volga = self._calc_volga(current_spot, t_greek, d1, d2, sigma, q)
 
                 # Dollar Exposure Normalizations
                 dollar_vanna = vanna * 0.01 * open_interest * 100 * current_spot
@@ -405,7 +422,7 @@ class QuantEngine:
                     iv = contract["implied_volatility"]
                     if iv <= 0.0: continue
 
-                    t = self._calculate_time_to_expiry(str(expiry))
+                    t = max(self._calculate_time_to_expiry(str(expiry)), self.MIN_GREEK_T)
                     flag = 'c' if contract_type in ['call', 'c'] else 'p'
                     sigma = iv  # decimal IV from the data layer
 
