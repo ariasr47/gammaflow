@@ -383,7 +383,10 @@ class QuantEngine:
         price_shifts = np.linspace(current_spot * 0.80, current_spot * 1.20, 100)
         previous_gex = None
         previous_spot = None
-        flip_price = current_spot
+
+        # Collect EVERY zero crossing (interpolated) so we can see whether the flip is a
+        # single regime boundary or one of several. Diagnostic for the flip methodology.
+        crossings = []
 
         for test_spot in price_shifts:
             current_gex = 0.0
@@ -411,12 +414,27 @@ class QuantEngine:
                 # grid points rather than snapping to the coarse grid step.
                 gex_span = current_gex - previous_gex
                 if gex_span != 0.0:
-                    flip_price = previous_spot + (-previous_gex) * (test_spot - previous_spot) / gex_span
+                    cross = previous_spot + (-previous_gex) * (test_spot - previous_spot) / gex_span
                 else:
-                    flip_price = test_spot
-                break
+                    cross = test_spot
+                # direction: '-> +' means net gamma turns positive moving up through here
+                direction = "-> +" if current_gex > previous_gex else "-> -"
+                crossings.append((round(float(cross), 2), direction))
 
             previous_gex = current_gex
             previous_spot = test_spot
 
-        return round(float(flip_price), 2)
+        if not crossings:
+            logger.info("Gamma flip: no zero crossing found in +/-20% scan; defaulting to spot")
+            return round(float(current_spot), 2)
+
+        first_cross = crossings[0][0]
+        nearest_cross = min(crossings, key=lambda c: abs(c[0] - current_spot))[0]
+        logger.info(
+            f"Gamma flip diagnostics: {len(crossings)} crossing(s) {crossings} | "
+            f"first(from -20%)={first_cross} | nearest-to-spot={nearest_cross} | "
+            f"spot={current_spot:.2f} | returning first={first_cross}"
+        )
+
+        # Behavior unchanged for now: return the first crossing from the bottom of the scan.
+        return first_cross
