@@ -37,22 +37,24 @@ class MassiveDataInterface:
         # Unified SDK Session initialization
         self.client = RESTClient(self.api_key)
 
-    def _is_market_closed(self, timestamp_ns: int) -> bool:
-        """Determines if the options snapshot timestamp occurs outside regular market hours (EST)."""
-        if timestamp_ns == 0:
-            return False
-
-        # Parse nanoseconds timestamp directly into UTC, then shift to Eastern Time
-        dt = datetime.fromtimestamp(timestamp_ns / 1e9, tz=timezone.utc)
-        dt_est = dt.astimezone(zoneinfo.ZoneInfo("America/New_York"))
-
-        # Weekend check
-        if dt_est.weekday() >= 5:
-            return True
-
-        market_open = time(9, 30)
-        market_close = time(16, 0)
-        return not (market_open <= dt_est.time() <= market_close)
+    def _current_market_phase(self) -> str:
+        """
+        Classifies the current Eastern-Time market phase, which decides the spot used
+        for GEX/greek calculations:
+          - 'rth'         : regular session in progress -> greeks priced at the live spot
+          - 'after_close' : weekday past the close -> greeks reflect today's session close
+          - 'closed_pre'  : before today's open, weekend, or holiday -> greeks reflect the
+                            previous completed session's close
+        """
+        now_et = datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+        if now_et.weekday() >= 5:
+            return "closed_pre"  # weekend -> last completed session is prior (Friday)
+        t = now_et.time()
+        if time(9, 30) <= t <= time(16, 0):
+            return "rth"
+        if t > time(16, 0):
+            return "after_close"  # today's session just completed
+        return "closed_pre"       # before the open -> last completed session is the prior day
 
     def fetch_historical_underlying_metrics(self, ticker: str) -> list[UnderlyingBarMetrics]:
         """
@@ -213,31 +215,49 @@ class MassiveDataInterface:
                 logger.warning(f"[{underlying_upper}] No valid option contracts returned")
                 return {}
 
-            # --- Spot for GEX/greek calculations. Outside RTH the options have stopped
-            # trading, so the closing greeks correspond to the cash close -- pairing them
-            # with the official close (not the drifting after-hours underlying) keeps the
-            # calculations consistent with the gamma the greeks were priced at. The live
-            # snapshot underlying is returned separately as current_spot (for display).
-            # During RTH the two coincide.
+            # --- Spot for GEX/greek calculations. Greeks are priced at the live spot
+            # during RTH; once the market closes they reflect the last completed session's
+            # close. So we use today's session close after the close, and the prior
+            # session's close pre-market / on weekends & holidays. The live (or
+            # after-hours) snapshot underlying is reported separately as current_spot for
+            # display. During RTH the two coincide.
             final_target_spot = synchronized_spot_price
+            phase = self._current_market_phase()
 
-            if self._is_market_closed(snapshot_timestamp):
-                logger.info(f"[{underlying_upper}] Market closed at snapshot time; using official cash close")
+            if phase == "rth":
+                logger.info(f"[{underlying_upper}] Market open; using live snapshot spot ${final_target_spot:.2f}")
+            else:
                 try:
-                    ticker_snapshot = self.client.get_snapshot_ticker("stocks", underlying_upper)
-                    day_bar = extract(ticker_snapshot, "day", {})
-                    cash_close = extract(day_bar, "close")
-                    if cash_close is not None and float(cash_close) > 0:
+                    snap = self.client.get_snapshot_ticker("stocks", underlying_upper)
+                    day_close = extract(extract(snap, "day", {}), "close")
+                    prev_close = extract(extract(snap, "prev_day", {}), "close")
+
+                    # After today's close use today's session; pre-market/weekend use the
+                    # prior session. Each falls back to the other if its bar is missing.
+                    if phase == "after_close":
+                        candidates = [("today's close", day_close), ("prior session close", prev_close)]
+                    else:  # closed_pre
+                        candidates = [("prior session close", prev_close), ("today's close", day_close)]
+
+                    chosen, chosen_label = None, None
+                    for label, c in candidates:
+                        if c is not None and float(c) > 0:
+                            chosen, chosen_label = float(c), label
+                            break
+
+                    if chosen is not None:
+                        final_target_spot = chosen
                         logger.info(
-                            f"[{underlying_upper}] Spot reconciled: snapshot ${synchronized_spot_price:.2f} "
-                            f"-> cash close ${float(cash_close):.2f}")
-                        final_target_spot = float(cash_close)
+                            f"[{underlying_upper}] Market closed ({phase}); using {chosen_label} "
+                            f"${chosen:.2f} (live underlying ${synchronized_spot_price:.2f})")
+                    else:
+                        logger.warning(
+                            f"[{underlying_upper}] No session close available; keeping snapshot spot "
+                            f"${synchronized_spot_price:.2f}")
                 except Exception as sdk_err:
                     logger.warning(
-                        f"[{underlying_upper}] Cash-close lookup failed; keeping snapshot spot "
+                        f"[{underlying_upper}] Session-close lookup failed; keeping snapshot spot "
                         f"${synchronized_spot_price:.2f}: {sdk_err}")
-            else:
-                logger.info(f"[{underlying_upper}] Market open; using live snapshot spot ${final_target_spot:.2f}")
 
             # --- ATM IV: take the NEAREST tenor that is at least MIN_DTE out (avoids
             # 0DTE/expiring noise), not the highest-OI expiration. This keeps the IV
