@@ -4,9 +4,10 @@
 conf/token.txt
 *.key
 *.pem
-# Generated runtime state (rewritten every 15 min by the engine loop)
+# Generated runtime state (rewritten every refresh by the engine loop)
 market_data.json
 strike_profile.json
+data/
 # Python
 __pycache__/
 *.py[cod]
