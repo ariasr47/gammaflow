@@ -28,6 +28,8 @@ if not logger.handlers:
 quant_engine = QuantEngine(risk_free_rate=0.045)
 data_provider = MassiveDataInterface()
 current_market_state = {}
+# Per-strike GEX/OI profile, kept separate from market_state so the AI payload stays lean.
+current_strike_profile = []
 
 
 async def market_data_engine_loop():
@@ -138,8 +140,18 @@ async def market_data_engine_loop():
                     f"ATM IV {s['atm_iv']:.2f}% | HV30 {s['hv_30d']:.2f}% | IV/HV {s['iv_hv_ratio']:.2f}"
                 )
 
+                # Per-strike profile kept separate (UI chart + diagnostics), not in the
+                # AI-facing market_state payload.
+                current_strike_profile[:] = gex_metrics["strike_profile"]
+
                 with open("market_data.json", "w") as f:
                     json.dump(current_market_state, f, indent=4)
+
+                with open("strike_profile.json", "w") as f:
+                    json.dump(
+                        {"ticker": s["ticker"], "spot": s["price"], "strikes": current_strike_profile},
+                        f, indent=4,
+                    )
 
             else:
                 logger.warning(f"[{target_ticker}] No option-chain data returned; skipping this cycle")
@@ -198,6 +210,20 @@ async def get_market_data():
             detail="The market data engine is currently bootstrapping. Please try again shortly."
         )
     return current_market_state
+
+
+@app.get("/api/strike-profile")
+async def get_strike_profile():
+    if not current_strike_profile:
+        raise HTTPException(
+            status_code=503,
+            detail="The strike profile is currently bootstrapping. Please try again shortly."
+        )
+    return {
+        "ticker": current_market_state.get("ticker"),
+        "spot": current_market_state.get("price"),
+        "strikes": current_strike_profile,
+    }
 
 
 if __name__ == "__main__":

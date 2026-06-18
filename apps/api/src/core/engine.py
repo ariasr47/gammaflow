@@ -151,6 +151,7 @@ class QuantEngine:
             "call_wall": 0.0, "put_wall": 0.0, "peak_gex_strike": 0.0,
             "gamma_flip": 0.0, "max_pain": 0.0, "max_pain_expiration": None,
             "net_vanna": 0.0, "net_charm": 0.0, "net_volga": 0.0, "put_call_ratio": 0.0,
+            "strike_profile": [],
         }
 
     @staticmethod
@@ -335,6 +336,30 @@ class QuantEngine:
         # the "Call GEX / Put GEX / Total GEX" breakdown shown on retail dashboards.
         total_gex = abs(total_call_gex) + abs(total_put_gex)
 
+        # Per-strike profile (net/call/put GEX + call/put OI), all expirations, for the
+        # UI Strike Profile chart and wall diagnostics. OI is summed across expirations
+        # (priced + unpriced); GEX comes from priced contracts in strike_gex_map.
+        strike_oi_total = {}
+        for strikes in exp_oi_map.values():
+            for k, oi in strikes.items():
+                acc = strike_oi_total.setdefault(k, {"call_oi": 0, "put_oi": 0})
+                acc["call_oi"] += oi["call_oi"]
+                acc["put_oi"] += oi["put_oi"]
+
+        strike_profile = []
+        for k in sorted(set(strike_gex_map) | set(strike_oi_total)):
+            g = strike_gex_map.get(k, {"call_gex": 0.0, "put_gex": 0.0, "net_gex": 0.0})
+            o = strike_oi_total.get(k, {"call_oi": 0, "put_oi": 0})
+            strike_profile.append({
+                "strike": k,
+                "net_gex": round(g["net_gex"], 2),
+                "call_gex": round(g["call_gex"], 2),
+                "put_gex": round(g["put_gex"], 2),
+                "call_oi": o["call_oi"],
+                "put_oi": o["put_oi"],
+                "total_oi": o["call_oi"] + o["put_oi"],
+            })
+
         return {
             "net_gex": round(total_net_gex, 2),
             "call_gex": round(total_call_gex, 2),
@@ -349,7 +374,8 @@ class QuantEngine:
             "net_vanna": round(total_net_vanna, 2),
             "net_charm": round(total_net_charm, 2),
             "net_volga": round(total_net_volga, 2),
-            "put_call_ratio": pc_ratio
+            "put_call_ratio": pc_ratio,
+            "strike_profile": strike_profile,
         }
 
     def _find_gamma_flip(self, contracts: list, current_spot: float, q: float = 0.0) -> float:
