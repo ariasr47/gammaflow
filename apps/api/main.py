@@ -127,9 +127,6 @@ async def market_data_engine_loop():
                     "hv_30d": hv_30d,
                     "iv_hv_ratio": iv_hv_ratio,
                     "net_flow": None,  # null until computed from the trades tape
-
-                    "macro_priority": "General",
-                    "news_summary": None
                 })
 
                 s = current_market_state

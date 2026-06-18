@@ -41,7 +41,3 @@ class MarketState(BaseModel):
     iv_hv_ratio: float
     net_flow: Optional[float] = None  # Order flow aggression; null until computed from the trades tape
     put_call_ratio: float
-
-    # Macro Regime (Flag for Tier 1 Catalyst Override)
-    macro_priority: str = "General"  # e.g., 'Tier1' or 'General'
-    news_summary: Optional[str] = None
