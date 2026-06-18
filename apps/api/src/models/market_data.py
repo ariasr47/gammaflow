@@ -19,18 +19,19 @@ class MarketState(BaseModel):
     net_charm: Optional[float] = None
     net_volga: Optional[float] = None
 
-    # Statistical Mean-Reversion Anchors (VWAP Deviations)
-    vwap: float
-    vwap_upper_2: float
-    vwap_upper_3: float
-    vwap_lower_2: float
-    vwap_lower_3: float
+    # Statistical Mean-Reversion Anchors (session-anchored VWAP ± volume-weighted std)
+    # Null when intraday bars are unavailable / too sparse to form stable bands.
+    vwap: Optional[float] = None
+    vwap_upper_2: Optional[float] = None
+    vwap_upper_3: Optional[float] = None
+    vwap_lower_2: Optional[float] = None
+    vwap_lower_3: Optional[float] = None
 
     # Volatility & Sentiment
     atm_iv: float
     hv_30d: float
     iv_hv_ratio: float
-    net_flow: float  # Order flow aggression (Volume Ask - Volume Bid)
+    net_flow: Optional[float] = None  # Order flow aggression; null until computed from the trades tape
     put_call_ratio: float
 
     # Macro Regime (Flag for Tier 1 Catalyst Override)

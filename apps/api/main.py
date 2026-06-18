@@ -45,6 +45,11 @@ async def market_data_engine_loop():
                 data_provider.fetch_historical_underlying_metrics, target_ticker
             )
 
+            # 3. Gather intraday 1-minute bars for the session-anchored VWAP + bands
+            intraday_bars = await asyncio.to_thread(
+                data_provider.fetch_intraday_session_bars, target_ticker
+            )
+
             if market_data and market_data.get("synchronized_spot", 0) > 0:
                 contracts = market_data.get("contracts", [])
                 exp_counts = {}
@@ -67,18 +72,13 @@ async def market_data_engine_loop():
                     bar["close"] for bar in underlying_history if bar.get("close") is not None
                 ]
 
-                # Isolate the current day's VWAP anchor from the end of the chronological list
-                latest_raw_vwap = (
-                    underlying_history[-1]["vwap"]
-                    if underlying_history and underlying_history[-1].get("vwap") is not None
-                    else 0.0
-                )
-
                 # Compute 30-day realized volatility metrics via sorted bar lists
                 hv_30d = quant_engine.calculate_historical_volatility_30d(historical_closes)
 
-                # Compute statistical deviation bands around our active VWAP anchor
-                vwap_bands = quant_engine.calculate_vwap_bands(latest_raw_vwap, historical_closes)
+                # Compute the session-anchored VWAP and volume-weighted deviation bands
+                vwap_bands = quant_engine.calculate_vwap_bands(intraday_bars)
+                if not vwap_bands:
+                    logger.warning("Intraday VWAP bands unavailable this cycle; emitting null VWAP fields.")
 
                 # Massive returns IV as a decimal (0.486); express as a percentage to match hv_30d.
                 atm_iv = market_data["atm_iv"] * 100.0
@@ -109,16 +109,16 @@ async def market_data_engine_loop():
                     "net_volga": gex_metrics["net_volga"],
                     "put_call_ratio": gex_metrics["put_call_ratio"],
 
-                    "vwap": vwap_bands["vwap"],
-                    "vwap_upper_2": vwap_bands["vwap_upper_2"],
-                    "vwap_upper_3": vwap_bands["vwap_upper_3"],
-                    "vwap_lower_2": vwap_bands["vwap_lower_2"],
-                    "vwap_lower_3": vwap_bands["vwap_lower_3"],
+                    "vwap": vwap_bands.get("vwap"),
+                    "vwap_upper_2": vwap_bands.get("vwap_upper_2"),
+                    "vwap_upper_3": vwap_bands.get("vwap_upper_3"),
+                    "vwap_lower_2": vwap_bands.get("vwap_lower_2"),
+                    "vwap_lower_3": vwap_bands.get("vwap_lower_3"),
 
                     "atm_iv": round(atm_iv, 4),
                     "hv_30d": hv_30d,
                     "iv_hv_ratio": iv_hv_ratio,
-                    "net_flow": 0.0,
+                    "net_flow": None,  # null until computed from the trades tape
 
                     "macro_priority": "General",
                     "news_summary": None

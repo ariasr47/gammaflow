@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 import logging
 from scipy.stats import norm
 
@@ -93,35 +93,56 @@ class QuantEngine:
             logger.error(f"Error computing quantitative 30-day realized volatility: {str(e)}")
             return 0.0
 
-    def calculate_vwap_bands(self, latest_vwap: float, closing_prices: list) -> dict:
+    def calculate_vwap_bands(self, intraday_bars: list, regular_hours_only: bool = True,
+                             min_bars: int = 10) -> dict:
         """
-        Computes 2 and 3 standard deviation volatility bands around the trailing
-        VWAP anchor using the last 20 closing sessions.
+        Computes a session-anchored VWAP and volume-weighted standard-deviation bands
+        from 1-minute bars. The latest session present in the data is used, so when the
+        market is closed this naturally resolves to the last completed session.
+
+            VWAP   = sum(vw_i * v_i) / sum(v_i)
+            sigma  = sqrt( sum(v_i * (vw_i - VWAP)^2) / sum(v_i) )
+            band_k = VWAP +/- k * sigma
+
+        Returns {} when bars are missing or too sparse (early-session sigma is unstable),
+        signalling the caller to emit null VWAP fields rather than misleading numbers.
         """
-        if not closing_prices or len(closing_prices) < 20 or latest_vwap <= 0.0:
-            return {
-                "vwap": latest_vwap,
-                "vwap_upper_2": latest_vwap, "vwap_upper_3": latest_vwap,
-                "vwap_lower_2": latest_vwap, "vwap_lower_3": latest_vwap
-            }
+        if not intraday_bars:
+            return {}
+
         try:
-            # Extract sample standard deviation across a standard 20-day trading window
-            sample_series = np.array(closing_prices[-20:], dtype=float)
-            historical_std = np.std(sample_series, ddof=1)
+            latest_session = max(b["session"] for b in intraday_bars)
+            rows = [
+                b for b in intraday_bars
+                if b["session"] == latest_session and b.get("v") and b.get("vw") is not None
+            ]
+            if regular_hours_only:
+                rows = [b for b in rows if time(9, 30) <= b["minute"] <= time(16, 0)]
+
+            if len(rows) < min_bars:
+                logger.warning(
+                    f"VWAP: only {len(rows)} bars for session {latest_session}; insufficient for stable bands.")
+                return {}
+
+            vol = np.array([b["v"] for b in rows], dtype=float)
+            vw = np.array([b["vw"] for b in rows], dtype=float)
+            total_vol = vol.sum()
+            if total_vol <= 0:
+                return {}
+
+            vwap = float((vw * vol).sum() / total_vol)
+            sigma = float(np.sqrt((vol * (vw - vwap) ** 2).sum() / total_vol))
 
             return {
-                "vwap": round(latest_vwap, 2),
-                "vwap_upper_2": round(latest_vwap + (2.0 * historical_std), 2),
-                "vwap_upper_3": round(latest_vwap + (3.0 * historical_std), 2),
-                "vwap_lower_2": round(latest_vwap - (2.0 * historical_std), 2),
-                "vwap_lower_3": round(latest_vwap - (3.0 * historical_std), 2),
+                "vwap": round(vwap, 2),
+                "vwap_upper_2": round(vwap + 2.0 * sigma, 2),
+                "vwap_upper_3": round(vwap + 3.0 * sigma, 2),
+                "vwap_lower_2": round(vwap - 2.0 * sigma, 2),
+                "vwap_lower_3": round(vwap - 3.0 * sigma, 2),
             }
-        except Exception:
-            return {
-                "vwap": latest_vwap,
-                "vwap_upper_2": latest_vwap, "vwap_upper_3": latest_vwap,
-                "vwap_lower_2": latest_vwap, "vwap_lower_3": latest_vwap
-            }
+        except Exception as e:
+            logger.error(f"Error computing session-anchored VWAP bands: {str(e)}")
+            return {}
 
     def process_gex_profile(self, market_data: dict, max_days_to_expiry: float = None,
                             dividend_yield: float = None) -> dict:

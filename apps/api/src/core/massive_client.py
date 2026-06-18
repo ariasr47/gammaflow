@@ -105,6 +105,46 @@ class MassiveDataInterface:
         except Exception:
             return -1.0
 
+    def fetch_intraday_session_bars(self, ticker: str) -> list[dict]:
+        """
+        Streams 1-minute bars over a short trailing window so the engine can build a
+        session-anchored VWAP and volume-weighted deviation bands. A multi-day window
+        is requested as a cushion for weekends/holidays; the engine selects the latest
+        session. Each row carries the bar's volume-weighted price (vw) and volume (v),
+        plus the Eastern-Time session date and minute for RTH filtering.
+        """
+        ticker_upper = ticker.upper()
+        now = datetime.now()
+        from_date = (now - timedelta(days=4)).strftime("%Y-%m-%d")
+        to_date = now.strftime("%Y-%m-%d")
+
+        rows: list[dict] = []
+        try:
+            logger.info(f"SDK Query: Streaming 1-minute bars for {ticker_upper} from {from_date} to {to_date}")
+            bars = self.client.list_aggs(ticker_upper, 1, "minute", from_date, to_date, True, "asc", 50000)
+
+            et_zone = zoneinfo.ZoneInfo("America/New_York")
+            for bar in bars:
+                ts_ms = extract(bar, "timestamp")
+                vw = extract(bar, "vwap")
+                vol = extract(bar, "volume")
+                if ts_ms is None or vw is None or vol is None:
+                    continue
+                et = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(et_zone)
+                rows.append({
+                    "session": et.date().isoformat(),
+                    "minute": et.time(),
+                    "vw": float(vw),
+                    "v": float(vol),
+                })
+
+            logger.info(f"SDK Ingestion: parsed {len(rows)} intraday bars for the VWAP engine.")
+            return rows
+
+        except Exception as e:
+            logger.error(f"SDK Exception during intraday bar ingestion: {str(e)}")
+            return rows
+
     def fetch_synchronized_options_market_state(self, underlying: str) -> dict:
         """
         Queries the Massive v3 Options Chain Snapshot for an underlying and returns a
