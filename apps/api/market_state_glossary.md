@@ -43,3 +43,53 @@ heading into. If `timestamp` looks stale, down-weight all greek/GEX fields.
 - `net_flow` — order-flow aggression. Currently `null` (not computed) — ignore until non-null.
 
 **Reliability order:** gamma structure (`net_gex`, `gamma_flip`, walls, `peak_gex_strike`) > `iv_hv_ratio`/VWAP > `max_pain` > higher-order greeks (directional only).
+
+---
+
+# `/api/signals` — pre-digested setups for ONE ticker
+
+This is the backend's interpretation of `market_state` (same source of truth). Prefer
+reasoning over these fields rather than re-deriving regime/levels yourself.
+
+```json
+{
+  "ticker": "TSLA",
+  "regime": "positive_gamma | negative_gamma",
+  "regime_note": "plain-English description of the regime",
+  "vol_regime": "iv_rich | iv_cheap | neutral",
+  "distances": { "call_wall_pct": 0.0057, "put_wall_pct": -0.0446, "gamma_flip_pct": -0.0251,
+                 "peak_gex_pct": 0.0057, "max_pain_pct": 0.0057 },
+  "setups": [ { "name": "...", "bias": "...", "strategy": "...", "rationale": "...", "conviction": "low|medium|high" } ],
+  "opportunity_score": 53
+}
+```
+
+- `regime` — the master switch. **`positive_gamma`** = dealers dampen moves → range-bound / mean-reverting (favor fading levels, selling premium). **`negative_gamma`** = dealers amplify → trending / breakout-prone (favor momentum, buying premium; do NOT fade).
+- `regime_note` — human-readable expansion of the regime.
+- `vol_regime` — `iv_rich` (IV/HV ≥ 1.10 → favor selling premium), `iv_cheap` (≤ 0.90 → favor buying premium), else `neutral`.
+- `distances` — signed distance from `price` to each level, as a fraction of price. **Positive = level is above price; negative = below.** (e.g. `call_wall_pct: 0.0057` = call wall 0.57% above; `put_wall_pct: -0.0446` = put wall 4.46% below.)
+- `setups[]` — detected confluence trades, **most actionable first**. Per setup:
+  - `name` — e.g. `Fade call wall`, `Fade put wall`, `VWAP band reversion`, `Range premium sell`, `Put-wall breakdown`, `Call-wall breakout (squeeze)`, `Gamma-flip transition`, `Pin confluence`, `Trend regime`.
+  - `bias` — `long`, `short`, `neutral`, `directional`, or `volatility`.
+  - `strategy` — suggested structure (e.g. "short / call credit spread", "iron condor", "long puts").
+  - `rationale` — why it fired (cites the specific levels). **Use this as the explanation.**
+  - `conviction` — `low` / `medium` / `high` (rises with confluence and IV alignment).
+- `opportunity_score` — 0–100, how actionable this ticker is right now (proximity to a level + IV extremity + number of setups + transition bonus). Higher = more setups stacking near a tradeable level.
+
+**How to read it:** lead with `regime`, take the top 1–2 `setups`, confirm direction against `distances` (is price actually near the level the setup names?) and `vol_regime` (does the structure fit — sell premium only when `iv_rich`, buy only when `iv_cheap`). An empty `setups` list means no clean edge right now — say so rather than forcing a trade.
+
+# `/api/scan` — opportunity-ranked watchlist
+
+```json
+{ "tickers": [
+  { "ticker": "NVDA", "opportunity_score": 54, "regime": "negative_gamma", "vol_regime": "iv_rich",
+    "price": 120.0, "gamma_flip": 118.0, "call_wall": 121.0, "put_wall": 110.0,
+    "setup_count": 1, "top_setup": "Trend regime", "top_bias": "directional" } ,
+  ... ] }
+```
+
+- `tickers` — **sorted by `opportunity_score` descending** (best opportunities first).
+- Each row is a summary; pull the full picture for a name via `/api/signals?ticker=` and `/api/market-data?ticker=`.
+- Use it to pick *which* names to focus on, then drill in. A high score flags "worth a look," not "take the trade" — always confirm with the per-ticker signals + the reliability order above.
+
+**Caveat:** scores are comparable across the watchlist but are heuristic rankings, not probabilities. Treat `conviction`/`opportunity_score` as triage, not certainty; size and stop accordingly.
