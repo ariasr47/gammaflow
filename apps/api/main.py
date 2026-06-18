@@ -57,10 +57,11 @@ async def market_data_engine_loop():
                 contracts = market_data.get("contracts", [])
                 expirations = sorted({c.get("expiration_date") for c in contracts if c.get("expiration_date")})
                 nearest_exp = expirations[0] if expirations else "n/a"
+                farthest_exp = expirations[-1] if expirations else "n/a"
 
                 logger.info(
                     f"[{target_ticker}] Option chain: {len(contracts)} contracts across "
-                    f"{len(expirations)} expirations (nearest {nearest_exp})"
+                    f"{len(expirations)} expirations (nearest {nearest_exp}, farthest {farthest_exp})"
                 )
 
                 # Compute core structural hedging levels using state-locked spot references
