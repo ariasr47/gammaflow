@@ -3,14 +3,15 @@ import pandas as pd
 from datetime import datetime, timezone
 import logging
 from scipy.stats import norm
-from vollib.black_scholes.greeks.numerical import gamma as bs_gamma
 
 logger = logging.getLogger("GammaFlowAsync")
 
 
 class QuantEngine:
-    def __init__(self, risk_free_rate: float = 0.045):
+    def __init__(self, risk_free_rate: float = 0.045, dividend_yield: float = 0.0):
         self.r = risk_free_rate
+        # Default continuous dividend yield; can be overridden per-ticker at call time.
+        self.q = dividend_yield
 
     def _calculate_time_to_expiry(self, expiry_str: str) -> float:
         """Calculates time to expiration as a fraction of a 365-day year."""
@@ -23,27 +24,42 @@ class QuantEngine:
         except Exception:
             return 0.0001
 
-    def _d1_d2(self, S: float, K: float, t: float, r: float, sigma: float):
-        """Calculates standard Black-Scholes d1 and d2 components."""
-        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * t) / (sigma * np.sqrt(t))
+    def _d1_d2(self, S: float, K: float, t: float, r: float, sigma: float, q: float = 0.0):
+        """
+        Generalized Black-Scholes d1/d2 using cost-of-carry b = r - q.
+        With q = 0 (no dividend) this reduces to the standard BS form.
+        """
+        b = r - q
+        d1 = (np.log(S / K) + (b + 0.5 * sigma ** 2) * t) / (sigma * np.sqrt(t))
         d2 = d1 - sigma * np.sqrt(t)
         return d1, d2
 
-    def _calc_vanna(self, d1: float, d2: float, sigma: float) -> float:
-        """Vanna = dDelta / dVol."""
-        return -norm.pdf(d1) * (d2 / sigma)
+    def _calc_gamma(self, S: float, K: float, t: float, r: float, sigma: float, q: float = 0.0) -> float:
+        """Generalized BSM gamma = e^{-q t} * phi(d1) / (S * sigma * sqrt(t))."""
+        d1, _ = self._d1_d2(S, K, t, r, sigma, q)
+        return np.exp(-q * t) * norm.pdf(d1) / (S * sigma * np.sqrt(t))
 
-    def _calc_charm(self, flag: str, t: float, r: float, sigma: float, d1: float, d2: float) -> float:
-        """Charm = -dDelta / dTime (Represents underlying asset daily Delta Bleed)."""
-        term1 = -norm.pdf(d1) * ((r / (sigma * np.sqrt(t))) - (d2 / (2 * t)))
+    def _calc_vanna(self, d1: float, d2: float, sigma: float, t: float, q: float = 0.0) -> float:
+        """Vanna = dDelta / dVol = -e^{-q t} * phi(d1) * d2 / sigma."""
+        return -np.exp(-q * t) * norm.pdf(d1) * (d2 / sigma)
+
+    def _calc_charm(self, flag: str, t: float, r: float, sigma: float, d1: float, d2: float, q: float = 0.0) -> float:
+        """
+        Charm = -dDelta / dTime (daily Delta Bleed), generalized via b = r - q.
+        The (b - r) = -q carry term vanishes for non-dividend underlyings, so this
+        reduces to the standard zero-carry charm when q = 0.
+        """
+        b = r - q
+        carry = np.exp((b - r) * t)  # == e^{-q t}
+        base = norm.pdf(d1) * ((b / (sigma * np.sqrt(t))) - (d2 / (2 * t)))
         if flag in ['call', 'c']:
-            return term1 - r * norm.cdf(d1)
+            return -carry * (base + (b - r) * norm.cdf(d1))
         else:
-            return term1 + r * norm.cdf(-d1)
+            return -carry * (base - (b - r) * norm.cdf(-d1))
 
-    def _calc_volga(self, S: float, t: float, d1: float, d2: float, sigma: float) -> float:
-        """Volga (Vomma) = dVega / dVol (Convexity of raw volatility sensitivity)."""
-        return S * np.sqrt(t) * norm.pdf(d1) * (d1 * d2 / sigma)
+    def _calc_volga(self, S: float, t: float, d1: float, d2: float, sigma: float, q: float = 0.0) -> float:
+        """Volga (Vomma) = dVega / dVol, with the e^{-q t} factor carried through Vega."""
+        return S * np.exp(-q * t) * np.sqrt(t) * norm.pdf(d1) * (d1 * d2 / sigma)
 
     def calculate_historical_volatility_30d(self, closing_prices: list) -> float:
         """
@@ -107,11 +123,16 @@ class QuantEngine:
                 "vwap_lower_2": latest_vwap, "vwap_lower_3": latest_vwap
             }
 
-    def process_gex_profile(self, market_data: dict, max_days_to_expiry: float = None) -> dict:
+    def process_gex_profile(self, market_data: dict, max_days_to_expiry: float = None,
+                            dividend_yield: float = None) -> dict:
         """
         Transforms the complete chain payload into structural dealer boundaries and
         aggregated hedging risk velocities across all expirations.
+
+        dividend_yield overrides the engine default for this ticker; pass the
+        underlying's continuous dividend yield (0.0 for non-payers like TSLA).
         """
+        q = self.q if dividend_yield is None else dividend_yield
         contracts = market_data.get("contracts", [])
         current_spot = market_data.get("synchronized_spot", 0.0)
 
@@ -155,11 +176,11 @@ class QuantEngine:
 
                 # IV arrives as a decimal from the data layer (e.g. 0.486).
                 sigma = max(iv, 0.0001)
-                d1, d2 = self._d1_d2(current_spot, strike, t_years, self.r, sigma)
+                d1, d2 = self._d1_d2(current_spot, strike, t_years, self.r, sigma, q)
 
-                vanna = self._calc_vanna(d1, d2, sigma)
-                charm = self._calc_charm(contract_type, t_years, self.r, sigma, d1, d2)
-                volga = self._calc_volga(current_spot, t_years, d1, d2, sigma)
+                vanna = self._calc_vanna(d1, d2, sigma, t_years, q)
+                charm = self._calc_charm(contract_type, t_years, self.r, sigma, d1, d2, q)
+                volga = self._calc_volga(current_spot, t_years, d1, d2, sigma, q)
 
                 # Dollar Exposure Normalizations
                 dollar_vanna = vanna * 0.01 * open_interest * 100 * current_spot
@@ -199,7 +220,7 @@ class QuantEngine:
         df_strikes = pd.DataFrame.from_dict(strike_gex_map, orient='index')
         call_wall = float(df_strikes['call_gex'].idxmax())
         put_wall = float(df_strikes['put_gex'].idxmin())
-        gamma_flip = self._find_gamma_flip(filtered_contracts, current_spot)
+        gamma_flip = self._find_gamma_flip(filtered_contracts, current_spot, q)
         pc_ratio = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 0.0
 
         return {
@@ -213,7 +234,7 @@ class QuantEngine:
             "put_call_ratio": pc_ratio
         }
 
-    def _find_gamma_flip(self, contracts: list, current_spot: float) -> float:
+    def _find_gamma_flip(self, contracts: list, current_spot: float, q: float = 0.0) -> float:
         """Simulates price shifts (+/- 20%) over the full array to isolate the true zero-gamma line."""
         price_shifts = np.linspace(current_spot * 0.80, current_spot * 1.20, 100)
         previous_gex = None
@@ -234,7 +255,7 @@ class QuantEngine:
                     flag = 'c' if contract_type in ['call', 'c'] else 'p'
                     sigma = iv  # decimal IV from the data layer
 
-                    calc_gamma = bs_gamma(flag, test_spot, strike, t, self.r, sigma)
+                    calc_gamma = self._calc_gamma(test_spot, strike, t, self.r, sigma, q)
                     gex_val = calc_gamma * open_interest * 100 * (test_spot ** 2) * 0.01
                     current_gex += gex_val if flag == 'c' else -gex_val
                 except Exception:
