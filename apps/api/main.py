@@ -102,8 +102,13 @@ async def market_data_engine_loop():
 
                     "call_wall": gex_metrics["call_wall"],
                     "put_wall": gex_metrics["put_wall"],
+                    "peak_gex_strike": gex_metrics["peak_gex_strike"],
                     "gamma_flip": gex_metrics["gamma_flip"],
+                    "max_pain": gex_metrics["max_pain"],
                     "net_gex": gex_metrics["net_gex"],
+                    "call_gex": gex_metrics["call_gex"],
+                    "put_gex": gex_metrics["put_gex"],
+                    "total_gex": gex_metrics["total_gex"],
                     "net_vanna": gex_metrics["net_vanna"],
                     "net_charm": gex_metrics["net_charm"],
                     "net_volga": gex_metrics["net_volga"],

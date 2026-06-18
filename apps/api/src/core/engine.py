@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 from datetime import datetime, time, timezone
 import logging
 from scipy.stats import norm
@@ -144,6 +143,39 @@ class QuantEngine:
             logger.error(f"VWAP: failed to compute session-anchored bands: {e}")
             return {}
 
+    @staticmethod
+    def _empty_gex_result() -> dict:
+        """Zeroed GEX result used when no usable contracts/spot are available."""
+        return {
+            "net_gex": 0.0, "call_gex": 0.0, "put_gex": 0.0, "total_gex": 0.0,
+            "call_wall": 0.0, "put_wall": 0.0, "peak_gex_strike": 0.0,
+            "gamma_flip": 0.0, "max_pain": 0.0,
+            "net_vanna": 0.0, "net_charm": 0.0, "net_volga": 0.0, "put_call_ratio": 0.0,
+        }
+
+    @staticmethod
+    def _calculate_max_pain(strike_oi_map: dict) -> float:
+        """
+        Max pain = the expiration price that minimizes the total intrinsic payout to
+        option holders across all open interest. Aggregated over all expirations here
+        (a simplification; a per-expiration max pain can be added later if needed).
+        """
+        strikes = sorted(strike_oi_map.keys())
+        if not strikes:
+            return 0.0
+
+        best_strike, best_payout = strikes[0], None
+        for k_test in strikes:
+            payout = 0.0
+            for k, oi in strike_oi_map.items():
+                if k_test > k:        # calls expire ITM
+                    payout += (k_test - k) * oi["call_oi"] * 100
+                elif k_test < k:      # puts expire ITM
+                    payout += (k - k_test) * oi["put_oi"] * 100
+            if best_payout is None or payout < best_payout:
+                best_payout, best_strike = payout, k_test
+        return float(best_strike)
+
     def process_gex_profile(self, market_data: dict, max_days_to_expiry: float = None,
                             dividend_yield: float = None) -> dict:
         """
@@ -158,13 +190,12 @@ class QuantEngine:
         current_spot = market_data.get("synchronized_spot", 0.0)
 
         if not contracts or current_spot <= 0:
-            return {
-                "net_gex": 0.0, "call_wall": 0.0, "put_wall": 0.0, "gamma_flip": 0.0,
-                "net_vanna": 0.0, "net_charm": 0.0, "net_volga": 0.0, "put_call_ratio": 0.0
-            }
+            return self._empty_gex_result()
 
         total_net_gex, total_net_vanna, total_net_charm, total_net_volga = 0.0, 0.0, 0.0, 0.0
+        total_call_gex, total_put_gex = 0.0, 0.0
         strike_gex_map = {}
+        strike_oi_map = {}
         filtered_contracts = []
 
         total_call_oi = 0
@@ -187,10 +218,15 @@ class QuantEngine:
 
                 filtered_contracts.append(contract)
 
+                if strike not in strike_oi_map:
+                    strike_oi_map[strike] = {"call_oi": 0, "put_oi": 0}
+
                 if contract_type in ['call', 'c']:
                     total_call_oi += open_interest
+                    strike_oi_map[strike]["call_oi"] += open_interest
                 elif contract_type in ['put', 'p']:
                     total_put_oi += open_interest
+                    strike_oi_map[strike]["put_oi"] += open_interest
 
                 # Primary Dollar GEX Scale Formula: Gamma * OI * 100 * Spot^2 * 0.01 [cite: 14]
                 dollar_gex = api_gamma * open_interest * 100 * (current_spot ** 2) * 0.01
@@ -224,8 +260,10 @@ class QuantEngine:
 
                 if contract_type in ['call', 'c']:
                     strike_gex_map[strike]["call_gex"] += dollar_gex
+                    total_call_gex += dollar_gex
                 else:
                     strike_gex_map[strike]["put_gex"] += dollar_gex
+                    total_put_gex += dollar_gex
 
                 strike_gex_map[strike]["net_gex"] += dollar_gex
 
@@ -233,22 +271,38 @@ class QuantEngine:
                 continue
 
         if not strike_gex_map:
-            return {
-                "net_gex": 0.0, "call_wall": 0.0, "put_wall": 0.0, "gamma_flip": 0.0,
-                "net_vanna": 0.0, "net_charm": 0.0, "net_volga": 0.0, "put_call_ratio": 0.0
-            }
+            return self._empty_gex_result()
 
-        df_strikes = pd.DataFrame.from_dict(strike_gex_map, orient='index')
-        call_wall = float(df_strikes['call_gex'].idxmax())
-        put_wall = float(df_strikes['put_gex'].idxmin())
+        # Walls are defined by open-interest concentration (matches the common retail
+        # convention, e.g. InsiderFinance): the strikes holding the most call / put OI.
+        call_wall = float(max(strike_oi_map, key=lambda k: strike_oi_map[k]["call_oi"]))
+        put_wall = float(max(strike_oi_map, key=lambda k: strike_oi_map[k]["put_oi"]))
+
+        # Peak GEX strike = the strike with the most total (gross) gamma exposure; the
+        # price magnet. This is the gamma-based concentration metric (distinct from walls).
+        peak_gex_strike = float(max(
+            strike_gex_map,
+            key=lambda k: abs(strike_gex_map[k]["call_gex"]) + abs(strike_gex_map[k]["put_gex"])
+        ))
+
         gamma_flip = self._find_gamma_flip(filtered_contracts, current_spot, q)
+        max_pain = self._calculate_max_pain(strike_oi_map)
         pc_ratio = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 0.0
+
+        # Gross split: total_gex sums magnitudes (put_gex is stored negative), matching
+        # the "Call GEX / Put GEX / Total GEX" breakdown shown on retail dashboards.
+        total_gex = abs(total_call_gex) + abs(total_put_gex)
 
         return {
             "net_gex": round(total_net_gex, 2),
+            "call_gex": round(total_call_gex, 2),
+            "put_gex": round(total_put_gex, 2),
+            "total_gex": round(total_gex, 2),
             "call_wall": call_wall,
             "put_wall": put_wall,
+            "peak_gex_strike": peak_gex_strike,
             "gamma_flip": gamma_flip,
+            "max_pain": max_pain,
             "net_vanna": round(total_net_vanna, 2),
             "net_charm": round(total_net_charm, 2),
             "net_volga": round(total_net_volga, 2),

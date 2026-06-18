@@ -9,10 +9,17 @@ class MarketState(BaseModel):
     timestamp_iso: Optional[str] = None  # human-readable UTC ISO-8601 for the consuming AI
 
     # Dealer Liquidity Levels (Structural Constraints)
-    call_wall: float
-    put_wall: float
+    call_wall: float       # strike with the most call open interest (OI-based wall)
+    put_wall: float        # strike with the most put open interest (OI-based wall)
+    peak_gex_strike: Optional[float] = None  # strike with the most gross gamma (price magnet)
     gamma_flip: float
+    max_pain: Optional[float] = None         # expiration price minimizing total option payout
     net_gex: float
+
+    # Gross gamma breakdown (mirrors the Call/Put/Total GEX shown on retail dashboards)
+    call_gex: Optional[float] = None         # sum of call dollar GEX (>= 0)
+    put_gex: Optional[float] = None          # sum of put dollar GEX (<= 0)
+    total_gex: Optional[float] = None        # |call_gex| + |put_gex|
 
     # Dealer Hedging Dynamics (The "Dealer Traps")
     net_vanna: Optional[float] = None

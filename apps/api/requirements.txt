@@ -1,5 +1,4 @@
 # Data Handling & Math
-pandas
 numpy
 scipy
 
