@@ -1,0 +1,25 @@
+# Secrets & credentials
+.env
+.env.*
+conf/token.txt
+*.key
+*.pem
+# Generated runtime state (this is rewritten every 15 min by the engine loop)
+market_data.json
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# IDE
+.idea/
+.vscode/
+# OS
+Thumbs.db
+.DS_Store
