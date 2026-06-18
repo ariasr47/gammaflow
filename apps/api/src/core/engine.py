@@ -101,32 +101,39 @@ class QuantEngine:
                              min_bars: int = 10) -> dict:
         """
         Computes a session-anchored VWAP and volume-weighted standard-deviation bands
-        from 1-minute bars. The latest session present in the data is used, so when the
-        market is closed this naturally resolves to the last completed session.
+        from 1-minute bars, using the latest session that actually has enough RTH bars.
+        Pre-market on a new day (or weekend/holiday) the current calendar session has no
+        regular-hours bars yet, so this falls back to the last completed RTH session --
+        the same "last completed session" basis used for the GEX spot.
 
             VWAP   = sum(vw_i * v_i) / sum(v_i)
             sigma  = sqrt( sum(v_i * (vw_i - VWAP)^2) / sum(v_i) )
             band_k = VWAP +/- k * sigma
 
-        Returns {} when bars are missing or too sparse (early-session sigma is unstable),
+        Returns {} when no session has enough bars (early-session sigma is unstable),
         signalling the caller to emit null VWAP fields rather than misleading numbers.
         """
         if not intraday_bars:
             return {}
 
-        try:        
-            latest_session = max(b["session"] for b in intraday_bars)
-            rows = [
-                b for b in intraday_bars
-                if b["session"] == latest_session and b.get("v") and b.get("vw") is not None
-            ]
-            if regular_hours_only:
-                rows = [b for b in rows if time(9, 30) <= b["minute"] <= time(16, 0)]
+        try:
+            # Group RTH-eligible bars by session, then pick the latest session that has
+            # at least min_bars (so pre-market/new-day falls back to the prior session).
+            sessions: dict = {}
+            for b in intraday_bars:
+                if not b.get("v") or b.get("vw") is None:
+                    continue
+                if regular_hours_only and not (time(9, 30) <= b["minute"] <= time(16, 0)):
+                    continue
+                sessions.setdefault(b["session"], []).append(b)
 
-            if len(rows) < min_bars:
-                logger.warning(
-                    f"VWAP: only {len(rows)} bars in session {latest_session} (need {min_bars}); skipping bands")
+            usable = sorted((s for s, r in sessions.items() if len(r) >= min_bars), reverse=True)
+            if not usable:
+                logger.warning(f"VWAP: no session with >= {min_bars} RTH bars; skipping bands")
                 return {}
+
+            session = usable[0]
+            rows = sessions[session]
 
             vol = np.array([b["v"] for b in rows], dtype=float)
             vw = np.array([b["vw"] for b in rows], dtype=float)
