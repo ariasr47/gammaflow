@@ -185,22 +185,27 @@ class MassiveDataInterface:
                 details = extract(contract, "details", {})
                 greeks = extract(contract, "greeks", {})
 
-                # GEX/greeks aggregation requires gamma; skip contracts the API
-                # has not priced.
-                if not greeks or extract(greeks, "gamma") is None:
-                    continue
+                strike = float(extract(details, "strike_price", 0.0))
+                contract_type = extract(details, "contract_type", "").lower()
+                if strike <= 0.0 or contract_type not in ("call", "put"):
+                    continue  # malformed contract
+
+                # Contracts Massive could not price greeks for (often deep ITM) are still
+                # kept so their open interest counts toward put/call ratio and max pain.
+                # Greeks are set to None so the engine excludes them from GEX/greeks only.
+                has_greeks = bool(greeks) and extract(greeks, "gamma") is not None
 
                 all_contracts.append({
-                    "strike_price": float(extract(details, "strike_price", 0.0)),
-                    "contract_type": extract(details, "contract_type", "").lower(),
+                    "strike_price": strike,
+                    "contract_type": contract_type,
                     "expiration_date": extract(details, "expiration_date", ""),
                     "open_interest": int(extract(contract, "open_interest", 0)),
-                    "implied_volatility": float(extract(contract, "implied_volatility", 0.0)),
+                    "implied_volatility": float(extract(contract, "implied_volatility", 0.0)) if has_greeks else 0.0,
                     "greeks": {
-                        "delta": float(extract(greeks, "delta", 0.0)),
-                        "gamma": float(extract(greeks, "gamma", 0.0)),
-                        "theta": float(extract(greeks, "theta", 0.0)),
-                        "vega": float(extract(greeks, "vega", 0.0)),
+                        "delta": float(extract(greeks, "delta", 0.0)) if has_greeks else None,
+                        "gamma": float(extract(greeks, "gamma", 0.0)) if has_greeks else None,
+                        "theta": float(extract(greeks, "theta", 0.0)) if has_greeks else None,
+                        "vega": float(extract(greeks, "vega", 0.0)) if has_greeks else None,
                     },
                 })
 

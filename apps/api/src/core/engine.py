@@ -213,11 +213,11 @@ class QuantEngine:
                 strike = contract["strike_price"]
                 contract_type = contract["contract_type"].lower()
                 open_interest = contract["open_interest"]
-                api_gamma = contract["greeks"]["gamma"]
-                iv = contract["implied_volatility"]
 
-                filtered_contracts.append(contract)
-
+                # Open-interest metrics (put/call ratio, max pain, per-strike OI) count
+                # EVERY contract, including ones Massive could not price greeks for --
+                # open interest exists independently of greek availability, and dropping
+                # unpriced (typically deep-ITM) contracts would bias these aggregates.
                 if strike not in strike_oi_map:
                     strike_oi_map[strike] = {"call_oi": 0, "put_oi": 0}
 
@@ -227,6 +227,15 @@ class QuantEngine:
                 elif contract_type in ['put', 'p']:
                     total_put_oi += open_interest
                     strike_oi_map[strike]["put_oi"] += open_interest
+
+                # GEX and the higher-order greeks require a priced gamma; skip unpriced
+                # contracts here only (their OI was already counted above).
+                api_gamma = (contract.get("greeks") or {}).get("gamma")
+                if api_gamma is None:
+                    continue
+                iv = contract["implied_volatility"]
+
+                filtered_contracts.append(contract)
 
                 # Primary Dollar GEX Scale Formula: Gamma * OI * 100 * Spot^2 * 0.01 [cite: 14]
                 dollar_gex = api_gamma * open_interest * 100 * (current_spot ** 2) * 0.01
