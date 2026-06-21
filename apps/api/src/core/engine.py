@@ -416,6 +416,46 @@ class QuantEngine:
             "strike_profile": strike_profile,
         }
 
+    def _gex_curve(self, contracts: list, price_shifts: np.ndarray, q: float = 0.0) -> np.ndarray:
+        """
+        Net dealer GEX at every spot in `price_shifts`, repricing gamma analytically across
+        the whole chain. Vectorized over the (grid x contracts) matrix: for each priced
+        contract the per-spot contribution is exactly
+
+            e^{-q t} * phi(d1) / (S * sigma * sqrt(t)) * OI * 100 * S^2 * 0.01
+
+        signed + for calls and - for puts -- i.e. _calc_gamma() per contract, summed. This
+        is the same formula the scalar double-loop used, just evaluated as NumPy arrays
+        instead of one scipy.norm.pdf call per (spot, contract) pair.
+        """
+        K, t, sigma, oi, sign = [], [], [], [], []
+        for c in contracts:
+            iv = c["implied_volatility"]
+            if iv <= 0.0:
+                continue
+            K.append(c["strike_price"])
+            t.append(max(self._calculate_time_to_expiry(str(c["expiration_date"])), self.MIN_GREEK_T))
+            sigma.append(iv)  # decimal IV from the data layer
+            oi.append(c["open_interest"])
+            sign.append(1.0 if c["contract_type"] in ['call', 'c'] else -1.0)
+
+        if not K:
+            return np.zeros_like(price_shifts, dtype=float)
+
+        K = np.asarray(K, dtype=float)
+        t = np.asarray(t, dtype=float)
+        sigma = np.asarray(sigma, dtype=float)
+        oi = np.asarray(oi, dtype=float)
+        sign = np.asarray(sign, dtype=float)
+
+        S = np.asarray(price_shifts, dtype=float)[:, None]               # (G, 1)
+        b = self.r - q
+        sqrt_t = np.sqrt(t)                                              # (N,)
+        d1 = (np.log(S / K) + (b + 0.5 * sigma ** 2) * t) / (sigma * sqrt_t)  # (G, N)
+        gamma = np.exp(-q * t) * norm.pdf(d1) / (S * sigma * sqrt_t)     # (G, N)
+        gex = gamma * oi * 100.0 * (S ** 2) * 0.01 * sign               # (G, N)
+        return gex.sum(axis=1)                                          # (G,)
+
     def _find_gamma_flip(self, contracts: list, current_spot: float, q: float = 0.0) -> float:
         """
         Finds the zero-gamma level by repricing net GEX across +/-20% spot shifts and
@@ -425,35 +465,19 @@ class QuantEngine:
         lowest crossing in the scan.
         """
         price_shifts = np.linspace(current_spot * 0.80, current_spot * 1.20, 100)
-        previous_gex = None
-        previous_spot = None
+        gex_curve = self._gex_curve(contracts, price_shifts, q)
 
         # Collect EVERY zero crossing (interpolated) so we can see whether the flip is a
         # single regime boundary or one of several. Diagnostic for the flip methodology.
         crossings = []
 
-        for test_spot in price_shifts:
-            current_gex = 0.0
-            for contract in contracts:
-                try:
-                    strike = contract["strike_price"]
-                    expiry = contract["expiration_date"]
-                    contract_type = contract["contract_type"]
-                    open_interest = contract["open_interest"]
-                    iv = contract["implied_volatility"]
-                    if iv <= 0.0: continue
+        for i in range(1, len(price_shifts)):
+            previous_spot = price_shifts[i - 1]
+            test_spot = price_shifts[i]
+            previous_gex = gex_curve[i - 1]
+            current_gex = gex_curve[i]
 
-                    t = max(self._calculate_time_to_expiry(str(expiry)), self.MIN_GREEK_T)
-                    flag = 'c' if contract_type in ['call', 'c'] else 'p'
-                    sigma = iv  # decimal IV from the data layer
-
-                    calc_gamma = self._calc_gamma(test_spot, strike, t, self.r, sigma, q)
-                    gex_val = calc_gamma * open_interest * 100 * (test_spot ** 2) * 0.01
-                    current_gex += gex_val if flag == 'c' else -gex_val
-                except Exception:
-                    continue
-
-            if previous_gex is not None and np.sign(current_gex) != np.sign(previous_gex):
+            if np.sign(current_gex) != np.sign(previous_gex):
                 # Linearly interpolate the zero crossing between the two bracketing
                 # grid points rather than snapping to the coarse grid step.
                 gex_span = current_gex - previous_gex
@@ -464,9 +488,6 @@ class QuantEngine:
                 # direction: '-> +' means net gamma turns positive moving up through here
                 direction = "-> +" if current_gex > previous_gex else "-> -"
                 crossings.append((round(float(cross), 2), direction))
-
-            previous_gex = current_gex
-            previous_spot = test_spot
 
         if not crossings:
             logger.info("Gamma flip: no zero crossing found in +/-20% scan; defaulting to spot")
