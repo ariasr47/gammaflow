@@ -200,10 +200,18 @@ class QuantEngine:
         return float(best_strike)
 
     def process_gex_profile(self, market_data: dict, max_days_to_expiry: float = None,
+                            min_days_to_expiry: float = None,
                             dividend_yield: float = None) -> dict:
         """
         Transforms the complete chain payload into structural dealer boundaries and
-        aggregated hedging risk velocities across all expirations.
+        aggregated hedging risk velocities across the chosen expiration window.
+
+        min_days_to_expiry / max_days_to_expiry bound the DTE window the gamma
+        structure is computed over (None = unbounded). Restricting to longer-dated
+        contracts (e.g. min 7, max 45) yields stabler walls/GEX/gamma-flip for swing
+        horizons, free of the 0DTE/weekly noise that shifts intraday. The window shapes
+        every gamma metric (walls, peak GEX, net/call/put GEX, gamma flip) but NOT max
+        pain, which keeps its own nearest-monthly-OPEX basis.
 
         dividend_yield overrides the engine default for this ticker; pass the
         underlying's continuous dividend yield (0.0 for non-payers like TSLA).
@@ -241,9 +249,6 @@ class QuantEngine:
                 t_years = self._calculate_time_to_expiry(str(expiry))
                 days_to_expiry = t_years * 365.0
 
-                if max_days_to_expiry is not None and days_to_expiry > max_days_to_expiry:
-                    continue
-
                 strike = contract["strike_price"]
                 contract_type = contract["contract_type"].lower()
                 open_interest = contract["open_interest"]
@@ -266,6 +271,15 @@ class QuantEngine:
                 elif contract_type in ['put', 'p']:
                     total_put_oi += open_interest
                     strikes_oi[strike]["put_oi"] += open_interest
+
+                # DTE window applies to the gamma structure only (walls, peak GEX,
+                # net/call/put GEX, and the gamma flip via filtered_contracts). It is
+                # placed AFTER the OI accounting so max pain and the put/call ratio stay
+                # on the full chain, independent of the window the caller selects.
+                if max_days_to_expiry is not None and days_to_expiry > max_days_to_expiry:
+                    continue
+                if min_days_to_expiry is not None and days_to_expiry < min_days_to_expiry:
+                    continue
 
                 # GEX and the higher-order greeks require a priced gamma; skip unpriced
                 # contracts here only (their OI was already counted above).

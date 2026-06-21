@@ -36,6 +36,11 @@ class MarketState(BaseModel):
     vwap_lower_2: Optional[float] = None
     vwap_lower_3: Optional[float] = None
 
+    # DTE window the gamma structure was computed over (null = full chain). Echoes the
+    # min_dte/max_dte the caller requested, for transparency. Does not affect max pain.
+    dte_min: Optional[int] = None
+    dte_max: Optional[int] = None
+
     # Volatility & Sentiment
     atm_iv: float
     hv_30d: float

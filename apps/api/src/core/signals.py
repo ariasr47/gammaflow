@@ -13,6 +13,7 @@ engine already produces and applies a transparent, regime-first rule set:
 All thresholds are module constants so they are easy to tune. Every setup carries a
 plain-English rationale so the downstream AI (and you) can see why it fired.
 """
+import hashlib
 import logging
 
 logger = logging.getLogger("GammaFlowAsync")
@@ -23,6 +24,9 @@ FAR_LEVEL_PCT = 0.03         # proximity score decays to 0 by 3% away
 IV_RICH = 1.10               # iv_hv_ratio above -> IV rich (favor selling premium)
 IV_CHEAP = 0.90              # iv_hv_ratio below -> IV cheap (favor buying premium)
 FLIP_PROXIMITY_PCT = 0.01    # within 1% of gamma_flip -> regime-transition risk
+
+DEFAULT_GATE_SCORE = 50      # opportunity_score at/above which a snapshot is AI-worthy
+ACTIONABLE_CONVICTIONS = {"medium", "high"}
 
 
 def _signed_pct(level, price):
@@ -202,3 +206,63 @@ def _opportunity_score(dist: dict, ivhv, setups: list, near_flip: bool) -> int:
     transition = 10.0 if near_flip else 0.0
 
     return int(round(min(100.0, proximity + vol + setup + transition)))
+
+
+def _sign(x) -> int:
+    """-1 / 0 / +1 sign of a number, treating None as 0 (level above vs below price)."""
+    if x is None:
+        return 0
+    return (x > 0) - (x < 0)
+
+
+def state_fingerprint(sig: dict) -> str:
+    """
+    Short stable hash of the *material* picture, so a consumer (and our dedupe) can tell
+    "same picture" from "new picture" across polls. Deliberately COARSE -- the
+    opportunity_score is bucketed and only the SIGN of each level distance is used -- so a
+    60s poll on a quiet tape yields an identical fingerprint, and it only changes when the
+    regime, vol regime, the set of setups, the score bucket, or which side of a level
+    price sits on actually changes.
+    """
+    dist = sig.get("distances") or {}
+    parts = [
+        sig.get("regime"),
+        sig.get("vol_regime"),
+        ",".join(sorted(s["name"] for s in sig.get("setups", []))),
+        (sig.get("opportunity_score") or 0) // 10,
+        _sign(dist.get("call_wall_pct")),
+        _sign(dist.get("put_wall_pct")),
+        _sign(dist.get("gamma_flip_pct")),
+    ]
+    raw = "|".join(str(p) for p in parts)
+    return hashlib.sha1(raw.encode()).hexdigest()[:12]
+
+
+def evaluate_gate(sig: dict, score_threshold: int = DEFAULT_GATE_SCORE) -> dict:
+    """
+    Cheap rule-layer gate that decides whether a snapshot is worth escalating to the
+    downstream strategy AI. Keeps the AI off a firehose: it only fires when something is
+    actually actionable. Stateless -- the `changed` dedupe (needs the prior fingerprint)
+    is resolved by the caller; staleness is also forced off by the caller.
+
+    ready = True when ANY of:
+      - opportunity_score >= score_threshold
+      - any setup has medium/high conviction
+      - price is near the gamma flip (regime-transition risk)
+    """
+    reasons = []
+
+    score = sig.get("opportunity_score") or 0
+    if score >= score_threshold:
+        reasons.append(f"score>={score_threshold}")
+
+    for s in sig.get("setups", []):
+        if s.get("conviction") in ACTIONABLE_CONVICTIONS:
+            reasons.append(f"setup:{s['name']}({s['conviction']})")
+
+    dist = (sig.get("distances") or {}).get("gamma_flip_pct")
+    if dist is not None and abs(dist) <= FLIP_PROXIMITY_PCT:
+        reasons.append("near gamma flip")
+
+    return {"ready": bool(reasons), "reasons": reasons,
+            "state_fingerprint": state_fingerprint(sig), "score_threshold": score_threshold}

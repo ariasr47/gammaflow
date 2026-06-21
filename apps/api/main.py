@@ -1,16 +1,16 @@
 import asyncio
 import sys
+import time
 import logging
 import json
 import os
 from datetime import datetime, timezone
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.engine import QuantEngine
 from src.core.massive_client import MassiveDataInterface
-from src.core.signals import generate_signals
+from src.core.signals import generate_signals, evaluate_gate
 from src.models.market_data import MarketState
 
 logger = logging.getLogger("GammaFlowAsync")
@@ -29,24 +29,36 @@ if not logger.handlers:
 quant_engine = QuantEngine(risk_free_rate=0.045)
 data_provider = MassiveDataInterface()
 
-# Watchlist (comma-separated WATCHLIST env var, default TSLA). The first entry is the
-# default ticker that endpoints return when no ?ticker= is supplied.
-WATCHLIST = [t.strip().upper() for t in os.getenv("WATCHLIST", "TSLA").split(",") if t.strip()] or ["TSLA"]
-DEFAULT_TICKER = WATCHLIST[0]
-REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "900"))
 DATA_DIR = "data"
 
-# Per-ticker in-memory stores the API serves from.
-market_states: dict = {}      # ticker -> market_state dict
-strike_profiles: dict = {}    # ticker -> per-strike profile list
-signals_store: dict = {}      # ticker -> signals dict
-current_scan: list = []       # ranked opportunity rows across the watchlist
+# --- Polling / freshness / gate config (env-overridable) ---
+# Cache TTL should match the consumer's poll interval (default 60s): repeated polls within
+# the window are served from memory with no Massive call.
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
+# Snapshot age (now - options snapshot time) beyond which the data is flagged stale and the
+# AI gate is forced off. Default ~15-min delay + slack; drop to ~120 on a real-time tier.
+STALE_AFTER_SECONDS = int(os.getenv("STALE_AFTER_SECONDS", "1200"))
+# opportunity_score at/above which a snapshot is worth escalating to the strategy AI.
+GATE_SCORE = int(os.getenv("GATE_SCORE", "50"))
+
+# In-memory state. Mutated only from the event loop (after awaiting the worker thread), so
+# no locking is needed. _cache is keyed by (ticker, min_dte, max_dte); _last_fingerprint
+# tracks the last DISTINCT fingerprint per ticker for the `changed` dedupe flag.
+_cache: dict = {}
+_last_fingerprint: dict = {}
 
 
 def _build_market_state(ticker: str, market_data: dict, underlying_history: list,
-                        intraday_bars: list) -> tuple[dict, list]:
-    """Compute the full market_state dict and per-strike profile for one ticker."""
-    gex_metrics = quant_engine.process_gex_profile(market_data)
+                        intraday_bars: list, min_dte: int | None = None,
+                        max_dte: int | None = None) -> tuple[dict, list]:
+    """Compute the full market_state dict and per-strike profile for one ticker.
+
+    min_dte / max_dte bound the expiration window the gamma structure (walls, GEX,
+    gamma flip) is computed over; None leaves the full chain. Max pain and the
+    put/call ratio stay on the full chain regardless (see QuantEngine.process_gex_profile).
+    """
+    gex_metrics = quant_engine.process_gex_profile(
+        market_data, max_days_to_expiry=max_dte, min_days_to_expiry=min_dte)
 
     historical_closes = [b["close"] for b in underlying_history if b.get("close") is not None]
     hv_30d = quant_engine.calculate_historical_volatility_30d(historical_closes)
@@ -95,6 +107,9 @@ def _build_market_state(ticker: str, market_data: dict, underlying_history: list
         "vwap_lower_2": vwap_bands.get("vwap_lower_2"),
         "vwap_lower_3": vwap_bands.get("vwap_lower_3"),
 
+        "dte_min": min_dte,
+        "dte_max": max_dte,
+
         "atm_iv": round(atm_iv, 4),
         "hv_30d": hv_30d,
         "iv_hv_ratio": iv_hv_ratio,
@@ -113,27 +128,23 @@ def _write_ticker_files(ticker: str, state: dict, profile: list, sig: dict):
     with open(os.path.join(DATA_DIR, f"{ticker}_strike_profile.json"), "w") as f:
         json.dump({"ticker": ticker, "spot": state["price"], "strikes": profile}, f, indent=4)
 
-    # Backward-compatible top-level files for the default ticker.
-    if ticker == DEFAULT_TICKER:
-        with open("market_data.json", "w") as f:
-            json.dump(state, f, indent=4)
-        with open("strike_profile.json", "w") as f:
-            json.dump({"ticker": ticker, "spot": state["price"], "strikes": profile}, f, indent=4)
 
+def compute_ticker(ticker: str, min_dte: int | None = None,
+                   max_dte: int | None = None) -> dict | None:
+    """
+    Fetch + compute everything for ONE ticker on demand and return the full bundle.
+    Returns None when the symbol has no usable option chain (so callers can 404).
 
-def process_ticker(ticker: str) -> bool:
+    Synchronous (does blocking SDK I/O); endpoints run it in a worker thread.
     """
-    Fetch + compute everything for one ticker and update the in-memory stores.
-    Synchronous (does blocking SDK I/O); the loop runs it in a worker thread.
-    """
-    logger.info(f"[{ticker}] Starting market data refresh")
+    logger.info(f"[{ticker}] On-demand refresh (min_dte={min_dte}, max_dte={max_dte})")
     market_data = data_provider.fetch_synchronized_options_market_state(ticker)
     underlying_history = data_provider.fetch_historical_underlying_metrics(ticker)
     intraday_bars = data_provider.fetch_intraday_session_bars(ticker)
 
     if not market_data or market_data.get("synchronized_spot", 0) <= 0:
-        logger.warning(f"[{ticker}] No option-chain data returned; skipping this cycle")
-        return False
+        logger.warning(f"[{ticker}] No option-chain data returned")
+        return None
 
     contracts = market_data.get("contracts", [])
     expirations = sorted({c.get("expiration_date") for c in contracts if c.get("expiration_date")})
@@ -142,12 +153,9 @@ def process_ticker(ticker: str) -> bool:
         f"(nearest {expirations[0] if expirations else 'n/a'}, farthest {expirations[-1] if expirations else 'n/a'})"
     )
 
-    state, profile = _build_market_state(ticker, market_data, underlying_history, intraday_bars)
+    state, profile = _build_market_state(
+        ticker, market_data, underlying_history, intraday_bars, min_dte, max_dte)
     sig = generate_signals(state)
-
-    market_states[ticker] = state
-    strike_profiles[ticker] = profile
-    signals_store[ticker] = sig
 
     top = sig["setups"][0]["name"] if sig["setups"] else "none"
     logger.info(
@@ -158,95 +166,19 @@ def process_ticker(ticker: str) -> bool:
     )
 
     _write_ticker_files(ticker, state, profile, sig)
-    return True
-
-
-def build_scan() -> list:
-    """Rank watchlist tickers by opportunity score for the scanner."""
-    rows = []
-    for t in WATCHLIST:
-        sig = signals_store.get(t)
-        st = market_states.get(t)
-        if not sig or not st:
-            continue
-        top = sig["setups"][0] if sig["setups"] else None
-        rows.append({
-            "ticker": t,
-            "opportunity_score": sig["opportunity_score"],
-            "regime": sig["regime"],
-            "vol_regime": sig["vol_regime"],
-            "price": st.get("price"),
-            "gamma_flip": st.get("gamma_flip"),
-            "call_wall": st.get("call_wall"),
-            "put_wall": st.get("put_wall"),
-            "setup_count": len(sig["setups"]),
-            "top_setup": top["name"] if top else None,
-            "top_bias": top["bias"] if top else None,
-        })
-    rows.sort(key=lambda r: r["opportunity_score"], reverse=True)
-    return rows
-
-
-async def market_data_engine_loop():
-    """Background loop: refresh every watchlist ticker, then rank them by opportunity."""
-    logger.info(f"Engine loop started for watchlist: {', '.join(WATCHLIST)}")
-    while True:
-        try:
-            for ticker in WATCHLIST:
-                try:
-                    await asyncio.to_thread(process_ticker, ticker)
-                except Exception as e:
-                    logger.error(f"[{ticker}] Refresh failed: {e}", exc_info=True)
-
-            global current_scan
-            current_scan = build_scan()
-            os.makedirs(DATA_DIR, exist_ok=True)
-            with open(os.path.join(DATA_DIR, "scan.json"), "w") as f:
-                json.dump({"generated_iso": datetime.now(timezone.utc).isoformat(),
-                           "tickers": current_scan}, f, indent=4)
-            if current_scan:
-                lead = current_scan[0]
-                logger.info(
-                    f"Scan complete: {len(current_scan)} tickers ranked | "
-                    f"top {lead['ticker']} (score {lead['opportunity_score']}, {lead['regime']})")
-
-        except asyncio.CancelledError:
-            logger.info("Market data loop cancelled on shutdown")
-            break
-        except Exception as e:
-            logger.error(f"Engine loop error: {e}", exc_info=True)
-
-        await asyncio.sleep(REFRESH_SECONDS)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Warm-start the default ticker from its cached file if present.
-    for cache in (os.path.join(DATA_DIR, f"{DEFAULT_TICKER}_market_state.json"), "market_data.json"):
-        if os.path.exists(cache):
-            try:
-                with open(cache) as f:
-                    market_states[DEFAULT_TICKER] = json.load(f)
-                logger.info(f"Loaded cached market state for {DEFAULT_TICKER} from {cache} on startup")
-                break
-            except Exception as e:
-                logger.warning(f"Could not load cached market state from {cache}: {e}")
-
-    engine_task = asyncio.create_task(market_data_engine_loop())
-    yield
-    logger.info("Shutting down; stopping market data loop")
-    engine_task.cancel()
-    try:
-        await engine_task
-    except asyncio.CancelledError:
-        logger.info("Market data loop stopped")
+    return {
+        "market_state": state,
+        "signals": sig,
+        "strike_profile": {"ticker": ticker, "spot": state["price"], "strikes": profile},
+        "ai_eval": evaluate_gate(sig, GATE_SCORE),  # `changed` + staleness filled in at serve time
+    }
 
 
 app = FastAPI(
     title="GammaFlow Volatility API",
-    description="Serves net dealer gamma profiles, greeks, and ranked trade signals from Massive data.",
-    version="2.0.0",
-    lifespan=lifespan
+    description="Serves net dealer gamma profiles, greeks, and trade signals for a single "
+                "ticker on demand, over a selectable expiration (DTE) window.",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -258,45 +190,122 @@ app.add_middleware(
 )
 
 
-def _resolve(ticker: str | None) -> str:
-    return (ticker or DEFAULT_TICKER).upper()
+async def _serve(ticker: str, min_dte: int | None, max_dte: int | None) -> dict:
+    """
+    Cache-aware serve path: returns the full wrapped bundle (market_state + signals +
+    strike_profile + ai_eval + meta) for one ticker. Computes on cache-miss (in a worker
+    thread, since the SDK blocks), serves from memory within CACHE_TTL_SECONDS. 404 when
+    the symbol has no option chain.
+    """
+    t = ticker.upper()
+    key = (t, min_dte, max_dte)
+    now = time.time()
+
+    entry = _cache.get(key)
+    hit = entry is not None and (now - entry["computed_at"]) < CACHE_TTL_SECONDS
+
+    if not hit:
+        bundle = await asyncio.to_thread(compute_ticker, t, min_dte, max_dte)
+        if bundle is None:
+            raise HTTPException(status_code=404, detail=f"No option-chain data available for {t}.")
+        # Resolve the dedupe flag against the last DISTINCT picture for this ticker.
+        fingerprint = bundle["ai_eval"]["state_fingerprint"]
+        changed = fingerprint != _last_fingerprint.get(t)
+        _last_fingerprint[t] = fingerprint
+        entry = {"bundle": bundle, "computed_at": now, "changed": changed}
+        _cache[key] = entry
+        # Opportunistically drop other expired keys so the cache can't grow unbounded.
+        for k in [k for k, e in _cache.items() if now - e["computed_at"] >= CACHE_TTL_SECONDS]:
+            _cache.pop(k, None)
+
+    return _wrap(entry, hit, now)
 
 
-@app.get("/api/watchlist")
-async def get_watchlist():
-    return {"watchlist": WATCHLIST, "default": DEFAULT_TICKER, "refresh_seconds": REFRESH_SECONDS}
+def _wrap(entry: dict, hit: bool, now: float) -> dict:
+    """Assemble the response envelope at serve time so freshness/age are always current."""
+    bundle = entry["bundle"]
+    state = bundle["market_state"]
+
+    snapshot_ns = state.get("timestamp") or 0
+    data_age = int(now - snapshot_ns / 1e9) if snapshot_ns > 0 else None
+    stale = data_age is not None and data_age > STALE_AFTER_SECONDS
+
+    ai_eval = dict(bundle["ai_eval"])
+    ai_eval["changed"] = entry["changed"]
+    if stale:
+        # Never ask the AI to trade on stale data.
+        ai_eval["ready"] = False
+        ai_eval["reasons"] = list(ai_eval["reasons"]) + ["stale data"]
+
+    return {
+        "market_state": state,
+        "signals": bundle["signals"],
+        "strike_profile": bundle["strike_profile"],
+        "ai_eval": ai_eval,
+        "meta": {
+            "served_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
+            "cache": {"hit": hit, "age_seconds": int(now - entry["computed_at"]),
+                      "ttl_seconds": CACHE_TTL_SECONDS},
+            "freshness": {"snapshot_iso": state.get("timestamp_iso"),
+                          "data_age_seconds": data_age, "stale": stale,
+                          "stale_after_seconds": STALE_AFTER_SECONDS},
+        },
+    }
+
+
+# Shared DTE query params. min_dte/max_dte bound the gamma-structure window (None = full
+# chain). For longer-dated/swing levels try min_dte=7&max_dte=45.
+_MinDTE = Query(None, ge=0, description="Drop contracts with fewer than this many days to expiry.")
+_MaxDTE = Query(None, ge=0, description="Drop contracts with more than this many days to expiry.")
+
+
+@app.get("/api/ticker/{ticker}")
+async def get_ticker_bundle(
+    ticker: str = Path(..., description="Underlying symbol, e.g. TSLA"),
+    min_dte: int | None = _MinDTE,
+    max_dte: int | None = _MaxDTE,
+):
+    """Full bundle (market_state + signals + strike_profile) for one ticker."""
+    return await _serve(ticker, min_dte, max_dte)
 
 
 @app.get("/api/market-data", response_model=MarketState)
-async def get_market_data(ticker: str | None = None):
-    state = market_states.get(_resolve(ticker))
-    if not state:
-        raise HTTPException(status_code=503, detail=f"No market data yet for {_resolve(ticker)}.")
-    return state
+async def get_market_data(
+    ticker: str = Query(..., description="Underlying symbol, e.g. TSLA"),
+    min_dte: int | None = _MinDTE,
+    max_dte: int | None = _MaxDTE,
+):
+    return (await _serve(ticker, min_dte, max_dte))["market_state"]
 
 
 @app.get("/api/strike-profile")
-async def get_strike_profile(ticker: str | None = None):
-    t = _resolve(ticker)
-    profile = strike_profiles.get(t)
-    if not profile:
-        raise HTTPException(status_code=503, detail=f"No strike profile yet for {t}.")
-    return {"ticker": t, "spot": (market_states.get(t) or {}).get("price"), "strikes": profile}
+async def get_strike_profile(
+    ticker: str = Query(..., description="Underlying symbol, e.g. TSLA"),
+    min_dte: int | None = _MinDTE,
+    max_dte: int | None = _MaxDTE,
+):
+    return (await _serve(ticker, min_dte, max_dte))["strike_profile"]
 
 
 @app.get("/api/signals")
-async def get_signals(ticker: str | None = None):
-    sig = signals_store.get(_resolve(ticker))
-    if not sig:
-        raise HTTPException(status_code=503, detail=f"No signals yet for {_resolve(ticker)}.")
-    return sig
+async def get_signals(
+    ticker: str = Query(..., description="Underlying symbol, e.g. TSLA"),
+    min_dte: int | None = _MinDTE,
+    max_dte: int | None = _MaxDTE,
+):
+    return (await _serve(ticker, min_dte, max_dte))["signals"]
 
 
-@app.get("/api/scan")
-async def get_scan():
-    if not current_scan:
-        raise HTTPException(status_code=503, detail="Scan not ready yet; engine is bootstrapping.")
-    return {"tickers": current_scan}
+# Friendly per-ticker route (e.g. /TSLA). Declared LAST and constrained to letters so it
+# can't shadow /docs, /openapi.json, or the /api/* routes above.
+@app.get("/{ticker}")
+async def get_ticker_page(
+    ticker: str = Path(..., pattern=r"^[A-Za-z]{1,6}$", description="Underlying symbol, e.g. TSLA"),
+    min_dte: int | None = _MinDTE,
+    max_dte: int | None = _MaxDTE,
+):
+    """Same full bundle as /api/ticker/{ticker}, on the friendly /SYMBOL URL."""
+    return await _serve(ticker, min_dte, max_dte)
 
 
 if __name__ == "__main__":

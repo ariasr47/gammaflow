@@ -30,6 +30,9 @@ heading into. If `timestamp` looks stale, down-weight all greek/GEX fields.
 - `max_pain_expiration` — expiration `max_pain` is for (nearest monthly OPEX, YYYY-MM-DD).
 - `put_call_ratio` — put OI / call OI, all expirations. >1 put-heavy, <1 call-heavy (positioning, not volume).
 
+## Expiration (DTE) window
+- `dte_min` / `dte_max` — the days-to-expiry window the **gamma structure** (`net_gex`, walls, `peak_gex_strike`, `gamma_flip`, gross GEX, higher-order greeks) was computed over. `null` = full chain. Set via the `min_dte` / `max_dte` query params. **Does NOT affect `max_pain` or `put_call_ratio`** — those always use the full chain. Restricting to e.g. 7–45 DTE gives stabler swing levels, free of the 0DTE/weekly noise that shifts intraday.
+
 ## Volatility
 - `atm_iv` — ATM implied vol, % annualized (nearest tenor ≥ 7 DTE).
 - `hv_30d` — 30-day realized vol, % annualized.
@@ -45,6 +48,60 @@ heading into. If `timestamp` looks stale, down-weight all greek/GEX fields.
 **Reliability order:** gamma structure (`net_gex`, `gamma_flip`, walls, `peak_gex_strike`) > `iv_hv_ratio`/VWAP > `max_pain` > higher-order greeks (directional only).
 
 ---
+
+# Endpoints — one ticker, on demand
+
+The API computes on request for ONE ticker (no background loop, no watchlist) and caches
+the result for a short TTL (default 60s) so polling at that cadence is instant and the
+upstream feed isn't hammered. Every endpoint accepts the symbol plus an optional DTE window:
+
+- `GET /{ticker}` — friendly URL (e.g. `/TSLA`). Returns the **full envelope** (below).
+- `GET /api/ticker/{ticker}` — identical full envelope (canonical machine path).
+- `GET /api/market-data?ticker=` — just the `market_state` slice.
+- `GET /api/signals?ticker=` — just the `signals` slice.
+- `GET /api/strike-profile?ticker=` — just the per-strike profile.
+
+**Query params (all routes):** `min_dte`, `max_dte` — bound the expiration window the
+gamma structure is computed over (omit for the full chain). For longer-dated / swing
+levels use e.g. `?min_dte=7&max_dte=45`; the chosen window is echoed back as
+`dte_min`/`dte_max`. The window shapes the gamma fields only — `max_pain` and
+`put_call_ratio` stay on the full chain.
+
+Unknown symbols (no option chain) return **404**. All routes share the cache, so a slice
+request right after a bundle request is free; AI consumers should use the bundle route to
+get `ai_eval` + `meta` in one call.
+
+## Response envelope (bundle routes)
+
+```json
+{
+  "market_state": { ... }, "signals": { ... }, "strike_profile": { ... },
+  "ai_eval": { "ready": true, "reasons": ["score>=50", "setup:Fade call wall(high)"],
+               "changed": true, "state_fingerprint": "a1b2c3d4e5f6", "score_threshold": 50 },
+  "meta": {
+    "served_at": "2026-06-21T13:45:01+00:00",
+    "cache":     { "hit": false, "age_seconds": 0, "ttl_seconds": 60 },
+    "freshness": { "snapshot_iso": "2026-06-21T13:30:00+00:00",
+                   "data_age_seconds": 901, "stale": false, "stale_after_seconds": 1200 }
+  }
+}
+```
+
+- `meta.cache` — `hit` = served from memory (no upstream fetch); `age_seconds` since the
+  cached compute; `ttl_seconds` = poll cadence the cache is tuned to.
+- `meta.freshness` — **how old the actual market snapshot is.** `data_age_seconds` = now −
+  options-snapshot time; `stale` = it exceeds `stale_after_seconds` (default 1200 ≈ the
+  15-min delay + slack; lower to ~120 on a real-time tier). **Always check `stale` before
+  trusting the greeks/GEX.** Note `data_age_seconds` includes the feed's inherent delay,
+  so on the delayed tier expect ~900s+ even when everything is healthy.
+- `ai_eval` — the **gate** that decides if this snapshot is worth the downstream strategy
+  AI. `ready` = the rule layer found something actionable (score ≥ `score_threshold`, a
+  medium/high-conviction setup, or price near the gamma flip); `reasons` lists what fired.
+  `ready` is forced `false` (and `"stale data"` added to `reasons`) when `meta.freshness.stale`.
+  `changed` = the picture differs from the last distinct compute for this ticker (dedupe),
+  and `state_fingerprint` is a coarse, stable hash a consumer dedupes on. **Invoke the AI
+  only when `ready && changed` and the fingerprint is new** — see `prompts/strategy_prompt.md`
+  for the full hand-off contract and required output schema.
 
 # `/api/signals` — pre-digested setups for ONE ticker
 
@@ -78,18 +135,4 @@ reasoning over these fields rather than re-deriving regime/levels yourself.
 
 **How to read it:** lead with `regime`, take the top 1–2 `setups`, confirm direction against `distances` (is price actually near the level the setup names?) and `vol_regime` (does the structure fit — sell premium only when `iv_rich`, buy only when `iv_cheap`). An empty `setups` list means no clean edge right now — say so rather than forcing a trade.
 
-# `/api/scan` — opportunity-ranked watchlist
-
-```json
-{ "tickers": [
-  { "ticker": "NVDA", "opportunity_score": 54, "regime": "negative_gamma", "vol_regime": "iv_rich",
-    "price": 120.0, "gamma_flip": 118.0, "call_wall": 121.0, "put_wall": 110.0,
-    "setup_count": 1, "top_setup": "Trend regime", "top_bias": "directional" } ,
-  ... ] }
-```
-
-- `tickers` — **sorted by `opportunity_score` descending** (best opportunities first).
-- Each row is a summary; pull the full picture for a name via `/api/signals?ticker=` and `/api/market-data?ticker=`.
-- Use it to pick *which* names to focus on, then drill in. A high score flags "worth a look," not "take the trade" — always confirm with the per-ticker signals + the reliability order above.
-
-**Caveat:** scores are comparable across the watchlist but are heuristic rankings, not probabilities. Treat `conviction`/`opportunity_score` as triage, not certainty; size and stop accordingly.
+**Caveat:** `conviction`/`opportunity_score` are heuristic, not probabilities. Treat them as triage, not certainty; size and stop accordingly.
