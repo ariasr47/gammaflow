@@ -77,6 +77,8 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip }:
                 background: theme.palette.background.paper,
                 border: `1px solid ${theme.palette.divider}`,
               }}
+              labelStyle={{ color: theme.palette.text.secondary }}
+              itemStyle={{ color: theme.palette.text.primary }}
             />
             <ReferenceLine x={0} stroke={theme.palette.divider} />
             <ReferenceLine
