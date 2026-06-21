@@ -201,6 +201,7 @@ class QuantEngine:
 
     def process_gex_profile(self, market_data: dict, max_days_to_expiry: float = None,
                             min_days_to_expiry: float = None,
+                            expirations: set = None,
                             dividend_yield: float = None) -> dict:
         """
         Transforms the complete chain payload into structural dealer boundaries and
@@ -212,6 +213,11 @@ class QuantEngine:
         horizons, free of the 0DTE/weekly noise that shifts intraday. The window shapes
         every gamma metric (walls, peak GEX, net/call/put GEX, gamma flip) but NOT max
         pain, which keeps its own nearest-monthly-OPEX basis.
+
+        expirations, when provided, restricts the gamma structure to that explicit set of
+        expiration dates (YYYY-MM-DD); contracts outside it are dropped. It is applied
+        alongside the DTE window (both must pass) and, like the DTE window, shapes only
+        the gamma structure, not max pain / put-call ratio.
 
         dividend_yield overrides the engine default for this ticker; pass the
         underlying's continuous dividend yield (0.0 for non-payers like TSLA).
@@ -279,6 +285,8 @@ class QuantEngine:
                 if max_days_to_expiry is not None and days_to_expiry > max_days_to_expiry:
                     continue
                 if min_days_to_expiry is not None and days_to_expiry < min_days_to_expiry:
+                    continue
+                if expirations is not None and expiry[:10] not in expirations:
                     continue
 
                 # GEX and the higher-order greeks require a priced gamma; skip unpriced

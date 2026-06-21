@@ -50,17 +50,29 @@ _cache: dict = {}
 _last_fingerprint: dict = {}
 
 
+def _dte_days(date_str: str) -> float | None:
+    """Calendar days from now (UTC) to an expiration date (YYYY-MM-DD); None on parse failure."""
+    try:
+        d = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return round((d - datetime.now(timezone.utc)).total_seconds() / 86400.0, 1)
+    except Exception:
+        return None
+
+
 def _build_market_state(ticker: str, market_data: dict, underlying_history: list,
                         intraday_bars: list, min_dte: int | None = None,
-                        max_dte: int | None = None) -> tuple[dict, list]:
+                        max_dte: int | None = None,
+                        expirations: tuple | None = None) -> tuple[dict, list]:
     """Compute the full market_state dict and per-strike profile for one ticker.
 
     min_dte / max_dte bound the expiration window the gamma structure (walls, GEX,
-    gamma flip) is computed over; None leaves the full chain. Max pain and the
-    put/call ratio stay on the full chain regardless (see QuantEngine.process_gex_profile).
+    gamma flip) is computed over; expirations restricts it to an explicit set of dates.
+    None leaves the full chain. Max pain and the put/call ratio stay on the full chain
+    regardless (see QuantEngine.process_gex_profile).
     """
     gex_metrics = quant_engine.process_gex_profile(
-        market_data, max_days_to_expiry=max_dte, min_days_to_expiry=min_dte)
+        market_data, max_days_to_expiry=max_dte, min_days_to_expiry=min_dte,
+        expirations=set(expirations) if expirations else None)
 
     historical_closes = [b["close"] for b in underlying_history if b.get("close") is not None]
     hv_30d = quant_engine.calculate_historical_volatility_30d(historical_closes)
@@ -132,14 +144,19 @@ def _write_ticker_files(ticker: str, state: dict, profile: list, sig: dict):
 
 
 def compute_ticker(ticker: str, min_dte: int | None = None,
-                   max_dte: int | None = None) -> dict | None:
+                   max_dte: int | None = None,
+                   expirations: tuple | None = None) -> dict | None:
     """
     Fetch + compute everything for ONE ticker on demand and return the full bundle.
     Returns None when the symbol has no usable option chain (so callers can 404).
 
+    `expirations` (a tuple of YYYY-MM-DD dates) restricts the gamma structure to those
+    expirations; None uses the full chain (subject to min/max DTE).
+
     Synchronous (does blocking SDK I/O); endpoints run it in a worker thread.
     """
-    logger.info(f"[{ticker}] On-demand refresh (min_dte={min_dte}, max_dte={max_dte})")
+    logger.info(f"[{ticker}] On-demand refresh (min_dte={min_dte}, max_dte={max_dte}, "
+                f"expirations={len(expirations) if expirations else 'all'})")
     market_data = data_provider.fetch_options_market_state(ticker)
     underlying_history = data_provider.fetch_daily_bars(ticker)
     intraday_bars = data_provider.fetch_intraday_bars(ticker)
@@ -149,14 +166,18 @@ def compute_ticker(ticker: str, min_dte: int | None = None,
         return None
 
     contracts = market_data.get("contracts", [])
-    expirations = sorted({c.get("expiration_date") for c in contracts if c.get("expiration_date")})
+    all_exps = sorted({c.get("expiration_date", "")[:10] for c in contracts if c.get("expiration_date")})
     logger.info(
-        f"[{ticker}] Option chain: {len(contracts)} contracts across {len(expirations)} expirations "
-        f"(nearest {expirations[0] if expirations else 'n/a'}, farthest {expirations[-1] if expirations else 'n/a'})"
+        f"[{ticker}] Option chain: {len(contracts)} contracts across {len(all_exps)} expirations "
+        f"(nearest {all_exps[0] if all_exps else 'n/a'}, farthest {all_exps[-1] if all_exps else 'n/a'})"
     )
+    # Available expirations (future only) for the UI selector: date + days to expiry.
+    available_expirations = [
+        {"date": e, "dte": _dte_days(e)} for e in all_exps if (_dte_days(e) or -1) >= 0
+    ]
 
     state, profile = _build_market_state(
-        ticker, market_data, underlying_history, intraday_bars, min_dte, max_dte)
+        ticker, market_data, underlying_history, intraday_bars, min_dte, max_dte, expirations)
     sig = generate_signals(state)
 
     top = sig["setups"][0]["name"] if sig["setups"] else "none"
@@ -172,6 +193,7 @@ def compute_ticker(ticker: str, min_dte: int | None = None,
         "market_state": state,
         "signals": sig,
         "strike_profile": {"ticker": ticker, "spot": state["price"], "strikes": profile},
+        "expirations": available_expirations,  # for the UI expiration selector (all future dates)
         "ai_eval": evaluate_gate(sig, GATE_SCORE),  # `changed` + staleness filled in at serve time
     }
 
@@ -192,22 +214,31 @@ app.add_middleware(
 )
 
 
-async def _serve(ticker: str, min_dte: int | None, max_dte: int | None) -> dict:
+def _parse_expirations(csv: str | None) -> tuple | None:
+    """Normalize a comma-separated expirations param to a sorted tuple (cache-stable), or None."""
+    if not csv:
+        return None
+    items = sorted({e.strip()[:10] for e in csv.split(",") if e.strip()})
+    return tuple(items) or None
+
+
+async def _serve(ticker: str, min_dte: int | None, max_dte: int | None,
+                 expirations: tuple | None = None) -> dict:
     """
     Cache-aware serve path: returns the full wrapped bundle (market_state + signals +
-    strike_profile + ai_eval + meta) for one ticker. Computes on cache-miss (in a worker
-    thread, since the SDK blocks), serves from memory within CACHE_TTL_SECONDS. 404 when
-    the symbol has no option chain.
+    strike_profile + expirations + ai_eval + meta) for one ticker. Computes on cache-miss
+    (in a worker thread, since the SDK blocks), serves from memory within CACHE_TTL_SECONDS.
+    404 when the symbol has no option chain.
     """
     t = ticker.upper()
-    key = (t, min_dte, max_dte)
+    key = (t, min_dte, max_dte, expirations)
     now = time.time()
 
     entry = _cache.get(key)
     hit = entry is not None and (now - entry["computed_at"]) < CACHE_TTL_SECONDS
 
     if not hit:
-        bundle = await asyncio.to_thread(compute_ticker, t, min_dte, max_dte)
+        bundle = await asyncio.to_thread(compute_ticker, t, min_dte, max_dte, expirations)
         if bundle is None:
             raise HTTPException(status_code=404, detail=f"No option-chain data available for {t}.")
         # Resolve the dedupe flag against the last DISTINCT picture for this ticker.
@@ -243,6 +274,7 @@ def _wrap(entry: dict, hit: bool, now: float) -> dict:
         "market_state": state,
         "signals": bundle["signals"],
         "strike_profile": bundle["strike_profile"],
+        "expirations": bundle.get("expirations", []),
         "ai_eval": ai_eval,
         "meta": {
             "served_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
@@ -255,10 +287,12 @@ def _wrap(entry: dict, hit: bool, now: float) -> dict:
     }
 
 
-# Shared DTE query params. min_dte/max_dte bound the gamma-structure window (None = full
-# chain). For longer-dated/swing levels try min_dte=7&max_dte=45.
+# Shared filter query params. min_dte/max_dte bound the gamma-structure window (None = full
+# chain); expirations restricts it to an explicit comma-separated set of YYYY-MM-DD dates
+# (None = all). For longer-dated/swing levels try min_dte=7&max_dte=45.
 _MinDTE = Query(None, ge=0, description="Drop contracts with fewer than this many days to expiry.")
 _MaxDTE = Query(None, ge=0, description="Drop contracts with more than this many days to expiry.")
+_Expirations = Query(None, description="Comma-separated YYYY-MM-DD expirations to include (default: all).")
 
 
 @app.get("/api/ticker/{ticker}")
@@ -266,9 +300,10 @@ async def get_ticker_bundle(
     ticker: str = Path(..., description="Underlying symbol, e.g. TSLA"),
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
+    expirations: str | None = _Expirations,
 ):
-    """Full bundle (market_state + signals + strike_profile) for one ticker."""
-    return await _serve(ticker, min_dte, max_dte)
+    """Full bundle (market_state + signals + strike_profile + expirations) for one ticker."""
+    return await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations))
 
 
 @app.get("/api/market-data", response_model=MarketState)
@@ -276,8 +311,9 @@ async def get_market_data(
     ticker: str = Query(..., description="Underlying symbol, e.g. TSLA"),
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
+    expirations: str | None = _Expirations,
 ):
-    return (await _serve(ticker, min_dte, max_dte))["market_state"]
+    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations)))["market_state"]
 
 
 @app.get("/api/strike-profile")
@@ -285,8 +321,9 @@ async def get_strike_profile(
     ticker: str = Query(..., description="Underlying symbol, e.g. TSLA"),
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
+    expirations: str | None = _Expirations,
 ):
-    return (await _serve(ticker, min_dte, max_dte))["strike_profile"]
+    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations)))["strike_profile"]
 
 
 @app.get("/api/signals")
@@ -294,8 +331,9 @@ async def get_signals(
     ticker: str = Query(..., description="Underlying symbol, e.g. TSLA"),
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
+    expirations: str | None = _Expirations,
 ):
-    return (await _serve(ticker, min_dte, max_dte))["signals"]
+    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations)))["signals"]
 
 
 # Friendly per-ticker route (e.g. /TSLA). Declared LAST and constrained to letters so it
@@ -305,9 +343,10 @@ async def get_ticker_page(
     ticker: str = Path(..., pattern=r"^[A-Za-z]{1,6}$", description="Underlying symbol, e.g. TSLA"),
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
+    expirations: str | None = _Expirations,
 ):
     """Same full bundle as /api/ticker/{ticker}, on the friendly /SYMBOL URL."""
-    return await _serve(ticker, min_dte, max_dte)
+    return await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations))
 
 
 if __name__ == "__main__":
