@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useTheme } from '@mui/material/styles';
-import { Card, CardContent, Typography } from '@mui/material';
+import { Card, CardContent, Typography, Stack, Box } from '@mui/material';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell,
-  ReferenceLine, Tooltip, Legend,
+  ReferenceLine, Tooltip,
 } from 'recharts';
 import type { StrikeRow } from '@org/api';
 
@@ -45,10 +45,23 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip }:
 
   if (!data.length) return null;
 
+  const LegendDot = ({ color, label }: { color: string; label: string }) => (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+      <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: color }} />
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+    </Stack>
+  );
+
   return (
     <Card variant="outlined" sx={{ mt: 3 }}>
       <CardContent>
-        <Typography variant="h6" gutterBottom>GEX strike profile</Typography>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, flexWrap: 'wrap' }}>
+          <Typography variant="h6">GEX strike profile</Typography>
+          <Stack direction="row" spacing={2}>
+            <LegendDot color={green} label="Call-dominated (net +)" />
+            <LegendDot color={red} label="Put-dominated (net −)" />
+          </Stack>
+        </Stack>
         <ResponsiveContainer width="100%" height={Math.max(360, data.length * 22)}>
           <BarChart layout="vertical" data={data} margin={{ left: 8, right: 24, top: 8, bottom: 8 }}>
             <XAxis type="number" tickFormatter={fmtM} stroke={theme.palette.text.secondary} />
@@ -65,7 +78,6 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip }:
                 border: `1px solid ${theme.palette.divider}`,
               }}
             />
-            <Legend />
             <ReferenceLine x={0} stroke={theme.palette.divider} />
             <ReferenceLine
               y={nearest(spot)} stroke={theme.palette.primary.main} strokeDasharray="4 3"
@@ -80,7 +92,9 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip }:
                 <Cell
                   key={s.strike}
                   fill={s.net_gex >= 0 ? green : red}
-                  fillOpacity={s.strike === callWall || s.strike === putWall ? 1 : 0.55}
+                  fillOpacity={s.strike === callWall || s.strike === putWall ? 1 : 0.82}
+                  stroke={s.strike === callWall || s.strike === putWall ? theme.palette.common.white : 'none'}
+                  strokeWidth={s.strike === callWall || s.strike === putWall ? 1 : 0}
                 />
               ))}
             </Bar>

@@ -4,6 +4,7 @@ import { styled } from '@mui/material/styles';
 import {
   AppBar, Toolbar, Typography, Container, Box, Card, CardContent,
   Chip, CircularProgress, TextField, Stack, Alert,
+  FormControl, InputLabel, Select, OutlinedInput, MenuItem, Checkbox, ListItemText,
 } from '@mui/material';
 import { getTicker, TickerBundle } from '@org/api';
 import { GexProfileChart } from './gex-profile-chart';
@@ -40,15 +41,20 @@ function TickerDashboard() {
   const [data, setData] = useState<TickerBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState(ticker);
+  // Selected expirations to scope the GEX profile. [] means "all" (no filter sent).
+  const [selected, setSelected] = useState<string[]>([]);
 
   const load = useCallback(() => {
-    getTicker(ticker, { minDte: 7, maxDte: 45 })
+    getTicker(ticker, { expirations: selected })
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message));
-  }, [ticker]);
+  }, [ticker, selected]);
 
+  // Reset the expiration filter (back to "all") whenever the ticker changes.
+  useEffect(() => { setSelected([]); setData(null); }, [ticker]);
+
+  // (Re)load on ticker/selection change, then poll on the cache cadence.
   useEffect(() => {
-    setData(null);
     load();
     const id = setInterval(load, POLL_MS);
     return () => clearInterval(id);
@@ -58,14 +64,40 @@ function TickerDashboard() {
   const fresh = data?.meta.freshness;
   const sig = data?.signals;
 
+  const allDates = data?.expirations.map((e) => e.date) ?? [];
+  // What the Select shows as "checked": the explicit selection, or every date when "all".
+  const checked = selected.length ? selected : allDates;
+
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2 }}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
         <TextField
           size="small" label="Ticker" value={symbol}
           onChange={(e) => setSymbol(e.target.value.toUpperCase())}
           onKeyDown={(e) => { if (e.key === 'Enter' && symbol) navigate(`/${symbol}`); }}
         />
+        <FormControl size="small" sx={{ minWidth: 220 }} disabled={!allDates.length}>
+          <InputLabel>Expirations</InputLabel>
+          <Select
+            multiple
+            value={checked}
+            input={<OutlinedInput label="Expirations" />}
+            onChange={(e) => {
+              const v = (typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value);
+              // All checked -> store [] ("all", no filter); otherwise the chosen subset.
+              setSelected(v.length === allDates.length ? [] : v);
+            }}
+            renderValue={() => (selected.length === 0 ? 'All expirations' : `${selected.length} selected`)}
+            MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
+          >
+            {data?.expirations.map((e) => (
+              <MenuItem key={e.date} value={e.date}>
+                <Checkbox checked={checked.includes(e.date)} />
+                <ListItemText primary={e.date} secondary={e.dte != null ? `${e.dte}d to expiry` : undefined} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         {sig?.regime && (
           <Chip
             label={sig.regime.replace('_', ' ')}
@@ -87,7 +119,7 @@ function TickerDashboard() {
           <Typography variant="h1" gutterBottom>
             {m.ticker} · ${m.price?.toFixed(2)}
             <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-              (levels @ ${m.gex_spot?.toFixed(2)}, DTE {m.dte_min}–{m.dte_max})
+              (levels @ ${m.gex_spot?.toFixed(2)} · {selected.length === 0 ? 'all expirations' : `${selected.length} expirations`})
             </Typography>
           </Typography>
 

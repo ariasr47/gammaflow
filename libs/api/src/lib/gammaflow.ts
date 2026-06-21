@@ -85,17 +85,24 @@ export interface Meta {
   };
 }
 
+export interface Expiration {
+  date: string; // YYYY-MM-DD
+  dte: number | null;
+}
+
 export interface TickerBundle {
   market_state: MarketState;
   signals: Signals;
   strike_profile: { ticker: string; spot: number; strikes: StrikeRow[] };
+  expirations: Expiration[]; // all future expirations available for the selector
   ai_eval: AiEval;
   meta: Meta;
 }
 
-export interface DteWindow {
+export interface TickerQuery {
   minDte?: number;
   maxDte?: number;
+  expirations?: string[]; // explicit YYYY-MM-DD dates; omitted/empty = all
 }
 
 export class ApiError extends Error {
@@ -105,14 +112,15 @@ export class ApiError extends Error {
   }
 }
 
-/** Full bundle for one ticker, optionally over a DTE window. Hits the proxied /api route. */
+/** Full bundle for one ticker, optionally filtered by DTE window or explicit expirations. */
 export async function getTicker(
   symbol: string,
-  { minDte, maxDte }: DteWindow = {}
+  { minDte, maxDte, expirations }: TickerQuery = {}
 ): Promise<TickerBundle> {
   const params = new URLSearchParams();
   if (minDte != null) params.set('min_dte', String(minDte));
   if (maxDte != null) params.set('max_dte', String(maxDte));
+  if (expirations && expirations.length) params.set('expirations', expirations.join(','));
   const qs = params.toString();
   const res = await fetch(`/api/ticker/${symbol.toUpperCase()}${qs ? `?${qs}` : ''}`);
   if (!res.ok) {
