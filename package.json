@@ -4,18 +4,47 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
-  "dependencies": {},
   "devDependencies": {
+    "@babel/core": "^7.14.5",
+    "@babel/preset-react": "^7.14.5",
     "@nx/js": "23.0.0",
+    "@nx/react": "^23.0.0",
+    "@nx/vite": "23.0.0",
+    "@nx/vitest": "23.0.0",
+    "@nx/web": "23.0.0",
     "@swc-node/register": "1.11.1",
     "@swc/core": "1.15.8",
     "@swc/helpers": "0.5.18",
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/react": "16.3.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "@vitest/coverage-v8": "~4.1.0",
+    "@vitest/ui": "~4.1.0",
+    "jiti": "2.4.2",
+    "jsdom": "^27.1.0",
     "nx": "23.0.0",
     "prettier": "^3.8.1",
     "tslib": "^2.3.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vite": "^8.0.0",
+    "vitest": "~4.1.0"
   },
   "workspaces": [
-    "packages/*"
-  ]
+    "packages/*",
+    "apps/*",
+    "libs/*"
+  ],
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.1.1",
+    "@mui/material": "^9.1.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "6.30.3",
+    "recharts": "^3.8.1"
+  }
 }
