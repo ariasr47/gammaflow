@@ -30,15 +30,26 @@ market closed / no live ticks" messaging + honest live-vs-stale handling (live s
 `live`/`market_session` flags). Actually sourcing the overnight price requires thread 1's vendor
 decision (Databento Blue Ocean, or Webull supplement).
 
-## 3. Dark-pool block trades + stream isolation (BACKEND LANDED — FE pending)
+## 3. Dark-pool block trades + stream isolation (BOTH LANES LANDED — ready to archive)
 Contracts in `.claude/contracts/dark-pool-stream-isolation/`. **Backend (Session 4A) shipped:**
 `BlockPrint`/`OffExchange` TypedDicts in `src/providers/base.py`; `blocks[]` derived in the same
 off-exchange pass in `src/core/darkpool.py` (top-5 by notional, signed proximity, age, no `side`,
 no new fetch); `BLOCK_MIN_SHARES` env (5000 default) + best-effort try/except in `main.py`
 (`off_exchange = None` on any failure, bundle/SSE intact); `signals.py` untouched (blocks unscored).
-Verified live against TSLA + a forced-failure test. Glossary + GAMMAFLOW_CONTEXT refreshed.
-**Still open:** frontend lane (Session 4B) — the "Off-exchange blocks" UI section (UX_BLUEPRINT.md).
-Archive `.claude/contracts/dark-pool-stream-isolation/` once the FE lane also lands (per DoD).
+**Frontend (Session 4B) shipped** (repo `C:\Dev\gammaflow-web`): `BlockPrint` + `OffExchange.blocks`
+in `libs/api/src/lib/gammaflow.ts`; in `apps/dashboard/src/app/app.tsx` — the "Off-exchange blocks"
+section (Normal/Empty/Unavailable/Hidden states, neutral proximity chip, no side), a single
+`⚠ Live offline — reconnecting…` connection chip driven by a **payload-gap watchdog** (>15s; a
+healthy stream pushes ~every 1.5s even when quiet, so a gap = real drop), live-derived tiles dim +
+`⏸ offline` while the static chart/stats/blocks stay from the last bundle, and the cold-start-vs-
+refresh-failure split (cold = red error + Retry; post-success poll fail = keep bundle + soft
+"Couldn't refresh — showing data from {age} ago"). Verified all 6 acceptance states via a
+controllable mock backend behind the Vite proxy. Glossary + GAMMAFLOW_CONTEXT refreshed.
+**Follow-up (minor, contract gap):** the blocks empty-state copy needs `{threshold}` but
+`BLOCK_MIN_SHARES` is not carried in the `off_exchange` payload — the FE uses a display fallback
+constant (5000) that mirrors the backend default. If `BLOCK_MIN_SHARES` is ever retuned, add the
+value to the `off_exchange` payload (e.g. `block_min_shares`) and bind the copy to it.
+**Action:** archive `.claude/contracts/dark-pool-stream-isolation/` (both lanes done, per DoD).
 
 ## 4. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the

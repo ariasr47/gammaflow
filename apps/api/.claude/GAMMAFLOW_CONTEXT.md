@@ -27,8 +27,13 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - `src/models/market_data.py` — `MarketState` Pydantic response model.
 
 **Frontend** (`gammaflow-web/`, Nx monorepo, React 19 + Vite + MUI/Emotion):
-- `apps/dashboard/src/app/app.tsx` — dashboard (toolbar, stat tiles, setups), polls bundle
-  (60s) + subscribes SSE.
+- `apps/dashboard/src/app/app.tsx` — dashboard (toolbar, stat tiles, setups, **Off-exchange
+  blocks** section), polls bundle (60s) + subscribes SSE. **Stream isolation:** live-derived
+  tiles (price/net flow/spread/live flip) + one `⚠ Live offline` chip degrade on an SSE drop
+  (payload-gap watchdog >15s; dimmed + `⏸ offline`, never blanked), while the GEX chart + every
+  static tile + the blocks section keep rendering the last bundle; cold-start failure is the
+  only blank screen (error + Retry), a post-success poll failure keeps the bundle behind a soft
+  "Couldn't refresh" warning.
 - `apps/dashboard/src/app/gex-profile-chart.tsx` — recharts horizontal net-GEX-by-strike.
 - `libs/api/src/lib/gammaflow.ts` — typed API client (`@org/api`): `getTicker`, `streamTicker`.
 - Vite dev proxy `/api → 127.0.0.1:8000` (no CORS); SSE via `EventSource`.
