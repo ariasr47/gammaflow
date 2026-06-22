@@ -98,11 +98,23 @@ export interface OffExchangeLevel {
   proximity_pct: number;
 }
 
+/** A single large off-exchange ("dark pool") print. Display/context only — no side or
+ *  direction exists, now or in v1, and the UI must invent none. Ranked largest-notional-first
+ *  by the backend (top-5); render in order, never re-sort or re-cap. */
+export interface BlockPrint {
+  price: number;        // print price
+  shares: number;       // print size
+  notional: number;     // price * shares (the backend's ranking key)
+  proximity_pct: number; // SIGNED ratio vs spot: + above, − below (e.g. 0.004 = +0.4%)
+  age_seconds: number;  // age of the print within the recent window
+}
+
 export interface OffExchange {
   ratio_pct: number | null;     // off-exchange share of total volume in the window
   offex_shares: number;
   total_shares: number;
   levels: OffExchangeLevel[];
+  blocks: BlockPrint[];         // largest-notional first, top-5; may be [] (none ≥ threshold)
   note: string;
 }
 

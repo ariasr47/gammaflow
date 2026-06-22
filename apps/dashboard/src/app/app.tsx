@@ -12,6 +12,27 @@ import { getTicker, streamTicker, TickerBundle, LiveUpdate } from '@org/api';
 import { GexProfileChart } from './gex-profile-chart';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
+// A healthy SSE session pushes a payload every ~1.5s (the live broadcast throttle) even when
+// the market isn't ticking (`live:false`), so an onmessage gap this long means the transport
+// dropped — not a quiet session. Used to flip the single "Live offline" connection state.
+const STREAM_OFFLINE_MS = 15_000;
+// Display fallback for the blocks empty-state copy. The block threshold is BLOCK_MIN_SHARES on
+// the backend (env-tunable, default 5000) and is NOT carried in the off_exchange payload — see
+// the contract-gap note in the handoff. Mirrors the backend default; correct for stock config.
+const BLOCK_MIN_SHARES_DISPLAY = 5000;
+
+const BLOCKS_TOOLTIP =
+  'Individual large off-exchange ("dark pool") prints from the recent window, ranked by ' +
+  'notional (size × price), largest first. Off-exchange volume includes internalized retail ' +
+  'and the prints carry no reliable side, so this is positioning context only — never a ' +
+  'buy/sell signal. Updates only when new chain data loads, not from the live stream.';
+const PROXIMITY_TOOLTIP =
+  'How far this print is from current spot. Above spot is +, below is −. Lets you see at a ' +
+  'glance whether it overlaps a wall or the gamma flip.';
+const OFFLINE_CHIP_TOOLTIP =
+  'The live stream dropped. The positioning levels and the GEX chart below are still current ' +
+  'as of the last data load — only live price, spread, net flow and the live gamma flip are ' +
+  'paused. Reconnecting automatically; no refresh needed.';
 
 /** Conventional DTE label: 0 = expires today (0DTE), 1 = tomorrow, else N days. */
 function dteLabel(dte: number | null): string | undefined {
@@ -46,15 +67,22 @@ const StatTile = styled(Card)<{ accent?: 'up' | 'down' | 'neutral' }>(
   })
 );
 
-function Stat({ label, value, accent, info }:
-  { label: string; value: string; accent?: 'up' | 'down' | 'neutral'; info?: string }) {
+function Stat({ label, value, accent, info, offline }:
+  { label: string; value: string; accent?: 'up' | 'down' | 'neutral'; info?: string; offline?: boolean }) {
   const tile = (
-    <StatTile accent={accent} variant="outlined">
+    // Stream Offline: dim the (live-derived) tile and caption it `⏸ offline` so a kept last
+    // value is never mistaken for a current one. Static tiles never receive `offline`.
+    <StatTile accent={accent} variant="outlined" sx={offline ? { opacity: 0.5 } : undefined}>
       <CardContent>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Typography variant="caption" color="text.secondary">{label}</Typography>
           {info && <InfoOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled' }} />}
         </Stack>
+        {offline && (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1 }}>
+            ⏸ offline
+          </Typography>
+        )}
         <Typography variant="h6">{value}</Typography>
       </CardContent>
     </StatTile>
@@ -95,6 +123,10 @@ function TickerDashboard() {
   const [loading, setLoading] = useState(false);
   const [symbol, setSymbol] = useState(ticker);
   const [live, setLive] = useState<LiveUpdate | null>(null);
+  // Stream Offline: set when the SSE transport drops (no payload for > STREAM_OFFLINE_MS after
+  // having been live). Degrades ONLY the live-derived tiles + the connection chip; the static
+  // bundle (chart, stats, blocks) is untouched. Clears on the next payload (auto-reconnect).
+  const [streamOffline, setStreamOffline] = useState(false);
   // Expiration filter: null = all (no filter), [] = none selected, else an explicit subset.
   const [selected, setSelected] = useState<string[] | null>(null);
   // Dark-pool (off-exchange) context: off => excluded from the bundle AND the opportunity score.
@@ -110,7 +142,8 @@ function TickerDashboard() {
   }, [ticker, selected, darkPool]);
 
   // Reset the filter to "all" whenever the ticker changes; clear data so we show a spinner.
-  useEffect(() => { setSelected(null); setData(null); }, [ticker]);
+  // Clear any prior error too, so a stale cold-start error never flashes over the new ticker.
+  useEffect(() => { setSelected(null); setData(null); setError(null); }, [ticker]);
 
   // (Re)load on ticker/selection change, then poll on the cache cadence. Data is updated
   // in place (not cleared) on a re-filter, so the view doesn't flicker between fetches.
@@ -121,10 +154,23 @@ function TickerDashboard() {
   }, [load]);
 
   // Live SSE stream: mirrors the expiration filter. Skipped when nothing is selected.
+  // Stream-drop detection rides a payload-gap watchdog rather than a new payload field: a
+  // dropped stream sends nothing at all, so it's only visible at the transport layer. The gap
+  // is armed AFTER the first payload (before that we're in "loading (cold)", not "offline"),
+  // then re-armed on every payload; if it fires, we flip Stream Offline. The next payload
+  // (EventSource auto-reconnects) clears it. The watchdog never touches the static bundle.
   useEffect(() => {
     setLive(null);
+    setStreamOffline(false);
     if (selected !== null && selected.length === 0) return;
-    return streamTicker(ticker, { expirations: selected ?? undefined }, setLive);
+    let gapTimer: ReturnType<typeof setTimeout> | undefined;
+    const unsub = streamTicker(ticker, { expirations: selected ?? undefined }, (u) => {
+      setLive(u);
+      setStreamOffline(false);
+      if (gapTimer) clearTimeout(gapTimer);
+      gapTimer = setTimeout(() => setStreamOffline(true), STREAM_OFFLINE_MS);
+    });
+    return () => { if (gapTimer) clearTimeout(gapTimer); unsub(); };
   }, [ticker, selected]);
 
   const m = data?.market_state;
@@ -134,7 +180,9 @@ function TickerDashboard() {
   const allDates = data?.expirations.map((e) => e.date) ?? [];
   const noneSelected = selected !== null && selected.length === 0;
   const checked = selected ?? allDates; // dates shown ticked in the menu
-  const isLive = live?.live ?? false;   // a real tick arrived recently (vs. stale last-known)
+  // "Live" only if a real tick arrived recently AND the transport isn't offline — once offline,
+  // the last payload's `live:true` must not keep live values on screen as if current.
+  const isLive = (live?.live ?? false) && !streamOffline;
   const ls = liveStatus(live);          // session-aware live/stale status for the chip
 
   return (
@@ -190,7 +238,13 @@ function TickerDashboard() {
             />
           </Tooltip>
         )}
-        {ls && (
+        {/* Exactly one connection chip: the offline warning supersedes the session chip so a
+            stale "● live" can never contradict the dropped transport. */}
+        {streamOffline ? (
+          <Tooltip arrow title={OFFLINE_CHIP_TOOLTIP}>
+            <Chip size="small" color="warning" label="⚠ Live offline — reconnecting…" />
+          </Tooltip>
+        ) : ls && (
           <Tooltip arrow title={ls.tip}>
             <Chip size="small" variant="outlined" color={ls.color} label={ls.label} />
           </Tooltip>
@@ -204,7 +258,22 @@ function TickerDashboard() {
         )}
       </Stack>
 
-      {error && <Alert severity="error">{error}</Alert>}
+      {/* Cold-start failure (no bundle ever loaded) is the ONLY blank/error screen: red error
+          + Retry. A poll failure AFTER a prior success keeps the whole bundle on screen behind
+          a soft warning — never blank what's already rendered. */}
+      {error && !data && (
+        <Alert
+          severity="error"
+          action={<Button color="inherit" size="small" onClick={load}>Retry</Button>}
+        >
+          {error}
+        </Alert>
+      )}
+      {error && data && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Couldn't refresh — showing data from {humanAge(fresh?.data_age_seconds ?? null)} ago. Retrying automatically.
+        </Alert>
+      )}
       {!data && !error && <CircularProgress />}
 
       {noneSelected && (
@@ -229,14 +298,19 @@ function TickerDashboard() {
               info="Strike with the most negative dealer gamma — tends to act as support (dealers buy dips here)." />
             <Stat
               label={isLive ? 'Gamma flip (live)' : 'Gamma flip'}
-              value={`$${live?.gamma_flip ?? m.gamma_flip}`} accent="neutral"
+              // When not live (cold or offline) show the authoritative static flip, never the
+              // last stale live value — the live flip drops its "(live)" suffix too.
+              value={`$${(isLive ? live?.gamma_flip : null) ?? m.gamma_flip}`} accent="neutral"
+              offline={streamOffline}
               info="The price where dealer hedging switches from calming moves to amplifying them. Above it → steadier/range-bound; below it → more volatile/trending." />
             <Stat
               label={`Net flow (${live ? Math.round(live.flow_window_s / 60) : 5}m)`}
               value={isLive ? `${live!.net_flow >= 0 ? '+' : ''}${live!.net_flow.toLocaleString()}` : '—'}
               accent={!isLive ? 'neutral' : live!.net_flow >= 0 ? 'up' : 'down'}
+              offline={streamOffline}
               info="Aggressive buys minus sells over the last few minutes, from the live trade tape. Positive = buyers lifting the ask; negative = sellers hitting the bid." />
             <Stat label="Spread" value={isLive && live?.spread != null ? `$${live.spread.toFixed(2)}` : '—'} accent="neutral"
+              offline={streamOffline}
               info="Best ask minus best bid. Wider = a thinner, more volatile market." />
             <Stat label="Net GEX" value={`$${(m.net_gex / 1e6).toFixed(1)}M`} accent={m.net_gex >= 0 ? 'up' : 'down'}
               info="Total dealer gamma across the chain. Positive = dealers dampen moves (range-bound); negative = they amplify moves (trending)." />
@@ -265,6 +339,60 @@ function TickerDashboard() {
               gammaFlip={live?.gamma_flip ?? m.gamma_flip}
               liveSpot={isLive ? live!.mid : null}
             />
+          )}
+
+          {/* Off-exchange blocks — rides the REST bundle only (never the live stream) and has
+              no offline state of its own; it ages with the bundle freshness indicator. Hidden
+              entirely when the Dark pool toggle is off. */}
+          {darkPool && (
+            <Box sx={{ mt: 3 }}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <Typography variant="h6">Off-exchange blocks</Typography>
+                <Tooltip arrow title={BLOCKS_TOOLTIP}>
+                  <InfoOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
+                </Tooltip>
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Largest recent off-exchange prints near spot. Context, not a signal — no side or direction.
+              </Typography>
+              {!data?.off_exchange ? (
+                // Best-effort miss: off_exchange absent from an otherwise-good bundle. The chart
+                // and every other stat render normally — this never implies a chart problem.
+                <Typography variant="body2" color="text.disabled">
+                  Off-exchange data unavailable this cycle.
+                </Typography>
+              ) : !(data.off_exchange.blocks?.length) ? (
+                <Typography variant="body2" color="text.disabled">
+                  No blocks ≥ {BLOCK_MIN_SHARES_DISPLAY.toLocaleString()} shares in the recent window.
+                </Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {/* Already largest-notional-first, top-5 from the backend — render in order,
+                      do NOT re-sort or re-cap. No side/direction; proximity chip is neutral. */}
+                  {data.off_exchange.blocks.map((b, i) => {
+                    const pct = b.proximity_pct * 100; // payload is a signed ratio vs spot
+                    const prox = `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}% vs spot`;
+                    return (
+                      <Card key={i} variant="outlined">
+                        <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+                            <Typography variant="body2">
+                              {b.shares.toLocaleString()} sh @ ${b.price.toFixed(2)}
+                            </Typography>
+                            <Tooltip arrow title={PROXIMITY_TOOLTIP}>
+                              <Chip size="small" variant="outlined" label={prox} />
+                            </Tooltip>
+                            <Typography variant="caption" color="text.secondary">
+                              {humanAge(b.age_seconds)} ago
+                            </Typography>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Box>
           )}
 
           {sig?.setups?.length ? (
