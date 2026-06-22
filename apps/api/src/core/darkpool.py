@@ -101,6 +101,7 @@ def analyze_off_exchange(trades: list, spot: float, *, top_n: int = 5,
         "total_shares": int(total_vol),
         "levels": levels,
         "blocks": blocks,
+        "block_min_shares": int(block_min_shares),  # threshold a print needed to count as a block
         "note": "Off-exchange/TRF prints over a recent window; side & intent unknown, "
                 "includes internalized retail. Use as context, not a directional signal.",
     }

@@ -30,8 +30,9 @@ market closed / no live ticks" messaging + honest live-vs-stale handling (live s
 `live`/`market_session` flags). Actually sourcing the overnight price requires thread 1's vendor
 decision (Databento Blue Ocean, or Webull supplement).
 
-## 3. Dark-pool block trades + stream isolation (BOTH LANES LANDED — ready to archive)
-Contracts in `.claude/contracts/dark-pool-stream-isolation/`. **Backend (Session 4A) shipped:**
+## 3. Dark-pool block trades + stream isolation (SHIPPED + ARCHIVED — closed)
+Contracts archived at `.claude/contracts/_archive/dark-pool-stream-isolation/` (both lanes done).
+**Backend (Session 4A) shipped:**
 `BlockPrint`/`OffExchange` TypedDicts in `src/providers/base.py`; `blocks[]` derived in the same
 off-exchange pass in `src/core/darkpool.py` (top-5 by notional, signed proximity, age, no `side`,
 no new fetch); `BLOCK_MIN_SHARES` env (5000 default) + best-effort try/except in `main.py`
@@ -45,11 +46,9 @@ healthy stream pushes ~every 1.5s even when quiet, so a gap = real drop), live-d
 refresh-failure split (cold = red error + Retry; post-success poll fail = keep bundle + soft
 "Couldn't refresh — showing data from {age} ago"). Verified all 6 acceptance states via a
 controllable mock backend behind the Vite proxy. Glossary + GAMMAFLOW_CONTEXT refreshed.
-**Follow-up (minor, contract gap):** the blocks empty-state copy needs `{threshold}` but
-`BLOCK_MIN_SHARES` is not carried in the `off_exchange` payload — the FE uses a display fallback
-constant (5000) that mirrors the backend default. If `BLOCK_MIN_SHARES` is ever retuned, add the
-value to the `off_exchange` payload (e.g. `block_min_shares`) and bind the copy to it.
-**Action:** archive `.claude/contracts/dark-pool-stream-isolation/` (both lanes done, per DoD).
+**Contract gap RESOLVED:** `off_exchange.block_min_shares` (int) now rides the payload
+(interface-contract amendment); the FE empty-state copy binds to it and only falls back to the
+5000 display constant for a pre-amendment bundle. **Archived** under `_archive/` (per DoD).
 
 ## 4. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the

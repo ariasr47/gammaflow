@@ -105,6 +105,7 @@ class OffExchange(TypedDict):
     total_shares: int
     levels: list[OffExchangeLevel]
     blocks: list[BlockPrint]            # largest-notional off-exchange prints, top-N
+    block_min_shares: int               # share threshold a print needed to count as a block
     note: str
 
 

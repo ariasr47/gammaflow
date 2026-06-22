@@ -115,7 +115,9 @@ get `ai_eval` + `meta` in one call.
   on a best-effort failure). Each block: `price`, `shares`, `notional` (= price·shares),
   `proximity_pct` (signed, vs spot), `age_seconds`. Ordered largest-`notional` first, capped to a
   top-N short list. A "block" is a single off-exchange print at/above a fixed share-count threshold
-  (`BLOCK_MIN_SHARES`, operator-tunable; ADV-relative sizing is a future option, not in v1).
+  (`BLOCK_MIN_SHARES`, operator-tunable; ADV-relative sizing is a future option, not in v1). The
+  active threshold is echoed in the payload as `off_exchange.block_min_shares` (int) so consumers
+  can label "no blocks ≥ N" without hardcoding the backend default.
   **Display/context only — NOT directional and NOT scored.** Prints have no reliable side and
   include internalized retail; blocks add nothing to `opportunity_score` in v1. Do not infer
   accumulation/distribution. Blocks travel in the cached bundle (REST), never in the live stream.

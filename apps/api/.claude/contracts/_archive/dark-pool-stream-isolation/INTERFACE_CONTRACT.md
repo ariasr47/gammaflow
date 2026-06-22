@@ -35,9 +35,14 @@ best-effort miss, **NOT an error**, and the rest of the bundle (`market_state`,
       "age_seconds": 0               // int     — age of the print within the recent window
     }
   ],
+  "block_min_shares": 0,             // NEW (amendment) — int; active block threshold this cycle
   "note": "string"                   // unchanged
 }
 ```
+
+> **Amendment (post-ship):** `block_min_shares` was added to the `off_exchange` object so the FE
+> can label the blocks empty-state ("No blocks ≥ N shares…") from the payload instead of a
+> hardcoded mirror of the backend default. Additive + always present when `off_exchange` is.
 
 Binding presence/ordering rules:
 - `blocks` ordering: **descending `notional`** (largest first). Ties/overflow beyond N are not
