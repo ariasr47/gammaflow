@@ -73,6 +73,41 @@ class TradePrint(TypedDict):
     off_exchange: bool      # True if reported via a TRF (off-exchange / "dark pool" / internalized)
 
 
+class OffExchangeLevel(TypedDict):
+    """A volume-by-price concentration of off-exchange prints over the recent window."""
+    price: float
+    shares: int
+    share_of_offex_pct: float    # % of off-exchange shares at this bucketed price
+    proximity_pct: float         # SIGNED fraction vs spot (+ above, - below)
+
+
+class BlockPrint(TypedDict):
+    """A single large off-exchange print (institutional-size, trf_id present).
+
+    Display-only context: no side/direction is inferred (off-exchange prints carry no
+    reliable side and include internalized retail). Largest notional first, top-N.
+    """
+    price: float            # print price
+    shares: int             # print size
+    notional: float         # price * shares (ranking key)
+    proximity_pct: float    # SIGNED fraction vs spot (+ above, - below)
+    age_seconds: int        # age of the print within the recent window
+
+
+class OffExchange(TypedDict):
+    """Off-exchange ("dark pool") activity summary over the recent trade tape.
+
+    Best-effort context only: omitted entirely from the bundle when computation fails
+    (the caller drops the whole object), never an error. Side/intent are unknown.
+    """
+    ratio_pct: Optional[float]          # off-exchange shares / total shares, as %
+    offex_shares: int
+    total_shares: int
+    levels: list[OffExchangeLevel]
+    blocks: list[BlockPrint]            # largest-notional off-exchange prints, top-N
+    note: str
+
+
 class StreamEvent(TypedDict, total=False):
     """One real-time event off the stock stream. `kind` discriminates the payload:
     - "quote": NBBO update -> bid/ask/bid_size/ask_size

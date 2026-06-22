@@ -77,7 +77,11 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   distinguishes overnight (uncovered) / closed / feed-lagging.
 - **Dark-pool = context only, capped, toggleable** — off-exchange volume includes internalized
   retail and has no reliable side; small capped confluence bonus; omitted from bundle AND score
-  when `dark_pool=false`.
+  when `dark_pool=false`. **Block prints** (`blocks[]`, largest-notional off-exchange prints from
+  the same recent tape, no new fetch) are **display-only**: they do not feed `opportunity_score`
+  or `dark_pool_confluence`. The whole off-exchange computation is **best-effort + isolated** —
+  any failure yields `off_exchange = None` (object omitted, not an HTTP error), leaving
+  `market_state`/`strike_profile` and the SSE path untouched.
 - **Vectorized gamma flip** — ~330× faster than the scalar loop, identical output.
 - **Vendor-agnostic provider port** — so Massive↔another vendor is a contained swap.
 
@@ -86,14 +90,16 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - GEX strike-profile chart (walls always in-window, spot/flip/live reference lines, tooltips).
 - Live SSE: mid, spread, **net flow (5m, signed)**, live gamma flip; session-aware status chip.
 - AI gate + glossary + `prompts/strategy_prompt.md` hand-off contract (AI external).
-- Dark-pool/off-exchange ratio + levels + capped confluence, with UI toggle.
+- Dark-pool/off-exchange ratio + levels + capped confluence + largest-notional **block prints**
+  (top-5, `blocks[]`: price/shares/notional/signed proximity/age — display-only, unscored), UI toggle.
 - Explanatory hover tooltips on every jargon stat/chip/chart.
 
 ## 7. Conventions
 - **Env (`.env`):** `MASSIVE_API_KEY`, `DATA_FEED` (realtime|delayed), `CACHE_TTL_SECONDS` (60),
   `STALE_AFTER_SECONDS` (1200; drop to ~120 on real-time), `GATE_SCORE` (50),
   `FLOW_WINDOW_SECONDS` (300), `LIVE_THROTTLE_SECONDS` (1.5), `CHAIN_REFRESH_SECONDS` (120),
-  `INCLUDE_DARK_POOL` (true), `DARKPOOL_LOOKBACK_SECONDS` (3600).
+  `INCLUDE_DARK_POOL` (true), `DARKPOOL_LOOKBACK_SECONDS` (3600), `BLOCK_MIN_SHARES` (5000;
+  fixed institutional-size threshold for an off-exchange block print).
 - **Add a vendor:** implement `MarketDataProvider` in `src/providers/<name>.py`, register in
   `_PROVIDERS`, set `DATA_PROVIDER`. Nothing else changes.
 - **Run:** backend `.venv/Scripts/python.exe main.py` (uvicorn :8000); frontend

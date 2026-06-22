@@ -110,6 +110,15 @@ get `ai_eval` + `meta` in one call.
   When a level coincides with a gamma wall/flip it adds a small capped confluence bonus to
   `opportunity_score` (reflected in `signals.dark_pool_confluence`). If absent, the user
   disabled it — ignore entirely.
+  Additionally, `off_exchange.blocks[]` lists individual large off-exchange prints from the same
+  recent window (present only when `dark_pool=true`; the whole `off_exchange` object may be absent
+  on a best-effort failure). Each block: `price`, `shares`, `notional` (= price·shares),
+  `proximity_pct` (signed, vs spot), `age_seconds`. Ordered largest-`notional` first, capped to a
+  top-N short list. A "block" is a single off-exchange print at/above a fixed share-count threshold
+  (`BLOCK_MIN_SHARES`, operator-tunable; ADV-relative sizing is a future option, not in v1).
+  **Display/context only — NOT directional and NOT scored.** Prints have no reliable side and
+  include internalized retail; blocks add nothing to `opportunity_score` in v1. Do not infer
+  accumulation/distribution. Blocks travel in the cached bundle (REST), never in the live stream.
 
 # `/api/signals` — pre-digested setups for ONE ticker
 

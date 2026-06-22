@@ -30,13 +30,15 @@ market closed / no live ticks" messaging + honest live-vs-stale handling (live s
 `live`/`market_session` flags). Actually sourcing the overnight price requires thread 1's vendor
 decision (Databento Blue Ocean, or Webull supplement).
 
-## 3. Immediate next feature: dark-pool block trades + stream isolation (READY for PM)
-Architecture already written: `.claude/contracts/dark-pool-stream-isolation/ARCHITECTURE_CONTRACT.md`.
-Adds individual large off-exchange **block prints** (`BlockPrint`, extend `OffExchange.blocks`,
-from the existing `trf_id` trade pull — no new fetch) and formalizes **isolation** (static
-REST-bundle vs SSE are independent; dark-pool compute is best-effort and can't break the GEX
-chart; chart binds to bundle never to live). Next step is **Session 2 (PM)** → PRODUCT_CONTRACT.md.
-Note: current off-exchange layer ships ratio + volume-by-price `levels` only; `blocks` is the delta.
+## 3. Dark-pool block trades + stream isolation (BACKEND LANDED — FE pending)
+Contracts in `.claude/contracts/dark-pool-stream-isolation/`. **Backend (Session 4A) shipped:**
+`BlockPrint`/`OffExchange` TypedDicts in `src/providers/base.py`; `blocks[]` derived in the same
+off-exchange pass in `src/core/darkpool.py` (top-5 by notional, signed proximity, age, no `side`,
+no new fetch); `BLOCK_MIN_SHARES` env (5000 default) + best-effort try/except in `main.py`
+(`off_exchange = None` on any failure, bundle/SSE intact); `signals.py` untouched (blocks unscored).
+Verified live against TSLA + a forced-failure test. Glossary + GAMMAFLOW_CONTEXT refreshed.
+**Still open:** frontend lane (Session 4B) — the "Off-exchange blocks" UI section (UX_BLUEPRINT.md).
+Archive `.claude/contracts/dark-pool-stream-isolation/` once the FE lane also lands (per DoD).
 
 ## 4. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the

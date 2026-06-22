@@ -11,27 +11,46 @@ Computed over a bounded recent window (see DARKPOOL_LOOKBACK_SECONDS) — not a 
 accumulation view, which would need a heavy batched pull.
 """
 import logging
+import time
 
 logger = logging.getLogger("GammaFlowAsync")
 
+# Default institutional-size threshold for a "block" print (shares). Env-tunable via
+# BLOCK_MIN_SHARES in main.py; this is the fallback used when a caller doesn't pass one.
+DEFAULT_BLOCK_MIN_SHARES = 5000
+
 
 def analyze_off_exchange(trades: list, spot: float, *, top_n: int = 5,
-                         bucket_pct: float = 0.0025, min_level_share: float = 0.03) -> dict | None:
+                         bucket_pct: float = 0.0025, min_level_share: float = 0.03,
+                         block_min_shares: int = DEFAULT_BLOCK_MIN_SHARES,
+                         block_top_n: int = 5, now_ns: int | None = None) -> dict | None:
     """
-    Summarize off-exchange prints into volume-by-price levels + an off-exchange ratio.
+    Summarize off-exchange prints into volume-by-price levels + an off-exchange ratio,
+    plus the largest individual block prints.
 
-    trades: list of TradePrint dicts (price, size, off_exchange).
+    trades: list of TradePrint dicts (price, size, timestamp[ns], off_exchange).
     spot:   current/display spot, for proximity.
     Buckets prices to `bucket_pct` of spot (default 0.25%); keeps the top_n off-exchange
-    levels that each hold >= min_level_share of off-exchange volume. Returns None when
-    there's nothing usable so the caller can omit the block entirely.
+    levels that each hold >= min_level_share of off-exchange volume.
+
+    `blocks`: each single off-exchange print with shares >= `block_min_shares`, ranked
+    DESCENDING by notional (price*shares), capped at `block_top_n` (default 5). Derived in
+    this same pass from the same trades (no new fetch). Display-only: no side is inferred.
+    `proximity_pct` is SIGNED vs spot (+ above, - below); `age_seconds` is the print's age
+    within the recent window (relative to `now_ns`, defaulting to wall-clock now).
+
+    Returns None when there's nothing usable so the caller can omit the block entirely.
     """
     if not trades or spot <= 0:
         return None
 
+    if now_ns is None:
+        now_ns = time.time_ns()
+
     total_vol = 0.0
     offex_vol = 0.0
     by_bucket: dict = {}   # bucketed price -> off-exchange shares
+    blocks: list = []      # individual off-exchange prints >= block_min_shares
     step = max(spot * bucket_pct, 0.01)
 
     for tr in trades:
@@ -42,8 +61,19 @@ def analyze_off_exchange(trades: list, spot: float, *, top_n: int = 5,
         if not tr.get("off_exchange"):
             continue
         offex_vol += size
-        bucket = round(round(tr["price"] / step) * step, 2)
+        price = tr["price"]
+        bucket = round(round(price / step) * step, 2)
         by_bucket[bucket] = by_bucket.get(bucket, 0.0) + size
+        if size >= block_min_shares:
+            ts = tr.get("timestamp") or 0
+            age_seconds = int(max(0, (now_ns - ts) / 1e9)) if ts else 0
+            blocks.append({
+                "price": price,
+                "shares": int(size),
+                "notional": round(price * size, 2),
+                "proximity_pct": round((price - spot) / spot, 4),
+                "age_seconds": age_seconds,
+            })
 
     if offex_vol <= 0:
         return None
@@ -61,11 +91,16 @@ def analyze_off_exchange(trades: list, spot: float, *, top_n: int = 5,
         if len(levels) >= top_n:
             break
 
+    # Largest notional first; drop ties/overflow beyond the cap.
+    blocks.sort(key=lambda b: b["notional"], reverse=True)
+    blocks = blocks[:block_top_n]
+
     return {
         "ratio_pct": round(100.0 * offex_vol / total_vol, 1) if total_vol > 0 else None,
         "offex_shares": int(offex_vol),
         "total_shares": int(total_vol),
         "levels": levels,
+        "blocks": blocks,
         "note": "Off-exchange/TRF prints over a recent window; side & intent unknown, "
                 "includes internalized retail. Use as context, not a directional signal.",
     }

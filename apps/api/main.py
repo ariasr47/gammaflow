@@ -58,6 +58,9 @@ CHAIN_REFRESH_SECONDS = int(os.getenv("CHAIN_REFRESH_SECONDS", "120"))    # live
 # opportunity-score confluence bonus is not applied.
 INCLUDE_DARK_POOL = os.getenv("INCLUDE_DARK_POOL", "true").lower() == "true"
 DARKPOOL_LOOKBACK_SECONDS = int(os.getenv("DARKPOOL_LOOKBACK_SECONDS", "3600"))  # bounded window
+# Institutional-size threshold (shares) for a single off-exchange print to count as a "block".
+# Fixed in v1 (no ADV-relative sizing); display-only, never feeds the opportunity score.
+BLOCK_MIN_SHARES = int(os.getenv("BLOCK_MIN_SHARES", "5000"))
 
 # In-memory state. Mutated only from the event loop (after awaiting the worker thread), so
 # no locking is needed. _cache is keyed by (ticker, min_dte, max_dte); _last_fingerprint
@@ -217,10 +220,20 @@ def compute_ticker(ticker: str, min_dte: int | None = None,
     # Off-exchange ("dark pool") context — only when enabled. Derived from the trade tape
     # (trf-reported prints); used as a capped confluence bonus and passed to the AI. Omitted
     # entirely when off so it influences neither the score nor the downstream AI.
+    #
+    # BEST-EFFORT + ISOLATED: any failure here (trade-fetch error, parse error, empty tape)
+    # is caught and yields off_exchange = None, leaving market_state + strike_profile and the
+    # rest of the bundle fully intact. This must never turn into an HTTP error.
     off_exchange = None
     if dark_pool:
-        trades = data_provider.fetch_recent_trades(ticker, DARKPOOL_LOOKBACK_SECONDS)
-        off_exchange = analyze_off_exchange(trades, state["price"])
+        try:
+            trades = data_provider.fetch_recent_trades(ticker, DARKPOOL_LOOKBACK_SECONDS)
+            off_exchange = analyze_off_exchange(
+                trades, state["price"], block_min_shares=BLOCK_MIN_SHARES)
+        except Exception:
+            logger.exception(f"[{ticker}] Off-exchange computation failed; omitting off_exchange "
+                             f"(bundle unaffected)")
+            off_exchange = None
 
     sig = generate_signals(state, off_exchange)
 
