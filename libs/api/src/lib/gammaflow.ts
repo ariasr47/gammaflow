@@ -127,6 +127,7 @@ export interface LiveUpdate {
   spot_ts: number;
   live: boolean;            // true only if a real tick arrived recently (else mid is stale)
   tick_age_s: number | null;
+  market_session: string;   // premarket | regular | afterhours | overnight | closed
   feed: string;             // "realtime" | "delayed"
   ts: number;
   gamma_flip: number | null;

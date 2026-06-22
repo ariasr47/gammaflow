@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTheme } from '@mui/material/styles';
-import { Card, CardContent, Typography, Stack, Box } from '@mui/material';
+import { Card, CardContent, Typography, Stack, Box, Tooltip as MuiTooltip } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell,
   ReferenceLine, Tooltip,
@@ -59,7 +60,13 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip, l
     <Card variant="outlined" sx={{ mt: 3 }}>
       <CardContent>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1, flexWrap: 'wrap' }}>
-          <Typography variant="h6">GEX strike profile</Typography>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="h6">GEX strike profile</Typography>
+            <MuiTooltip arrow placement="top"
+              title="Net dealer gamma at each strike. Green = call-dominated (resistance above price); red = put-dominated (support below). Dashed lines mark the spot, the gamma flip, and the live price.">
+              <InfoOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
+            </MuiTooltip>
+          </Stack>
           <Stack direction="row" spacing={2}>
             <LegendDot color={green} label="Call-dominated (net +)" />
             <LegendDot color={red} label="Put-dominated (net −)" />

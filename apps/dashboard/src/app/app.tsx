@@ -3,9 +3,10 @@ import { Routes, Route, Navigate, useParams, useNavigate } from 'react-router-do
 import { styled } from '@mui/material/styles';
 import {
   AppBar, Toolbar, Typography, Container, Box, Card, CardContent,
-  Chip, CircularProgress, TextField, Stack, Alert, Button, ButtonGroup,
+  Chip, CircularProgress, TextField, Stack, Alert, Button, ButtonGroup, Tooltip,
   FormControl, InputLabel, Select, OutlinedInput, MenuItem, Checkbox, ListItemText,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { getTicker, streamTicker, TickerBundle, LiveUpdate } from '@org/api';
 import { GexProfileChart } from './gex-profile-chart';
 
@@ -44,15 +45,45 @@ const StatTile = styled(Card)<{ accent?: 'up' | 'down' | 'neutral' }>(
   })
 );
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: 'up' | 'down' | 'neutral' }) {
-  return (
+function Stat({ label, value, accent, info }:
+  { label: string; value: string; accent?: 'up' | 'down' | 'neutral'; info?: string }) {
+  const tile = (
     <StatTile accent={accent} variant="outlined">
       <CardContent>
-        <Typography variant="caption" color="text.secondary">{label}</Typography>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <Typography variant="caption" color="text.secondary">{label}</Typography>
+          {info && <InfoOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled' }} />}
+        </Stack>
         <Typography variant="h6">{value}</Typography>
       </CardContent>
     </StatTile>
   );
+  // Whole-tile hover tooltip (the ⓘ just signals one exists). Only when `info` is given.
+  return info ? <Tooltip title={info} arrow placement="top">{tile}</Tooltip> : tile;
+}
+
+// Session-aware live status: explains WHY there are (or aren't) live ticks, instead of a
+// frozen price that silently contradicts an overnight-capable platform like Webull.
+function liveStatus(live: LiveUpdate | null):
+  { color: 'info' | 'warning' | 'default'; label: string; tip: string } | null {
+  if (!live) return null;
+  const last = live.mid != null ? ` · last $${live.mid.toFixed(2)}` : '';
+  if (live.live) {
+    const s: Record<string, string> = { premarket: 'pre-market', regular: 'open',
+      afterhours: 'after-hours', overnight: 'overnight' };
+    return { color: 'info', label: `● live · ${s[live.market_session] ?? live.market_session} · $${live.mid?.toFixed(2)}`,
+      tip: `Streaming live ${live.feed} ticks.` };
+  }
+  if (live.market_session === 'overnight') {
+    return { color: 'warning', label: `○ overnight — no live data${last}`,
+      tip: 'Massive covers 4 AM–8 PM ET only; the 8 PM–4 AM overnight session is not provided, so this is the last close. Overnight-capable platforms (e.g. Webull) will show a different, live price.' };
+  }
+  if (live.market_session === 'closed') {
+    return { color: 'default', label: `○ market closed${last}`,
+      tip: 'Market is closed (weekend/holiday). Showing the last completed session.' };
+  }
+  return { color: 'warning', label: `○ no live ticks${last}`,
+    tip: 'In a covered session but no ticks are arriving — the feed may be lagging, or it is a market holiday.' };
 }
 
 function TickerDashboard() {
@@ -101,6 +132,7 @@ function TickerDashboard() {
   const noneSelected = selected !== null && selected.length === 0;
   const checked = selected ?? allDates; // dates shown ticked in the menu
   const isLive = live?.live ?? false;   // a real tick arrived recently (vs. stale last-known)
+  const ls = liveStatus(live);          // session-aware live/stale status for the chip
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -142,24 +174,24 @@ function TickerDashboard() {
         </ButtonGroup>
         {loading && <CircularProgress size={18} />}
         {sig?.regime && (
-          <Chip
-            label={sig.regime.replace('_', ' ')}
-            color={sig.regime === 'positive_gamma' ? 'success' : 'error'}
-          />
+          <Tooltip arrow title="Positive gamma: dealers dampen moves → range-bound, fade extremes. Negative gamma: dealers amplify moves → trending, don't fade.">
+            <Chip
+              label={sig.regime.replace('_', ' ')}
+              color={sig.regime === 'positive_gamma' ? 'success' : 'error'}
+            />
+          </Tooltip>
         )}
-        {live && (
-          isLive ? (
-            <Chip size="small" variant="outlined" color="info"
-              label={`● live ${live.feed} · $${live.mid?.toFixed(2)}`} />
-          ) : (
-            <Chip size="small" variant="outlined" color="warning"
-              label={`○ no live ticks${live.mid ? ` · last $${live.mid.toFixed(2)}` : ''}`} />
-          )
+        {ls && (
+          <Tooltip arrow title={ls.tip}>
+            <Chip size="small" variant="outlined" color={ls.color} label={ls.label} />
+          </Tooltip>
         )}
         {fresh?.stale && (
-          <Alert severity="warning" sx={{ py: 0 }}>
-            data is {humanAge(fresh.data_age_seconds)} old — levels may be unreliable
-          </Alert>
+          <Tooltip arrow title="Age of the option-chain snapshot the levels were computed from. Large here is expected outside market hours; mid-session staleness means the data is lagging.">
+            <Alert severity="warning" sx={{ py: 0 }}>
+              data is {humanAge(fresh.data_age_seconds)} old — levels may be unreliable
+            </Alert>
+          </Tooltip>
         )}
       </Stack>
 
@@ -182,21 +214,31 @@ function TickerDashboard() {
           </Typography>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 }}>
-            <Stat label="Call wall" value={`$${m.call_wall}`} accent="up" />
-            <Stat label="Put wall" value={`$${m.put_wall}`} accent="down" />
+            <Stat label="Call wall" value={`$${m.call_wall}`} accent="up"
+              info="Strike with the most positive dealer gamma — tends to act as resistance (dealers sell into rallies here)." />
+            <Stat label="Put wall" value={`$${m.put_wall}`} accent="down"
+              info="Strike with the most negative dealer gamma — tends to act as support (dealers buy dips here)." />
             <Stat
               label={isLive ? 'Gamma flip (live)' : 'Gamma flip'}
-              value={`$${live?.gamma_flip ?? m.gamma_flip}`} accent="neutral" />
+              value={`$${live?.gamma_flip ?? m.gamma_flip}`} accent="neutral"
+              info="The price where dealer hedging switches from calming moves to amplifying them. Above it → steadier/range-bound; below it → more volatile/trending." />
             <Stat
               label={`Net flow (${live ? Math.round(live.flow_window_s / 60) : 5}m)`}
               value={isLive ? `${live!.net_flow >= 0 ? '+' : ''}${live!.net_flow.toLocaleString()}` : '—'}
-              accent={!isLive ? 'neutral' : live!.net_flow >= 0 ? 'up' : 'down'} />
-            <Stat label="Spread" value={isLive && live?.spread != null ? `$${live.spread.toFixed(2)}` : '—'} accent="neutral" />
-            <Stat label="Net GEX" value={`$${(m.net_gex / 1e6).toFixed(1)}M`} accent={m.net_gex >= 0 ? 'up' : 'down'} />
-            <Stat label="Max pain" value={`$${m.max_pain ?? '—'}`} accent="neutral" />
-            <Stat label="IV / HV" value={m.iv_hv_ratio.toFixed(2)} accent="neutral" />
-            <Stat label="VWAP" value={m.vwap != null ? `$${m.vwap.toFixed(2)}` : '—'} accent="neutral" />
-            <Stat label="Opportunity" value={`${sig?.opportunity_score ?? 0}`} accent="neutral" />
+              accent={!isLive ? 'neutral' : live!.net_flow >= 0 ? 'up' : 'down'}
+              info="Aggressive buys minus sells over the last few minutes, from the live trade tape. Positive = buyers lifting the ask; negative = sellers hitting the bid." />
+            <Stat label="Spread" value={isLive && live?.spread != null ? `$${live.spread.toFixed(2)}` : '—'} accent="neutral"
+              info="Best ask minus best bid. Wider = a thinner, more volatile market." />
+            <Stat label="Net GEX" value={`$${(m.net_gex / 1e6).toFixed(1)}M`} accent={m.net_gex >= 0 ? 'up' : 'down'}
+              info="Total dealer gamma across the chain. Positive = dealers dampen moves (range-bound); negative = they amplify moves (trending)." />
+            <Stat label="Max pain" value={`$${m.max_pain ?? '—'}`} accent="neutral"
+              info="Price at the nearest monthly expiration where the most option value expires worthless — a mild magnet into expiry." />
+            <Stat label="IV / HV" value={m.iv_hv_ratio.toFixed(2)} accent="neutral"
+              info="Implied volatility ÷ recent realized volatility. >1 = options look expensive (favor selling); <1 = cheap (favor buying)." />
+            <Stat label="VWAP" value={m.vwap != null ? `$${m.vwap.toFixed(2)}` : '—'} accent="neutral"
+              info="Volume-weighted average price for the session — a common intraday fair-value / mean-reversion reference." />
+            <Stat label="Opportunity" value={`${sig?.opportunity_score ?? 0}`} accent="neutral"
+              info="0–100 triage score for how actionable the setup is now (closeness to a key level + volatility extremity + confluence). Not a trade signal." />
           </Box>
 
           {data?.strike_profile && (
