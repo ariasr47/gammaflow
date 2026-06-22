@@ -195,6 +195,7 @@ function TickerDashboard() {
             <Stat label="Net GEX" value={`$${(m.net_gex / 1e6).toFixed(1)}M`} accent={m.net_gex >= 0 ? 'up' : 'down'} />
             <Stat label="Max pain" value={`$${m.max_pain ?? '—'}`} accent="neutral" />
             <Stat label="IV / HV" value={m.iv_hv_ratio.toFixed(2)} accent="neutral" />
+            <Stat label="VWAP" value={m.vwap != null ? `$${m.vwap.toFixed(2)}` : '—'} accent="neutral" />
             <Stat label="Opportunity" value={`${sig?.opportunity_score ?? 0}`} accent="neutral" />
           </Box>
 

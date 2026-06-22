@@ -29,13 +29,15 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip, l
   const red = theme.palette.error.main;
 
   const data = useMemo(() => {
-    // Keep a readable window around spot, sorted high→low so high strikes sit on top.
-    const lo = spot * 0.88;
-    const hi = spot * 1.12;
+    // A readable window around spot, but ALWAYS wide enough to include the walls it labels
+    // (a round-number wall can sit just outside a fixed ±% band, which would crop the very
+    // strike the chart names). Sorted high→low so high strikes sit on top.
+    const lo = Math.min(spot * 0.88, putWall > 0 ? putWall : spot * 0.88);
+    const hi = Math.max(spot * 1.12, callWall > 0 ? callWall : spot * 1.12);
     return strikes
       .filter((s) => s.strike >= lo && s.strike <= hi)
       .sort((a, b) => b.strike - a.strike);
-  }, [strikes, spot]);
+  }, [strikes, spot, callWall, putWall]);
 
   // Snap a price to the nearest plotted strike so a category-axis reference line lands on a band.
   const nearest = (price: number) =>
