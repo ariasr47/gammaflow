@@ -31,3 +31,12 @@
 
 ## Out of scope
 - No frontend. No endpoint shape changes beyond the interface contract. No gamma-math changes.
+
+## Definition of done
+- [ ] Code implemented to spec and verified (see Verification).
+- [ ] `.claude/GAMMAFLOW_CONTEXT.md` refreshed to reflect the merged code (re-read touched
+      files; same section structure), and `market_state_glossary.md` updated if any payload
+      fields changed.
+- [ ] This feature's `.claude/contracts/<feature>/` folder archived (it's shipped), and
+      `.claude/OPEN_THREADS.md` updated for anything opened/closed.
+- [ ] Committed.

@@ -33,3 +33,12 @@
 
 ## Out of scope
 - No backend. No data-shape changes (bind to the interface contract). No new endpoints.
+
+## Definition of done
+- [ ] UI implemented to spec and verified (see Verification).
+- [ ] `.claude/GAMMAFLOW_CONTEXT.md` refreshed if the UI changed the system's described
+      behavior/state (re-read touched files; same section structure).
+- [ ] This feature's `.claude/contracts/<feature>/` folder archived (it's shipped), and
+      `.claude/OPEN_THREADS.md` updated for anything opened/closed. (Coordinate with backend so
+      the folder is archived once both lanes land.)
+- [ ] Committed.
