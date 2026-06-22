@@ -70,6 +70,7 @@ class TradePrint(TypedDict):
     size: float
     timestamp: int          # nanoseconds since epoch
     conditions: list[int]
+    off_exchange: bool      # True if reported via a TRF (off-exchange / "dark pool" / internalized)
 
 
 class StreamEvent(TypedDict, total=False):

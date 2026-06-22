@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from src.core.engine import QuantEngine
 from src.core.signals import generate_signals, evaluate_gate
 from src.core.live import LiveHub
+from src.core.darkpool import analyze_off_exchange
 from src.providers import get_provider
 from src.models.market_data import MarketState
 
@@ -50,6 +51,13 @@ GATE_SCORE = int(os.getenv("GATE_SCORE", "50"))
 FLOW_WINDOW_SECONDS = int(os.getenv("FLOW_WINDOW_SECONDS", "300"))   # rolling net-flow window
 LIVE_THROTTLE_SECONDS = float(os.getenv("LIVE_THROTTLE_SECONDS", "1.5"))  # SSE broadcast cadence
 CHAIN_REFRESH_SECONDS = int(os.getenv("CHAIN_REFRESH_SECONDS", "120"))    # live chain re-fetch
+
+# --- Dark-pool / off-exchange config ---
+# Default inclusion; per-request `dark_pool` query param overrides. When excluded, the
+# off_exchange block is omitted from the bundle (so the downstream AI never sees it) AND the
+# opportunity-score confluence bonus is not applied.
+INCLUDE_DARK_POOL = os.getenv("INCLUDE_DARK_POOL", "true").lower() == "true"
+DARKPOOL_LOOKBACK_SECONDS = int(os.getenv("DARKPOOL_LOOKBACK_SECONDS", "3600"))  # bounded window
 
 # In-memory state. Mutated only from the event loop (after awaiting the worker thread), so
 # no locking is needed. _cache is keyed by (ticker, min_dte, max_dte); _last_fingerprint
@@ -165,7 +173,8 @@ def _write_ticker_files(ticker: str, state: dict, profile: list, sig: dict):
 
 def compute_ticker(ticker: str, min_dte: int | None = None,
                    max_dte: int | None = None,
-                   expirations: tuple | None = None) -> dict | None:
+                   expirations: tuple | None = None,
+                   dark_pool: bool = False) -> dict | None:
     """
     Fetch + compute everything for ONE ticker on demand and return the full bundle.
     Returns None when the symbol has no usable option chain (so callers can 404).
@@ -173,10 +182,14 @@ def compute_ticker(ticker: str, min_dte: int | None = None,
     `expirations` (a tuple of YYYY-MM-DD dates) restricts the gamma structure to those
     expirations; None uses the full chain (subject to min/max DTE).
 
+    `dark_pool`: when True, compute off-exchange volume context, include it in the bundle,
+    and apply its (capped) confluence bonus to the opportunity score. When False, it is
+    omitted entirely -- not in the bundle and not in scoring.
+
     Synchronous (does blocking SDK I/O); endpoints run it in a worker thread.
     """
     logger.info(f"[{ticker}] On-demand refresh (min_dte={min_dte}, max_dte={max_dte}, "
-                f"expirations={len(expirations) if expirations else 'all'})")
+                f"expirations={len(expirations) if expirations else 'all'}, dark_pool={dark_pool})")
     market_data = data_provider.fetch_options_market_state(ticker)
     underlying_history = data_provider.fetch_daily_bars(ticker)
     intraday_bars = data_provider.fetch_intraday_bars(ticker)
@@ -200,7 +213,16 @@ def compute_ticker(ticker: str, min_dte: int | None = None,
 
     state, profile = _build_market_state(
         ticker, market_data, underlying_history, intraday_bars, min_dte, max_dte, expirations)
-    sig = generate_signals(state)
+
+    # Off-exchange ("dark pool") context — only when enabled. Derived from the trade tape
+    # (trf-reported prints); used as a capped confluence bonus and passed to the AI. Omitted
+    # entirely when off so it influences neither the score nor the downstream AI.
+    off_exchange = None
+    if dark_pool:
+        trades = data_provider.fetch_recent_trades(ticker, DARKPOOL_LOOKBACK_SECONDS)
+        off_exchange = analyze_off_exchange(trades, state["price"])
+
+    sig = generate_signals(state, off_exchange)
 
     top = sig["setups"][0]["name"] if sig["setups"] else "none"
     logger.info(
@@ -211,13 +233,16 @@ def compute_ticker(ticker: str, min_dte: int | None = None,
     )
 
     _write_ticker_files(ticker, state, profile, sig)
-    return {
+    bundle = {
         "market_state": state,
         "signals": sig,
         "strike_profile": {"ticker": ticker, "spot": state["price"], "strikes": profile},
         "expirations": available_expirations,  # for the UI expiration selector (all future dates)
         "ai_eval": evaluate_gate(sig, GATE_SCORE),  # `changed` + staleness filled in at serve time
     }
+    if off_exchange is not None:
+        bundle["off_exchange"] = off_exchange  # present only when dark_pool is enabled
+    return bundle
 
 
 app = FastAPI(
@@ -245,22 +270,22 @@ def _parse_expirations(csv: str | None) -> tuple | None:
 
 
 async def _serve(ticker: str, min_dte: int | None, max_dte: int | None,
-                 expirations: tuple | None = None) -> dict:
+                 expirations: tuple | None = None, dark_pool: bool = False) -> dict:
     """
     Cache-aware serve path: returns the full wrapped bundle (market_state + signals +
-    strike_profile + expirations + ai_eval + meta) for one ticker. Computes on cache-miss
-    (in a worker thread, since the SDK blocks), serves from memory within CACHE_TTL_SECONDS.
-    404 when the symbol has no option chain.
+    strike_profile + expirations + ai_eval + meta [+ off_exchange]) for one ticker. Computes
+    on cache-miss (in a worker thread, since the SDK blocks), serves from memory within
+    CACHE_TTL_SECONDS. 404 when the symbol has no option chain.
     """
     t = ticker.upper()
-    key = (t, min_dte, max_dte, expirations)
+    key = (t, min_dte, max_dte, expirations, dark_pool)
     now = time.time()
 
     entry = _cache.get(key)
     hit = entry is not None and (now - entry["computed_at"]) < CACHE_TTL_SECONDS
 
     if not hit:
-        bundle = await asyncio.to_thread(compute_ticker, t, min_dte, max_dte, expirations)
+        bundle = await asyncio.to_thread(compute_ticker, t, min_dte, max_dte, expirations, dark_pool)
         if bundle is None:
             raise HTTPException(status_code=404, detail=f"No option-chain data available for {t}.")
         # Resolve the dedupe flag against the last DISTINCT picture for this ticker.
@@ -292,7 +317,7 @@ def _wrap(entry: dict, hit: bool, now: float) -> dict:
         ai_eval["ready"] = False
         ai_eval["reasons"] = list(ai_eval["reasons"]) + ["stale data"]
 
-    return {
+    wrapped = {
         "market_state": state,
         "signals": bundle["signals"],
         "strike_profile": bundle["strike_profile"],
@@ -307,6 +332,9 @@ def _wrap(entry: dict, hit: bool, now: float) -> dict:
                           "stale_after_seconds": STALE_AFTER_SECONDS},
         },
     }
+    if "off_exchange" in bundle:   # present only when dark_pool was enabled at compute time
+        wrapped["off_exchange"] = bundle["off_exchange"]
+    return wrapped
 
 
 # Shared filter query params. min_dte/max_dte bound the gamma-structure window (None = full
@@ -315,6 +343,8 @@ def _wrap(entry: dict, hit: bool, now: float) -> dict:
 _MinDTE = Query(None, ge=0, description="Drop contracts with fewer than this many days to expiry.")
 _MaxDTE = Query(None, ge=0, description="Drop contracts with more than this many days to expiry.")
 _Expirations = Query(None, description="Comma-separated YYYY-MM-DD expirations to include (default: all).")
+_DarkPool = Query(INCLUDE_DARK_POOL, description="Include off-exchange (dark-pool) context in the "
+                  "bundle and opportunity score. False omits it from both.")
 
 
 @app.get("/api/ticker/{ticker}")
@@ -323,9 +353,10 @@ async def get_ticker_bundle(
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
     expirations: str | None = _Expirations,
+    dark_pool: bool = _DarkPool,
 ):
-    """Full bundle (market_state + signals + strike_profile + expirations) for one ticker."""
-    return await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations))
+    """Full bundle (market_state + signals + strike_profile + expirations [+ off_exchange])."""
+    return await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations), dark_pool)
 
 
 @app.get("/api/market-data", response_model=MarketState)
@@ -334,8 +365,9 @@ async def get_market_data(
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
     expirations: str | None = _Expirations,
+    dark_pool: bool = _DarkPool,
 ):
-    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations)))["market_state"]
+    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations), dark_pool))["market_state"]
 
 
 @app.get("/api/strike-profile")
@@ -344,8 +376,9 @@ async def get_strike_profile(
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
     expirations: str | None = _Expirations,
+    dark_pool: bool = _DarkPool,
 ):
-    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations)))["strike_profile"]
+    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations), dark_pool))["strike_profile"]
 
 
 @app.get("/api/signals")
@@ -354,8 +387,9 @@ async def get_signals(
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
     expirations: str | None = _Expirations,
+    dark_pool: bool = _DarkPool,
 ):
-    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations)))["signals"]
+    return (await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations), dark_pool))["signals"]
 
 
 @app.get("/api/stream/{ticker}")
@@ -406,9 +440,10 @@ async def get_ticker_page(
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
     expirations: str | None = _Expirations,
+    dark_pool: bool = _DarkPool,
 ):
     """Same full bundle as /api/ticker/{ticker}, on the friendly /SYMBOL URL."""
-    return await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations))
+    return await _serve(ticker, min_dte, max_dte, _parse_expirations(expirations), dark_pool)
 
 
 if __name__ == "__main__":

@@ -41,8 +41,44 @@ def _near(level, price, pct=NEAR_LEVEL_PCT):
     return d is not None and abs(d) <= pct
 
 
-def generate_signals(state: dict) -> dict:
-    """Produce regime, vol regime, level distances, setups, and a 0-100 opportunity score."""
+DARK_POOL_NEAR_PCT = 0.005   # off-exchange level within 0.5% of a gamma level = confluence
+DARK_POOL_BONUS_EACH = 3     # points per coinciding level
+DARK_POOL_BONUS_CAP = 6      # max total dark-pool confluence bonus
+
+
+def _dark_pool_confluence(state: dict, off_exchange: dict | None) -> tuple[int, list]:
+    """
+    Small, capped opportunity bonus when an off-exchange volume level coincides with a gamma
+    level (wall/flip/peak). Confirmation only -- off-exchange side/intent is unknown, so this
+    never drives the score on its own. Returns (bonus, matched-level descriptions).
+    """
+    if not off_exchange or not off_exchange.get("levels"):
+        return 0, []
+    gamma_levels = {
+        "call_wall": state.get("call_wall"), "put_wall": state.get("put_wall"),
+        "gamma_flip": state.get("gamma_flip"), "peak_gex_strike": state.get("peak_gex_strike"),
+    }
+    matches = []
+    for lvl in off_exchange["levels"]:
+        p = lvl.get("price")
+        if not p:
+            continue
+        for name, gl in gamma_levels.items():
+            if gl and abs(p - gl) / gl <= DARK_POOL_NEAR_PCT:
+                matches.append({"off_exchange_price": p, "coincides_with": name, "level": gl})
+                break
+    bonus = min(DARK_POOL_BONUS_CAP, len(matches) * DARK_POOL_BONUS_EACH)
+    return bonus, matches
+
+
+def generate_signals(state: dict, off_exchange: dict | None = None) -> dict:
+    """
+    Produce regime, vol regime, level distances, setups, and a 0-100 opportunity score.
+
+    off_exchange (when provided) adds a small capped confluence bonus to the score where an
+    off-exchange volume level overlaps a gamma level. Pass None to exclude it entirely (no
+    bonus, no confluence field) -- this is how the dark-pool toggle keeps it out of scoring.
+    """
     price = state.get("price") or state.get("gex_spot")
     flip = state.get("gamma_flip")
     net_gex = state.get("net_gex")
@@ -187,7 +223,12 @@ def generate_signals(state: dict) -> dict:
         )
 
     out["setups"] = setups
-    out["opportunity_score"] = _opportunity_score(dist, ivhv, setups, near_flip)
+    score = _opportunity_score(dist, ivhv, setups, near_flip)
+    dp_bonus, dp_matches = _dark_pool_confluence(state, off_exchange)
+    if dp_bonus:
+        score = min(100, score + dp_bonus)
+        out["dark_pool_confluence"] = dp_matches
+    out["opportunity_score"] = score
     return out
 
 

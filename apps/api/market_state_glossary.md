@@ -102,6 +102,14 @@ get `ai_eval` + `meta` in one call.
   and `state_fingerprint` is a coarse, stable hash a consumer dedupes on. **Invoke the AI
   only when `ready && changed` and the fingerprint is new** — see `prompts/strategy_prompt.md`
   for the full hand-off contract and required output schema.
+- `off_exchange` — **present only when `dark_pool=true`.** Off-exchange (TRF-reported)
+  volume over a recent window: `ratio_pct` (off-lit share of volume), and `levels[]`
+  (volume-by-price: `price`, `shares`, `share_of_offex_pct`, `proximity_pct`). **Context
+  only — NOT directional.** Off-exchange volume includes dark pools/ATS *and* internalized
+  retail, and prints carry no reliable side, so do not infer accumulation/distribution.
+  When a level coincides with a gamma wall/flip it adds a small capped confluence bonus to
+  `opportunity_score` (reflected in `signals.dark_pool_confluence`). If absent, the user
+  disabled it — ignore entirely.
 
 # `/api/signals` — pre-digested setups for ONE ticker
 

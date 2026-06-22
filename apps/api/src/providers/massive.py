@@ -317,16 +317,24 @@ class MassiveProvider(MarketDataProvider):
             logger.error(f"[{underlying_upper}] Failed to fetch option chain: {e}")
             return {}
 
+    # Hard cap on trades scanned in one fetch, so a long dark-pool lookback on a liquid name
+    # can't run away. Newest-first so a cap keeps the most recent prints.
+    _MAX_TRADES = 120000
+
     def fetch_recent_trades(self, ticker: str, lookback_seconds: int) -> list[TradePrint]:
-        """Recent executed trades (ascending) over a trailing window, to seed order flow."""
+        """
+        Recent executed trades over a trailing window, ascending. Each carries off_exchange
+        (TRF-reported) so callers can derive order flow AND off-exchange/dark-pool activity.
+        """
         ticker_upper = ticker.upper()
         now_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
         start_ns = now_ns - int(lookback_seconds * 1e9)
         out: list[TradePrint] = []
         try:
+            # Pull newest-first so the cap retains recent prints, then return ascending.
             trades = self.client.list_trades(
                 ticker_upper, timestamp_gte=start_ns, timestamp_lte=now_ns,
-                order="asc", sort="timestamp", limit=50000,
+                order="desc", sort="timestamp", limit=50000,
             )
             for tr in trades:
                 price = extract(tr, "price")
@@ -337,11 +345,15 @@ class MassiveProvider(MarketDataProvider):
                 out.append(TradePrint(
                     price=float(price), size=float(size), timestamp=int(ts),
                     conditions=extract(tr, "conditions") or [],
+                    off_exchange=extract(tr, "trf_id") is not None,
                 ))
-            logger.info(f"[{ticker_upper}] Backfilled {len(out)} trades over last {lookback_seconds}s")
+                if len(out) >= self._MAX_TRADES:
+                    break
+            out.reverse()  # ascending by time
+            logger.info(f"[{ticker_upper}] Pulled {len(out)} trades over last {lookback_seconds}s")
             return out
         except Exception as e:
-            logger.error(f"[{ticker_upper}] Failed to backfill trades: {e}")
+            logger.error(f"[{ticker_upper}] Failed to fetch trades: {e}")
             return out
 
     async def stream_stock(self, ticker: str) -> AsyncIterator[StreamEvent]:
