@@ -13,6 +13,7 @@ interface Props {
   callWall: number;
   putWall: number;
   gammaFlip: number;
+  liveSpot?: number | null;
 }
 
 const fmtM = (v: number) => `${(v / 1e6).toFixed(1)}M`;
@@ -22,7 +23,7 @@ const fmtM = (v: number) => `${(v / 1e6).toFixed(1)}M`;
  * red = net negative / put-dominated), strikes high→low on the Y axis. Call/put walls are
  * drawn at full opacity; spot and gamma flip are dashed reference lines.
  */
-export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip }: Props) {
+export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip, liveSpot }: Props) {
   const theme = useTheme();
   const green = theme.palette.success.main;
   const red = theme.palette.error.main;
@@ -89,6 +90,12 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip }:
               y={nearest(gammaFlip)} stroke={theme.palette.warning.main} strokeDasharray="4 3"
               label={{ value: `flip $${gammaFlip.toFixed(0)}`, position: 'right', fontSize: 11, fill: theme.palette.warning.main }}
             />
+            {liveSpot != null && liveSpot > 0 && (
+              <ReferenceLine
+                y={nearest(liveSpot)} stroke={theme.palette.info.main} strokeWidth={2}
+                label={{ value: `live $${liveSpot.toFixed(0)}`, position: 'right', fontSize: 11, fill: theme.palette.info.main }}
+              />
+            )}
             <Bar dataKey="net_gex" name="Net GEX" isAnimationActive={false}>
               {data.map((s) => (
                 <Cell

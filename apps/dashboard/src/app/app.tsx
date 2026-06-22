@@ -6,7 +6,7 @@ import {
   Chip, CircularProgress, TextField, Stack, Alert, Button, ButtonGroup,
   FormControl, InputLabel, Select, OutlinedInput, MenuItem, Checkbox, ListItemText,
 } from '@mui/material';
-import { getTicker, TickerBundle } from '@org/api';
+import { getTicker, streamTicker, TickerBundle, LiveUpdate } from '@org/api';
 import { GexProfileChart } from './gex-profile-chart';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
@@ -62,6 +62,7 @@ function TickerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [symbol, setSymbol] = useState(ticker);
+  const [live, setLive] = useState<LiveUpdate | null>(null);
   // Expiration filter: null = all (no filter), [] = none selected, else an explicit subset.
   const [selected, setSelected] = useState<string[] | null>(null);
 
@@ -84,6 +85,13 @@ function TickerDashboard() {
     const id = setInterval(load, POLL_MS);
     return () => clearInterval(id);
   }, [load]);
+
+  // Live SSE stream: mirrors the expiration filter. Skipped when nothing is selected.
+  useEffect(() => {
+    setLive(null);
+    if (selected !== null && selected.length === 0) return;
+    return streamTicker(ticker, { expirations: selected ?? undefined }, setLive);
+  }, [ticker, selected]);
 
   const m = data?.market_state;
   const fresh = data?.meta.freshness;
@@ -138,6 +146,10 @@ function TickerDashboard() {
             color={sig.regime === 'positive_gamma' ? 'success' : 'error'}
           />
         )}
+        {live && (
+          <Chip size="small" variant="outlined" color="info"
+            label={`● ${live.feed}${live.mid ? ` · $${live.mid.toFixed(2)}` : ''}`} />
+        )}
         {fresh?.stale && (
           <Alert severity="warning" sx={{ py: 0 }}>
             data is {humanAge(fresh.data_age_seconds)} old — levels may be unreliable
@@ -157,7 +169,7 @@ function TickerDashboard() {
       {!noneSelected && m && (
         <>
           <Typography variant="h1" gutterBottom>
-            {m.ticker} · ${m.price?.toFixed(2)}
+            {m.ticker} · ${(live?.mid ?? m.price)?.toFixed(2)}
             <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
               (levels @ ${m.gex_spot?.toFixed(2)} · {selected === null ? 'all expirations' : `${selected.length} expiration${selected.length === 1 ? '' : 's'}`})
             </Typography>
@@ -166,8 +178,14 @@ function TickerDashboard() {
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 }}>
             <Stat label="Call wall" value={`$${m.call_wall}`} accent="up" />
             <Stat label="Put wall" value={`$${m.put_wall}`} accent="down" />
-            <Stat label="Gamma flip" value={`$${m.gamma_flip}`} accent="neutral" />
-            <Stat label="Peak GEX (magnet)" value={`$${m.peak_gex_strike ?? '—'}`} accent="neutral" />
+            <Stat
+              label={live?.gamma_flip != null ? 'Gamma flip (live)' : 'Gamma flip'}
+              value={`$${live?.gamma_flip ?? m.gamma_flip}`} accent="neutral" />
+            <Stat
+              label={`Net flow (${live ? Math.round(live.flow_window_s / 60) : 5}m)`}
+              value={live ? `${live.net_flow >= 0 ? '+' : ''}${live.net_flow.toLocaleString()}` : '—'}
+              accent={!live ? 'neutral' : live.net_flow >= 0 ? 'up' : 'down'} />
+            <Stat label="Spread" value={live?.spread != null ? `$${live.spread.toFixed(2)}` : '—'} accent="neutral" />
             <Stat label="Net GEX" value={`$${(m.net_gex / 1e6).toFixed(1)}M`} accent={m.net_gex >= 0 ? 'up' : 'down'} />
             <Stat label="Max pain" value={`$${m.max_pain ?? '—'}`} accent="neutral" />
             <Stat label="IV / HV" value={m.iv_hv_ratio.toFixed(2)} accent="neutral" />
@@ -180,7 +198,8 @@ function TickerDashboard() {
               spot={m.gex_spot ?? m.price}
               callWall={m.call_wall}
               putWall={m.put_wall}
-              gammaFlip={m.gamma_flip}
+              gammaFlip={live?.gamma_flip ?? m.gamma_flip}
+              liveSpot={live?.mid ?? null}
             />
           )}
 

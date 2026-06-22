@@ -112,6 +112,47 @@ export class ApiError extends Error {
   }
 }
 
+/** Live payload pushed over SSE (mid/flow/live flip). Levels other than the flip come from
+ *  the bundle; the UI measures price-vs-wall using `mid` + the bundle's walls. */
+export interface LiveUpdate {
+  ticker: string;
+  mid: number | null;
+  bid: number | null;
+  ask: number | null;
+  spread: number | null;
+  net_flow: number;
+  buy_vol: number;
+  sell_vol: number;
+  flow_window_s: number;
+  spot_ts: number;
+  feed: string;        // "realtime" | "delayed"
+  ts: number;
+  gamma_flip: number | null;
+}
+
+/**
+ * Subscribe to the live SSE stream for a ticker. Calls `onUpdate` on each payload and returns
+ * an unsubscribe fn that closes the EventSource (which tears down the backend session when the
+ * last subscriber leaves). SSE comment lines (heartbeats) are ignored by EventSource.
+ */
+export function streamTicker(
+  symbol: string,
+  { minDte, maxDte, expirations }: TickerQuery,
+  onUpdate: (u: LiveUpdate) => void
+): () => void {
+  const params = new URLSearchParams();
+  if (minDte != null) params.set('min_dte', String(minDte));
+  if (maxDte != null) params.set('max_dte', String(maxDte));
+  if (expirations && expirations.length) params.set('expirations', expirations.join(','));
+  const qs = params.toString();
+  const es = new EventSource(`/api/stream/${symbol.toUpperCase()}${qs ? `?${qs}` : ''}`);
+  es.onmessage = (e) => {
+    try { onUpdate(JSON.parse(e.data) as LiveUpdate); } catch { /* ignore malformed */ }
+  };
+  // onerror: EventSource auto-reconnects; nothing to do.
+  return () => es.close();
+}
+
 /** Full bundle for one ticker, optionally filtered by DTE window or explicit expirations. */
 export async function getTicker(
   symbol: string,
