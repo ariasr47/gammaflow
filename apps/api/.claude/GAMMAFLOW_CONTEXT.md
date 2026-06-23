@@ -5,6 +5,7 @@
 > against the repo; re-generate from code if it drifts.
 
 ## 1. Purpose & scope
+<!-- shard: tags=overview,purpose,scope -->
 GammaFlow is a **single-ticker options-positioning dashboard + analysis engine**. It turns an
 equity's option chain into dealer **gamma-exposure (GEX)** structure — call/put walls, the
 gamma flip, the magnet — then layers volatility context, real-time order flow, and a
@@ -14,6 +15,7 @@ Built for **longer-dated (≈7–45 DTE) swing trading with optional intraday ti
 computed bundle also feeds an **external** downstream AI that produces risk-first trade calls.
 
 ## 2. Architecture
+<!-- shard: tags=architecture,backend,frontend,api,engine,signals,live,sse,providers,observability,ui -->
 **Backend** (FastAPI, repo root + `src/`):
 - `main.py` — endpoints, response envelope, 60s in-memory cache, config, the `LiveHub`, the
   filter-independent `/api/contract/{ticker}` tracked-contract lookup (off a ticker-keyed snapshot
@@ -98,6 +100,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 **Transport:** heavy bundle over REST (polled ~60s, cached); light live payload over **SSE**.
 
 ## 3. Core math constraints
+<!-- shard: tags=math,gamma,greeks,flip,dte,vanna; always -->
 - **Two gamma sources (do not unify casually):** the per-strike **profile + walls + net/call/
   put GEX use the VENDOR's gamma** (`api_gamma`); the **gamma flip uses our ANALYTIC
   Black-Scholes gamma** (`_gex_curve`), because the flip reprices across a hypothetical spot
@@ -123,6 +126,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   `price`/`current_spot` = live/delayed display spot.
 
 ## 4. Data sources & coverage
+<!-- shard: tags=data,vendor,coverage,overnight,massive,options -->
 - **Massive = Polygon.io rebrand** (hostnames `*.massive.com`). REST + WebSocket.
 - **Stock coverage 4 AM–8 PM ET** (pre-market + RTH + after-hours). **NO overnight (8 PM–4 AM)** —
   the overnight ATS (Blue Ocean) price seen on Webull is NOT sourceable here.
@@ -132,6 +136,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - Trades carry **`trf_id`** → non-null = off-exchange ("dark pool"/internalized) print.
 
 ## 5. Key decisions & rationale
+<!-- shard: tags=decisions,invariants,isolation,darkpool; always -->
 - **Single-ticker, on-demand** (dropped the watchlist scan) — bulk per-cycle calc was too slow.
 - **Selectable DTE/expiration window** (`min_dte/max_dte/expirations`) — stabler swing levels,
   free of 0DTE noise; shapes gamma structure only.
@@ -171,6 +176,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   and leaves the trader path + SSE untouched. *(backend-observability, latency-visualizer — 2 binding.)*
 
 ## 6. Current feature state (works end-to-end)
+<!-- shard: tags=features,state,observability,darkpool,ghost-trade,dex,personas,metrics -->
 - On-demand bundle: `GET /{ticker}` & `/api/ticker/{ticker}` (+ slices) with DTE/expiration filter.
 - GEX strike-profile chart (walls always in-window, spot/flip/live reference lines, tooltips).
 - Live SSE: mid, spread, **net flow (5m, signed)**, live gamma flip; session-aware status chip.
@@ -210,6 +216,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - Explanatory hover tooltips on every jargon stat/chip/chart.
 
 ## 7. Conventions
+<!-- shard: tags=conventions,env,run,config,vendor -->
 - **Env (`.env`):** `MASSIVE_API_KEY`, `DATA_FEED` (realtime|delayed), `CACHE_TTL_SECONDS` (60),
   `STALE_AFTER_SECONDS` (1200; drop to ~120 on real-time), `GATE_SCORE` (50),
   `FLOW_WINDOW_SECONDS` (300), `LIVE_THROTTLE_SECONDS` (1.5), `CHAIN_REFRESH_SECONDS` (120),
@@ -227,6 +234,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - Two git repos: `C:\Dev\GammaFlow` (backend) and `C:\Dev\gammaflow-web` (frontend); no remotes.
 
 ## 8. Downstream-AI contract
+<!-- shard: tags=ai,prompt,strategy,reassessment,glossary,personas -->
 - `market_state_glossary.md` = field-level reference (reliability order, regimes, envelope,
   off_exchange, ghost-trade tracker). `prompts/strategy_prompt.md` = when to invoke (gate + dedupe) +
   required risk-first output schema (entry). `prompts/reassessment_prompt.md` = the position-aware
@@ -238,6 +246,7 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   **external** — GammaFlow defines the contract + gate only, it does **not** call an LLM.
 
 ## 9. Open items / under consideration
+<!-- shard: tags=open,roadmap,vendor,overnight -->
 - **Vendor evaluation:** Massive (cheap ~$400/mo flat, greeks included, no overnight) vs
   **Databento** (overnight via Blue Ocean + full OPRA + fidelity, but live-overnight likely
   Plus tier ~$1,500/mo + separate OPRA + build own greeks) vs **Webull data API** (cheap

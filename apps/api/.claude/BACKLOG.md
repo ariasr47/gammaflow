@@ -170,11 +170,16 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   tool-allowlists are partial (a `Write` could still hit an out-of-lane path); add `.claude/settings.json`
   PreToolUse hooks so a backend agent can't write the frontend repo and contract authors can't touch
   `src/`. *Value M · Effort S–M.* That completes "lanes enforced, not trusted."
-- **system-5 · Ground-truth + ledger sharding (retrieval)** — load only the canon a feature's
-  `BRIEF.md` cites instead of re-reading the whole `GAMMAFLOW_CONTEXT.md` every session. *Impact:*
-  decouples per-session token cost from total system size — the economics that otherwise worsen as you
-  ship more (SYSTEM_ANALYSIS §4.6/§6). *Value H (cost) · Effort M–L.* **Invariant watch:** every
-  session must still see the invariants it could violate — shard by relevance, never drop a binding rule.
+- **system-5 · Ground-truth + ledger sharding (retrieval)** — `✓ LANDED (2026-06-23, logical-slice) →
+  .claude/tools/context_for.py`. Each `## N.` section in `GAMMAFLOW_CONTEXT.md` carries an inline
+  `<!-- shard: tags=...; always -->` annotation; the tool assembles the minimal pack from the BRIEF's
+  `Context tags:` (+ Invariant-watch keys) + the always-load invariant floor (§3 math, §5
+  decisions/promoted invariants). `--print` emits the pack; `--stat` shows savings (39–72% on current
+  features, growing with the canon). **Single-source kept** (logical slice, no physical split → no drift,
+  unlike the rejected fork). Added a `Context tags:` BRIEF field (ORCHESTRATOR §4a); wired into
+  ROLE_LAUNCH intro + §6 invariant. *Value H (cost) · Effort M–L.* **Invariant honored:** §3+§5 are
+  `always` — sharding never drops a binding rule. **Deferred:** ledger sharding (the Promoted-canon
+  index is already compact, so minor); auto-deriving `Context tags` from the BRIEF's free text.
 - **system-6 · Adversarial Security/red-team role (different model)** — a session whose whole mindset is
   "what could be made to go wrong?": least-privilege per role, injection from fetched/external content,
   data leakage — run on a **different base model** so its blind spots don't correlate with the builders'.

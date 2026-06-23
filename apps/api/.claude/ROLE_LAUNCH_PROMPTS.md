@@ -11,6 +11,11 @@ Pipeline: **Architect → Product Manager → UX/Tech-Writer → Backend & Front
 > as the Orchestrator (`.claude/ORCHESTRATOR.md`) and announce the transition; it drives these
 > prompts + the compressors for you instead of manual copy-paste.
 
+> **Context retrieval (system-5):** instead of re-reading all of `GAMMAFLOW_CONTEXT.md`, a session can
+> load the minimal pack — `.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print`
+> (the always-load invariant floor §3+§5 + the sections the BRIEF's `Context tags:` select). Opt-in; the
+> whole file stays valid + single-source. Decouples per-session token cost from canon size.
+
 > **Lane-fenced subagents (system-4):** each role also has a tool-fenced subagent in `.claude/agents/`
 > (`gammaflow-architect` · `gammaflow-pm` · `gammaflow-ux` · `gammaflow-backend` · `gammaflow-frontend`
 > · `qa-verify`). A role spawned via the Agent tool is mechanically held to its lane — contract authors

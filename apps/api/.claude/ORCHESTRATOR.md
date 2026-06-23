@@ -286,6 +286,9 @@ Effort:          S | M | L
 Invariant watch: <canonical keys from DECISION_LEDGER.md "Promoted canon" this feature touches (e.g.
                  additive-keeps-score-byte-identical, best-effort-isolated-or-null) + any other locked
                  rule it must not touch (gamma sourcing, etc.)>
+Context tags:    <optional (system-5): GAMMAFLOW_CONTEXT section tags this feature needs, e.g.
+                 architecture,backend,personas,observability — context_for.py loads these + the
+                 always-load invariant floor (§3,§5). Omit ⇒ invariant floor only.>
 Entry point:     architect-first | pm-first — <one-line why>
 Source:          <backlog item / deferred seam / friction note it came from>
 ```
@@ -330,6 +333,12 @@ NEXT      : <role(s) to launch> — launch prompt below
   run code); executioners get the build toolset. Tool-allowlists are a PARTIAL guard (a `Write` could
   still target an out-of-lane path); the repo/path fencing that completes it is the deferred PreToolUse
   hook half. Lanes stay enforced-where-mechanical, trusted-where-not, until those hooks land.
+- **Ground-truth retrieval (system-5):** a session may load the minimal context pack via
+  `.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print` instead of re-reading all of
+  `GAMMAFLOW_CONTEXT.md` (selected from the BRIEF's `Context tags:` + the section shard tags). The
+  invariant-bearing sections (§3 math, §5 decisions/promoted invariants) are **`always`-load** — sharding
+  cuts tokens by relevance but NEVER drops a binding rule a feature could violate. Decouples per-session
+  cost from total canon size; the whole file stays the single source (logical slice, not a split).
 - **QA gates the ship (system-2):** GATE S requires a passing `QA_REPORT.md` from a FRESH QA/Verify
   session (GATE Q, `ROLE_LAUNCH_PROMPTS.md` §6) — never the builder's self-verification. QA confirms
   every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs
