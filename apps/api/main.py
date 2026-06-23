@@ -16,6 +16,7 @@ from src.core.signals import (generate_signals, evaluate_gate,
 from src.core.live import LiveHub
 from src.core.darkpool import analyze_off_exchange
 from src.core import observability as obs
+from src.core import personas as personas_lib
 from src.providers import get_provider
 from src.models.market_data import MarketState
 
@@ -666,6 +667,20 @@ async def get_tracked_contract(
         "iv": iv if iv else None,      # 0.0 (unpriced) -> null
         "dte": _dte_days(exp10),
     }
+
+
+@app.get("/api/personas")
+async def get_personas():
+    """
+    Read-only trader-persona data (side-effect-free): the canonical DECOMPOSED hand-off template
+    (FIXED text + named PERSONA slot ids) for both prompts, the slot-fill maps, the byte-identical
+    Default rendering, and the 7 built-in PersonaDefinitions. The FE assembles per-persona prompts
+    client-side from this; the server ships NO per-persona text, NO `meta.handoff`, NO `?persona=`.
+
+    Persona is a prompt projection only — it never touches `market_state`/`signals`/`ai_eval` (those
+    are byte-identical across personas) and triggers no recompute. No vendor fetch, no LLM call.
+    """
+    return personas_lib.readout()
 
 
 @app.get("/api/_metrics")

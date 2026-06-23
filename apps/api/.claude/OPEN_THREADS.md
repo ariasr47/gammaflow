@@ -143,7 +143,32 @@ shipped backend. **Archived** under `_archive/` (per DoD).
 **Deferred (specified, not built):** OTel/Prometheus export, latency/headroom alert thresholds,
 persisted/cross-restart baselines, the multi-ticker scanner (baseline data supports it).
 
-## 7. Smaller deferred items (proposed, not implemented)
+## 7. Trader personas (BACKEND SHIPPED — coordinate FE archive)
+Contracts in `.claude/contracts/trader-personas/` (A1 RESOLVED·ACCEPTED). Persona is a **read-only,
+post-FREEZE prompt projection** — a non-input to scoring by construction. **Backend shipped**
+(`C:\Dev\GammaFlow`): `prompts/strategy_prompt.md` + `reassessment_prompt.md` decomposed (FIXED vs
+PERSONA, annotation appended; bodies byte-identical) with the **A1 move** (trader-disposition lifted
+out of the universal risk floor); new `src/core/personas.py` (decomposed template + 7 built-in
+`PersonaDefinition`s + A1 disposition/objective/risk maps + reference `assemble()`); read-only
+`GET /api/personas` serving the template + presets. `signals.py`/`generate_signals`/
+`_opportunity_score`/`state_fingerprint`/`evaluate_gate`/engine **NOT modified** (the enforcement
+boundary). **No `meta.handoff`, no `?persona=` param, no LLM, SSE untouched.** Verified: Default ==
+today **verbatim** (entry+reassessment); `market_state`/`signals`/`ai_eval` **byte-identical** across
+`?persona=A/B/none` (param ignored) with **no recompute**; greed line only under Default + conservative;
+FIXED floor/schema/Add-cap present under every persona; hostile emphasis note stays in its slot.
+Glossary + GAMMAFLOW_CONTEXT refreshed.
+**Resolved (filed in INTERFACE amendment):** (1) transport = read-only `GET /api/personas` (the
+contract shipped no transport for the separate-repo FE); (2) **contract inconsistency** — the A1 map
+gives conservative the *softened* text, but the prose + BACKEND Verification require conservative to
+contain "prone to greed"; resolved by the **superset** clause (harsh phrase + verbatim map text).
+Flag for clean-up amendment if conservative was meant to be softened-only.
+**Still open:** FE lane (`PersonaPicker`/`HandoffDialog`/`PersonaCustomizeForm`, client-local store,
+FE-side assembly + fallback, ReassessCard `Briefing:` label). **Archive
+`.claude/contracts/trader-personas/` once the FE lane lands.**
+**Deferred (specified, not built):** multi-device sync, operator-shared persona library, richer
+customization, per-persona acceptance analytics.
+
+## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
   pre-market anchor selecting a different crossing when multiple exist. Also lower the per-tick
@@ -155,7 +180,7 @@ persisted/cross-restart baselines, the multi-ticker scanner (baseline data suppo
 - **Multi-session dark-pool accumulation map:** current dark-pool is a bounded recent window;
   true multi-session block history needs a heavier batched pull. Future.
 
-## 8. Resolved decisions (do NOT revisit)
+## 9. Resolved decisions (do NOT revisit)
 - **Live spot = NBBO mid, not last trade** — smoother, better for anchoring; Webull shows last
   trade, hence small benign differences. Keep mid; do not add last-trade.
 - **Gamma sourcing** — vendor gamma for walls/profile, analytic BS for the flip; the divergence

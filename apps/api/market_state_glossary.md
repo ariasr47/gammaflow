@@ -258,3 +258,36 @@ reasoning over these fields rather than re-deriving regime/levels yourself.
 - **Isolation:** every span/metric/emit is best-effort — an instrumentation failure leaves the bundle
   **200 with identical computed values** (only the affected span/metric missing); reading the readout
   is side-effect-free (no vendor fetch, no recompute, no cache mutation); **SSE is not instrumented**.
+
+---
+
+# Trader personas (prompt-layer projection only — NOT analytics)
+
+> Operator/strategy-AI note. A **persona** reframes the external-AI hand-off prompts only; it is a
+> read-only projection applied **after FREEZE** and is **not** a field in this bundle.
+
+- A **persona** reframes the external-AI hand-off prompts (`strategy_prompt`, `reassessment_prompt`)
+  for the trader's objective + risk tolerance. It changes **how the AI is briefed**, never
+  `opportunity_score`, `opportunity_tier`, `ai_eval` (`ready`/`changed`/`state_fingerprint`), the
+  gate, or any analytics — those are **byte-identical** across personas, and switching persona
+  triggers **no recompute**. GammaFlow still never calls an LLM. The 7 built-in `PersonaDefinition`s +
+  the decomposed template are served read-only at `GET /api/personas`; the FE assembles the prompt.
+- **FIXED (persona-invariant) sections:** when-to-invoke / when-to-reassess (gate + dedupe); what to
+  send (full bundle + glossary + DTE window — no field dropped); the output / verdict **schema**; the
+  reassessment **Add cap, no-auto-apply, Roll constraint, and `status` semantics**; and the
+  **universal risk-first floor** (lead with risk; `no_trade`/Hold is valid; JSON-only; anchor
+  `gex_spot`; reliability order; respect regime). This floor carries **no** characterization of who
+  the trader is.
+- **PERSONA-VARIABLE slots:** objective framing (income/premium-selling · directional swing ·
+  hedging) · risk calibration (conservative/moderate/aggressive) · the **trader-disposition
+  characterization** (A1) · the reassessment **disposition lean** (within the fixed caps/schema) · an
+  optional bounded **emphasis note** · an optional **DTE-preference** framing line. Slots fill **text
+  only** — a hostile customization cannot escape its slot to alter any FIXED section.
+- **Default (no persona)** reproduces today's prompt **verbatim** — including the "prone to greed and
+  poor risk management" line, which is **relocated to the persona-variable disposition slot (A1), not
+  deleted.** The harsh phrase appears **only** under Default and the **conservative** register —
+  never under moderate/aggressive, never as a universal assertion.
+- **Dark-pool stays neutral context** under every persona (it lives in the FIXED "what to send" set;
+  no persona reframes it as directional / "smart money").
+- **Best-effort:** any persona/assembly failure falls back to the default one-size prompt; never an
+  error, never blocks the bundle, gate, or hand-off.

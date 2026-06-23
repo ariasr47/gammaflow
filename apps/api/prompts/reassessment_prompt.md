@@ -82,3 +82,32 @@ Assembled by the app (durable lane + cached bundle); an extension of the strateg
 GammaFlow guarantees the request assembly + accept/reject + decision-history machinery. Round-trip
 synchrony is a property of the operator's AI integration behind this boundary, **not** a GammaFlow
 guarantee. No real order is ever placed (simulation only).
+
+<!--PERSONA_DECOMP_START-->
+## Persona decomposition (FIXED vs PERSONA — annotation only; not part of the prompt sent)
+
+The prompt **body above is the byte-identical Default render** (today's reassessment prompt,
+unchanged). For the Trader Personas feature (A1 RESOLVED·ACCEPTED), this hand-off is decomposed into
+FIXED vs PERSONA-VARIABLE sections. The machine-readable template + the 7 built-in
+`PersonaDefinition`s are in `src/core/personas.py` and served read-only at `GET /api/personas`. **The
+FE assembles** the persona-parametrized prompt client-side; the server adds **no** `meta.handoff` and
+accepts **no** `?persona=` param. Persona never changes the bundle/score/tier/gate/fingerprint
+(byte-identical) and triggers **no recompute**; GammaFlow still never calls an LLM.
+
+- **FIXED (persona-invariant):** *When to reassess* (gate + dedupe); *What to send* (the
+  `reassessment_request` + `market_state_glossary.md` + held-contract stats — no field dropped); the
+  **verdict schema** `{Hold, Trim, Add, Exit, Roll}`; the **Add cap / no-auto-apply / Roll constraint /
+  `status` semantics**; and the **universal risk-first floor** (lead with risk; `Hold` is valid;
+  JSON-only; anchor `gex_spot`; reliability order; respect regime). **No trader characterization.**
+- **PERSONA-VARIABLE slots:** the inline **trader-disposition** clause (A1 — relocated out of the
+  fixed floor), plus an optional **objective-framing** line, **risk-calibration** line, a
+  **reassessment-disposition lean** (within the fixed caps/schema), an optional **emphasis note**, and
+  an optional **DTE-preference** line (a "Persona framing" block; empty for Default).
+- **A1 disposition map** (fills the inline disposition slot; `prone to greed and poor risk management`
+  appears **only** under **Default** (verbatim) and the **conservative** register):
+  - Default: `prone to greed and poor risk management`
+  - conservative: `prone to greed and poor risk management — risk-averse; values capital preservation; benefits from imposed discipline (guard against over-trading)`
+  - moderate: `who is disciplined; balanced risk`
+  - aggressive: `who accepts higher variance for higher reward`
+- **Dark-pool stays neutral context** under every persona. **Best-effort:** any assembly failure
+  falls back to this Default prompt; never an error.

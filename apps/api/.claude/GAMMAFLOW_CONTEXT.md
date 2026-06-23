@@ -32,6 +32,10 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   trace), per-request `RequestTrace`, process-local rolling `MetricsAggregate` (p50/p95 per stage &
   total, cache hit/miss, vendor latency + min rate-limit headroom; per-ticker rolls up to global),
   structured emitter. `engine/signals/darkpool` do NOT import it (Level-1, orchestration-boundary only).
+- `src/core/personas.py` — trader-persona **prompt projection** (read-only data, post-FREEZE): the
+  decomposed FIXED/PERSONA hand-off template + the 7 built-in `PersonaDefinition`s + the A1 disposition
+  map, served at `GET /api/personas`. A **non-input to scoring by construction** — imports only
+  `logging`/`os`; never touches signals/score/gate/fingerprint/engine. No LLM call.
 - `src/models/market_data.py` — `MarketState` Pydantic response model.
 
 **Frontend** (`gammaflow-web/`, Nx monorepo, React 19 + Vite + MUI/Emotion):
@@ -157,6 +161,14 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   min rate-limit headroom→null="unknown" for Massive, per-ticker→global, recent traces w/ lineage);
   additive structured `trace request` log lines. Best-effort (never a non-200), **SSE uninstrumented**,
   ephemeral (resets on restart), computed values frozen.
+- **Trader personas** (prompt-layer projection): `GET /api/personas` ships the decomposed
+  FIXED/PERSONA hand-off template (both prompts) + the 7 built-in `PersonaDefinition`s + the A1
+  disposition map as read-only data; the **FE assembles** the persona-parametrized prompt client-side.
+  Default renders today's prompt **byte-identically**; persona reframes only the AI briefing — never
+  `market_state`/`signals`/`opportunity_score`/`opportunity_tier`/`ai_eval`/`state_fingerprint` (all
+  byte-identical across personas), **no recompute** on switch, **no `meta.handoff`, no `?persona=`**.
+  A1: the "prone to greed…" disposition is lifted out of the universal risk floor into the disposition
+  slot (Default + conservative only). No LLM call; SSE untouched.
 - Explanatory hover tooltips on every jargon stat/chip/chart.
 
 ## 7. Conventions
@@ -181,8 +193,11 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   off_exchange, ghost-trade tracker). `prompts/strategy_prompt.md` = when to invoke (gate + dedupe) +
   required risk-first output schema (entry). `prompts/reassessment_prompt.md` = the position-aware
   sibling: an OPEN trade + current `market_state` + decision digest → risk-first verdict ∈
-  {Hold,Trim,Add,Exit,Roll}. The AI is **external** — GammaFlow defines the contract + gate only,
-  it does **not** call an LLM.
+  {Hold,Trim,Add,Exit,Roll}. Both prompts are **decomposed** into FIXED vs PERSONA sections (trader
+  personas; A1): the FIXED floor/schema/cap carry no trader characterization, and the disposition +
+  framing are persona-variable slots. `src/core/personas.py` / `GET /api/personas` ship the
+  decomposed template + 7 `PersonaDefinition`s; the FE assembles per-persona text. The AI is
+  **external** — GammaFlow defines the contract + gate only, it does **not** call an LLM.
 
 ## 9. Open items / under consideration
 - **Vendor evaluation:** Massive (cheap ~$400/mo flat, greeks included, no overnight) vs

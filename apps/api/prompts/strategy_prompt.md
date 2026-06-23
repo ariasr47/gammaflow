@@ -72,3 +72,33 @@ faster only on a real-time tier.
 
 When `decision` is `no_trade`, set the trade fields to `null` and explain why in
 `rationale`.
+
+<!--PERSONA_DECOMP_START-->
+## Persona decomposition (FIXED vs PERSONA — annotation only; not part of the prompt sent)
+
+The prompt **body above is the byte-identical Default render** (today's prompt, unchanged). For the
+Trader Personas feature (A1 RESOLVED·ACCEPTED), this hand-off is decomposed into FIXED vs
+PERSONA-VARIABLE sections. The machine-readable template + the 7 built-in `PersonaDefinition`s are in
+`src/core/personas.py` and served read-only at `GET /api/personas`. **The FE assembles** the
+persona-parametrized prompt client-side from that template; the server adds **no** `meta.handoff` and
+accepts **no** `?persona=` param. Persona never changes `opportunity_score`, `opportunity_tier`,
+`ai_eval` (`ready`/`changed`/`state_fingerprint`), the gate, or any analytics — those are
+byte-identical across personas — and switching it triggers **no recompute**. GammaFlow still never calls an LLM.
+
+- **FIXED (persona-invariant):** *When to invoke* (gate + dedupe); *What to send* (full bundle +
+  `market_state_glossary.md` + DTE window — no field dropped); the **required output schema**; and the
+  **universal risk-first floor** (lead with risk; `no_trade` is valid; JSON-only; anchor `gex_spot`;
+  reliability order; respect regime). **The floor carries NO characterization of who the trader is.**
+- **PERSONA-VARIABLE slots:** the inline **trader-disposition** clause in the floor sentence (A1 —
+  relocated OUT of the fixed floor), plus an optional **objective-framing** line, **risk-calibration**
+  line, **emphasis note**, and **DTE-preference** line (injected as a "Persona framing" block; empty
+  for Default).
+- **A1 disposition map** (fills the inline disposition slot; the harsh `prone to greed and poor risk
+  management` register appears **only** under **Default** (verbatim) and the **conservative** register —
+  never moderate/aggressive, never universal):
+  - Default: `is prone to greed and poor risk management`
+  - conservative: `is prone to greed and poor risk management — risk-averse; values capital preservation; benefits from imposed discipline (guard against over-trading)`
+  - moderate: `is disciplined; balanced risk`
+  - aggressive: `accepts higher variance for higher reward`
+- **Dark-pool stays neutral context** under every persona (it lives in the FIXED "what to send" set).
+- **Best-effort:** any persona/assembly failure falls back to this Default prompt; never an error.

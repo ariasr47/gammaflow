@@ -100,3 +100,34 @@ bundle, and **never** overrides a window the user already set. Switching persona
   → the **default one-size prompt** is used; never an HTTP error, never blocks the bundle/gate/hand-off.
 - **No-op when absent:** a no-persona request is byte-identical to today (prompt included).
 - **No LLM call** anywhere. **SSE untouched.** Persona writes to **no** scoring/gate/fingerprint field.
+
+---
+
+## Backend resolution amendment (binding — filed by the Backend Executioner)
+
+Two items the contract left open/inconsistent; resolved additively (no FE assumption broken):
+
+**1. Transport for the shipped decomposed template + personas — FINAL: `GET /api/personas`.**
+The contract says the backend "ships/exposes the decomposed template + the 7 presets" for the
+FE (a separate repo) to assemble, but listed no transport in "Endpoints touched". Resolved with a
+**read-only, side-effect-free** `GET /api/personas` returning `{ personas[7], slot_fills{disposition,
+objective_framing, risk_calibration}, templates{entry,reassessment}{default_text, fragments[{id,
+kind:fixed|persona, label, text? | slot?}]} }`. It triggers **no** vendor fetch / recompute / cache
+mutation, carries **no** per-persona assembled text, and is **not** on the bundle path — so the
+binding "no `meta.handoff`, no `?persona=`, no server overlay" constraints are all preserved. The
+canonical source is `src/core/personas.py` + the decomposed `prompts/*.md`.
+
+**2. Conservative disposition vs the greed line — inconsistency RESOLVED by superset.**
+The A1 map gives `conservative` the softened text `risk-averse; values capital preservation; benefits
+from imposed discipline (guard against over-trading)` (no "prone to greed"), but BOTH this contract's
+prose ("`prone to greed…` appears in Default AND the conservative register") and the BACKEND
+Verification ("a **conservative** persona's prompt **does** contain 'prone to greed / poor risk
+management'") require the harsh phrase under conservative. These cannot all hold if conservative is
+*only* the softened text. **Resolution:** the conservative disposition clause is the **superset** —
+it contains the **verbatim harsh phrase AND the verbatim softened map text**:
+`is prone to greed and poor risk management — risk-averse; values capital preservation; benefits from
+imposed discipline (guard against over-trading)` (entry; the reassessment register drops the leading
+`is`). This satisfies every binding source at once. Default stays verbatim; moderate/aggressive carry
+neither the harsh phrase nor any greed/discipline-deficit characterization. **Flag for a clean-up
+amendment:** if the intent was conservative = softened-only, the BACKEND Verification line must change;
+until then the superset is the only reading that passes all stated checks.
