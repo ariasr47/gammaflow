@@ -83,8 +83,13 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
   2. **Decision-impact test** (the cull) — every candidate must answer *"which trading decision
      does this improve, and how would I observe the improvement?"* Anything that can't answer is
      **parked, not promoted** (mirrors the AC-observable rule + the AI over-trading gate).
-  3. **Feasibility gate** — data coverage / math invariants. A blocked item names its blocker
-     (e.g. "needs the vendor decision") and is **not** scheduled.
+  3. **Feasibility gate** — data coverage / math invariants. An uncertain or heavy item may take a
+     **grooming-time feasibility consult** from an Architect session: a one-paragraph
+     *buildable / blocked-on* read that only informs the score. This is **NOT** the full Architect
+     session and produces **NO** `ARCHITECTURE_CONTRACT.md` — the real contract waits until the
+     feature is chosen and a `BRIEF.md` exists (writing contracts for un-chosen ideas is the sprawl
+     the cull exists to prevent). A blocked item names its blocker (e.g. "needs the vendor
+     decision") and is **not** scheduled.
   4. **Score** the survivors: Value (H/M/L to the trading edge) × Effort (S/M/L); flag any locked
      invariant it would touch.
   5. **Cull to ONE** next feature.
