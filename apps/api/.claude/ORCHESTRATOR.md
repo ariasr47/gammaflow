@@ -22,7 +22,10 @@
    deliberation, keep decisions).
 5. **Write** the output contract(s) to the exact paths in §3 (correct repo — see §2).
 6. **Update** `.claude/contracts/{FEATURE}/_MANIFEST.md` (§4).
-7. **Print** the status block (§5) + the pre-filled launch prompt for the next role.
+7. **Capture** any *binding* decision the gateway locked into `.claude/DECISION_LEDGER.md` — one row
+   per decision (`key · feature · gate · statement · binding`). This is the compounding-memory intake
+   (§3a); only log decisions a future feature could violate (same bar as the GATE I cull).
+8. **Print** the status block (§5) + the pre-filled launch prompt for the next role.
 
 I act on EXIT events ("Architect's done", "lock the UX", "math drift in the flip") — packaging the
 session that just finished into the one that comes next. I never enforce a rigid path; I open the
@@ -37,7 +40,9 @@ gateway you name.
   `.claude/COMPRESSOR_PROMPTS.md` (#1 Universal · #2 Session-Transition · #3 Split · #4 Resume) ·
   `.claude/ROLE_LAUNCH_PROMPTS.md` (§1 Architect · §1b Architect-after-PM · §2 PM · §2b PM-first ·
   §3 UX · §4 Backend · §5 Frontend) ·
-  `.claude/BACKLOG.md` (the standing idea pool + roadmap-discovery method — feeds GATE I).
+  `.claude/BACKLOG.md` (the standing idea pool + roadmap-discovery method — feeds GATE I) ·
+  `.claude/DECISION_LEDGER.md` (the compounding-memory ledger + promotion rule — captured every
+  gateway, graduated at GATE S, fed forward into GATE I).
 - **Variable (per feature — what I produce):** `.claude/contracts/{FEATURE}/` containing some of
   `ARCHITECTURE_CONTRACT.md`, `PRODUCT_CONTRACT.md`, `UX_BLUEPRINT.md`, **`INTERFACE_CONTRACT.md`
   (the FE↔BE single source of truth — both lanes bind to it)**, `BACKEND_EXECUTION_CONTRACT.md`,
@@ -65,6 +70,16 @@ gateway closes after them except SHIP (§3, GATE S).
 ## 3. Gateway catalog
 Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs next.
 
+> **§3a — Compounding memory (the Decision Ledger).** A loop layered over the gateways so the system
+> gets wiser per feature, not just bigger:
+> **CAPTURE** (every gateway, §0 step 7) → append each binding decision to `DECISION_LEDGER.md`.
+> **DETECT + GRADUATE** (GATE S) → tally; a key recurring across **≥3 shipped features (≥2 if binding)**
+> promotes into the canon (`GAMMAFLOW_CONTEXT.md` §5 + `OPEN_THREADS.md` §9), single-sourced, with
+> provenance. **REUSE** (GATE I step 0 + every role's "restate binding constraints") → the BRIEF cites
+> promoted keys; §6 forbids reopening them. Net: each ship can only *add* to the constraint envelope
+> the next feature inherits. The generative judgement (is this decision binding? does the prose read
+> right?) stays in the gateway; the ledger makes recurrence mechanical instead of remembered.
+
 ### GATE I — Discovery / roadmap (PRE-pipeline)  → entry role (Architect-first or PM-first)
 > The only divergent gate. It exists so that, when the in-mind queue drains, there's a repeatable
 > method for advancing the roadmap instead of ad-hoc whim. I **route to** a discovery session and
@@ -74,9 +89,13 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Use when:** the active pipeline has drained, or on a periodic review, to generate + cull the
   next wave of features/improvements.
 - **Audit:** `GAMMAFLOW_CONTEXT.md` (what exists), `OPEN_THREADS.md` (deferred §7 + open §1/§9 +
-  the "deferred seams" noted inside each shipped thread), `BACKLOG.md` (the standing pool), plus
-  any usage-friction notes I name.
+  the "deferred seams" noted inside each shipped thread), `BACKLOG.md` (the standing pool),
+  `DECISION_LEDGER.md` (the **Promoted canon** — the accumulated invariants every candidate must
+  respect), plus any usage-friction notes I name.
 - **Method (diverge → converge):**
+  0. **Load the canon (REUSE step of §3a):** read the ledger's Promoted-canon keys first — they bound
+     the whole pool. A candidate that fights a promoted invariant is reshaped or culled, not promoted;
+     a survivor's `BRIEF.md` will cite the keys it touches in "Invariant watch."
   1. **Harvest** signal from the five sources: deferred items · shipped-feature seams · usage
      friction · downstream-AI quality (strategy/reassessment prompt fit) · lifted data/vendor
      constraints.
@@ -178,12 +197,19 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Write:** `RESUME.md` (objective, done + files changed, in-progress & exactly where it stopped,
   next concrete step, gotchas). Self-contained against `GAMMAFLOW_CONTEXT.md`.
 
-### GATE S — Ship / archive
+### GATE S — Ship / archive  (also the GRADUATE step of compounding memory, §3a)
 - **Trigger:** "shipped / both lanes done / archive {FEATURE}."
 - **Do:** move `.claude/contracts/{FEATURE}/` → `.claude/contracts/_archive/{FEATURE}/`; refresh
   `OPEN_THREADS.md` (flip the thread to SHIPPED + ARCHIVED) and `GAMMAFLOW_CONTEXT.md` (fold the
   new capability into §6 / conventions) **only if the feature is verified end-to-end**.
-- **Guard:** confirm both lanes verified before archiving; never archive a half-shipped feature.
+- **Promote (compounding memory):** finalize the feature's `DECISION_LEDGER.md` rows, then **DETECT** —
+  tally the ledger; any key now in **≥3 distinct shipped features (or ≥2 if every instance is
+  `binding:yes`)** **GRADUATES**: write its prose **once** into `GAMMAFLOW_CONTEXT.md` §5 + a locked
+  pointer in `OPEN_THREADS.md` §9, add it to the ledger's "Promoted canon" index with provenance, and
+  move near-threshold keys to the ledger watch list. Single-source: canon prose lives in CONTEXT/§9;
+  the ledger only indexes it.
+- **Guard:** confirm both lanes verified before archiving; never archive a half-shipped feature. Never
+  promote a key that isn't **binding** (a future feature could violate it) — same bar as the GATE I cull.
 
 > **Your Routines, mapped:** A (PM→UX→Executioners) = GATE P·X then **GATE U·X**. B (Architect→
 > Backend, math) = **GATE M**. C (UX→Frontend, visual) = **GATE V**. The orchestrator just makes
@@ -223,7 +249,9 @@ Goal:            <one short paragraph — becomes {GOAL} in the launch prompt>
 Decision impact: <which trading decision this improves + how it's observed>  (the cull test)
 Feasibility:     pass | blocked-on: <X>
 Effort:          S | M | L
-Invariant watch: <any locked rule it must not touch, e.g. gate/score/fingerprint, gamma sourcing>
+Invariant watch: <canonical keys from DECISION_LEDGER.md "Promoted canon" this feature touches (e.g.
+                 additive-keeps-score-byte-identical, best-effort-isolated-or-null) + any other locked
+                 rule it must not touch (gamma sourcing, etc.)>
 Entry point:     architect-first | pm-first — <one-line why>
 Source:          <backlog item / deferred seam / friction note it came from>
 ```
@@ -251,6 +279,10 @@ NEXT      : <role(s) to launch> — launch prompt below
 - Stay in lane on every write: Architect emits no UI/endpoints; PM emits no code/math; UX no server
   internals; the split keeps server internals out of the FE file and UI out of the BE file.
 - Strip deliberation, ship decisions. Reference files, don't paste.
-- Respect `OPEN_THREADS.md` §8 "Resolved (do NOT revisit)" and the math invariants in
-  `GAMMAFLOW_CONTEXT.md` §3 — never reopen them through a gateway.
+- Respect `OPEN_THREADS.md` §9 "Resolved (do NOT revisit)" (incl. the **promoted build invariants**)
+  and the math invariants in `GAMMAFLOW_CONTEXT.md` §3/§5 — never reopen them through a gateway.
+- **Compounding memory (§3a):** capture binding decisions to `DECISION_LEDGER.md` every gateway;
+  graduate a key at GATE S once it recurs across ≥3 shipped features (≥2 if binding). A promoted rule's
+  **prose is single-sourced** in `GAMMAFLOW_CONTEXT.md` §5 / `OPEN_THREADS.md` §9 — the ledger only
+  indexes it (no duplicated prose). Promotion is contestable via GATE Z, never silent canon.
 - Frontend writes target `C:\Dev\gammaflow-web`; contracts always live in this repo.

@@ -205,3 +205,13 @@ customization, per-persona acceptance analytics.
   is immaterial. Don't "fix" it via interpolation or borrow-rate calibration.
 - **Dark pool** — context only, capped confluence, toggleable; never a directional "smart money"
   signal (off-exchange includes internalized retail; prints have no reliable side).
+
+### Standing build invariants (promoted from the Decision Ledger 2026-06-22 — do NOT revisit)
+> Graduated by recurrence (`.claude/DECISION_LEDGER.md`); full prose single-sourced in
+> `GAMMAFLOW_CONTEXT.md` §5. Reopen only via GATE Z.
+- **`[best-effort-isolated-or-null]`** (5 features) — added computations fail to null/omitted, never an
+  HTTP error; bundle + SSE intact.
+- **`[additive-keeps-score-byte-identical]`** (4 features) — additive features keep gate /
+  `opportunity_score` / `opportunity_tier` / `state_fingerprint` byte-identical; never a scoring input.
+- **`[live-vs-static-isolation]`** (4 features) — live-derived UI degrades on SSE drop; static reads
+  keep rendering the last bundle.

@@ -143,6 +143,20 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - **Vectorized gamma flip** — ~330× faster than the scalar loop, identical output.
 - **Vendor-agnostic provider port** — so Massive↔another vendor is a contained swap.
 
+### Standing build invariants (promoted from the Decision Ledger — apply to EVERY new feature)
+> Graduated via the recurrence rule in `.claude/DECISION_LEDGER.md`. A new feature's `BRIEF.md` cites
+> these by key in "Invariant watch"; each role restates the ones it touches. Reopen only via GATE Z.
+- **`[best-effort-isolated-or-null]`** — an optional or added computation is best-effort: any failure
+  yields a **null/omitted field, never an HTTP error**, leaving `market_state`/`strike_profile` and the
+  SSE path intact. *(dark-pool, the four metrics, ghost-trade, observability, trader-personas — 5.)*
+- **`[additive-keeps-score-byte-identical]`** — an additive feature leaves the entry gate,
+  `opportunity_score`, `opportunity_tier`, and `state_fingerprint` **byte-identical**; it is **never an
+  input** to `signals`/scoring/the fingerprint (that module boundary is the enforcement). *(dex-voloi-
+  skew-term, ghost-trade, observability, trader-personas — 4.)*
+- **`[live-vs-static-isolation]`** — every new datum declares **live-derived vs static**: live-derived
+  UI degrades on an SSE drop (dim + offline, never blank) while static reads keep rendering the last
+  bundle. *(dark-pool, the four metrics, ghost-trade, trader-personas — 4.)*
+
 ## 6. Current feature state (works end-to-end)
 - On-demand bundle: `GET /{ticker}` & `/api/ticker/{ticker}` (+ slices) with DTE/expiration filter.
 - GEX strike-profile chart (walls always in-window, spot/flip/live reference lines, tooltips).
