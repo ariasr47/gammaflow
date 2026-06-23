@@ -32,8 +32,9 @@ function ageLabel(s: number | null | undefined): string {
 const money = (n: number) => `${n >= 0 ? '+' : '−'}$${Math.abs(n).toFixed(0)}`;
 const pct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
 
-export function GhostTradePanel({ gt, data, live, isLive, streamOffline, onOpenEntry }: {
+export function GhostTradePanel({ gt, data, live, isLive, streamOffline, onOpenEntry, briefing }: {
   gt: Gt; data: TickerBundle | null; live: LiveUpdate | null; isLive: boolean; streamOffline: boolean; onOpenEntry: () => void;
+  briefing?: string;
 }) {
   const theme = useTheme();
   const { trade, tracked, trackingUnavailable, markRes, plNow, alerts } = gt;
@@ -151,7 +152,7 @@ export function GhostTradePanel({ gt, data, live, isLive, streamOffline, onOpenE
         </Box>
 
         <Divider sx={{ my: 1.5 }} />
-        <ReassessCard gt={gt} />
+        <ReassessCard gt={gt} briefing={briefing} />
         <DecisionHistory gt={gt} />
       </CardContent>
     </Card>
@@ -161,7 +162,7 @@ export function GhostTradePanel({ gt, data, live, isLive, streamOffline, onOpenE
 function fmt(n: number | null): string { return n == null ? '—' : n.toFixed(2); }
 
 // ---- Reassess card -------------------------------------------------------------------------
-function ReassessCard({ gt }: { gt: Gt }) {
+function ReassessCard({ gt, briefing }: { gt: Gt; briefing?: string }) {
   const theme = useTheme();
   const { reassess, reassessDisabled, reassessmentRequest } = gt;
   const [showRequest, setShowRequest] = useState(false);
@@ -171,6 +172,8 @@ function ReassessCard({ gt }: { gt: Gt }) {
   const idle = reassess.phase === 'idle';
   return (
     <Box sx={{ mt: 1 }}>
+      {/* Active persona briefing — the reassessment hand-off is framed by this persona. */}
+      {briefing && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Briefing: {briefing}</Typography>}
       {(idle || reassess.phase === 'accepted' || reassess.phase === 'rejected' || reassess.phase === 'failed') && (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Tooltip arrow title={reassessDisabled ? REASSESS_DISABLED_TIP : REASSESS_TIP}>

@@ -392,3 +392,42 @@ export async function fetchMetrics(): Promise<MetricsAggregate> {
   if (!res.ok) throw new ApiError(`Metrics readout failed (${res.status})`, res.status);
   return (await res.json()) as MetricsAggregate;
 }
+
+// ---- Trader personas (prompt-layer projection only; assembled FE-side, locus PINNED FE-rendered) ----
+// Persona is a read-only, post-FREEZE presentation overlay: it changes only the assembled hand-off
+// prompt text, NEVER opportunity_score/opportunity_tier/ai_eval/state_fingerprint, and switching it
+// triggers NO recompute. There is no `meta.handoff` and no `?persona=` — the FE owns the template.
+export type PersonaObjective = 'income' | 'directional_swing' | 'hedging';
+export type PersonaRisk = 'conservative' | 'moderate' | 'aggressive';
+
+/** Declarative persona data (no executable logic, no analytics params). The framing-copy fields
+ *  (summary/objective_framing/risk_calibration) are FE-embedded UX text. */
+export interface PersonaDefinition {
+  id: string;
+  name: string;
+  builtin: boolean;
+  version: number;
+  objective: PersonaObjective;
+  risk: PersonaRisk;
+  reassessment_lean: string;       // declarative lean within the fixed schema/cap (text)
+  emphasis_note?: string | null;   // bounded free-text; fills the framing slot ONLY
+  dte_pref?: { min_dte: number; max_dte: number } | null;
+  // FE framing copy (presets carry preset-specific text; customs derive generic text):
+  summary?: string;
+  objective_framing?: string;
+  risk_calibration?: string;
+  based_on?: string;               // for customs: the preset id it was derived from
+}
+
+export type HandoffSectionKind = 'fixed' | 'persona';
+/** One labelled prompt section, badged FIXED ("same under every persona") or PERSONA. */
+export interface HandoffSection { id: string; kind: HandoffSectionKind; label: string }
+export interface HandoffPrompt { text: string; sections: HandoffSection[] }
+/** FE-assembled hand-off projection for both prompts. `fallback` ⇒ persona assembly failed and the
+ *  default one-size prompt was used. */
+export interface Handoff {
+  persona: { id: string | null; name: string };
+  entry: HandoffPrompt;
+  reassessment: HandoffPrompt;
+  fallback?: boolean;
+}

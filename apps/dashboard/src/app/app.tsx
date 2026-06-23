@@ -18,6 +18,8 @@ import { GhostTradePanel } from './ghost-trade/GhostTradePanel';
 import { TradeEntryDialog } from './ghost-trade/TradeEntryDialog';
 import { PrimeBanner, tierMeta, OPPORTUNITY_TIER_INFO } from './ghost-trade/OpportunityTier';
 import { OperatorMetrics } from './operator-metrics';
+import { usePersona } from './personas/usePersona';
+import { PersonaPicker, HandoffDialog, PersonaCustomizeForm } from './personas/components';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
 // A healthy SSE session pushes a payload every ~1.5s (the live broadcast throttle) even when
@@ -215,11 +217,24 @@ function TickerDashboard() {
   // Ghost trade (paper sim): owns the durable position, mark/P-L, alerts, and the reassessment
   // boundary. `positionQuery` (set when a trade is open) makes the bundle compute position_eval.
   const gt = useGhostTrade(ticker, data, live, isLive, streamOffline);
+  // Trader persona (prompt-layer overlay): switching is pure client-state — assembleHandoff is
+  // synchronous + bundle-independent, so it triggers NO getTicker/streamTicker and NO recompute.
+  const persona = usePersona();
+
+  // Persona DTE pre-fill: a visible, clearable staged window for the NEXT load. One-shot ref so it
+  // applies ONLY on an explicit ticker navigation — never on the 60s poll and never on a persona
+  // switch (so it can't retro-mutate the current view or recompute the bundle by itself).
+  const [dtePrefill, setDtePrefill] = useState<{ min: number; max: number; persona: string } | null>(null);
+  const pendingPrefill = useRef<{ min: number; max: number } | null>(null);
 
   const load = useCallback(() => {
     if (selected !== null && selected.length === 0) return; // nothing selected -> nothing to fetch
+    const pf = pendingPrefill.current; pendingPrefill.current = null; // consume one-shot
     setLoading(true);
-    getTicker(ticker, { expirations: selected ?? undefined, darkPool, position: gt.positionQuery })
+    getTicker(ticker, {
+      expirations: selected ?? undefined, darkPool, position: gt.positionQuery,
+      minDte: pf?.min, maxDte: pf?.max,
+    })
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -295,6 +310,19 @@ function TickerDashboard() {
   const strikeList = Array.from(new Set((data?.strike_profile.strikes ?? []).map((s) => s.strike))).sort((a, b) => a - b);
   const tm = tierMeta(theme, sig?.opportunity_tier ?? 'dormant');
 
+  // Persona hand-off + customize dialogs.
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+
+  // Offer the active persona's DTE preference as a staged pre-fill — ONLY when the user hasn't set
+  // an explicit expiration window. Setting it touches no fetch (it's a note); it's applied to the
+  // next ticker navigation via the one-shot ref. A user-set window is never overridden.
+  useEffect(() => {
+    if (selected !== null) { setDtePrefill(null); return; } // user picked expirations → their window wins
+    const pref = persona.active.dte_pref;
+    setDtePrefill(pref ? { min: pref.min_dte, max: pref.max_dte, persona: persona.active.name } : null);
+  }, [persona.active, selected]);
+
   // Hover label for a term-structure point: real tenor + expiration + ATM IV (auditable).
   const TermPointTooltip = ({ active, payload }:
     { active?: boolean; payload?: { payload: { dte: number; expiration: string; atm_iv: number } }[] }) => {
@@ -314,7 +342,13 @@ function TickerDashboard() {
         <TextField
           size="small" label="Ticker" value={symbol}
           onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-          onKeyDown={(e) => { if (e.key === 'Enter' && symbol) navigate(`/${symbol}`); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && symbol) {
+              // Apply the staged DTE pre-fill to THIS explicit navigation only (one-shot).
+              if (dtePrefill) pendingPrefill.current = { min: dtePrefill.min, max: dtePrefill.max };
+              navigate(`/${symbol}`);
+            }
+          }}
         />
         <FormControl size="small" sx={{ minWidth: 240 }} disabled={!allDates.length}>
           <InputLabel>Expirations</InputLabel>
@@ -352,6 +386,15 @@ function TickerDashboard() {
             label="Dark pool" sx={{ ml: 0 }}
           />
         </Tooltip>
+        {/* Persona (prompt-layer overlay) + hand-off viewer — pure presentation, never recomputes. */}
+        <PersonaPicker persona={persona} onOpenCustomize={() => setCustomizeOpen(true)} />
+        <Button size="small" variant="outlined" onClick={() => setHandoffOpen(true)}>View AI hand-off</Button>
+        {dtePrefill && (
+          <Tooltip arrow title="Visible, overridable pre-fill — it won't touch the current view or recompute anything.">
+            <Chip size="small" variant="outlined" onDelete={() => setDtePrefill(null)}
+              label={`Pre-filled ${dtePrefill.persona}'s preferred horizon (${dtePrefill.min}–${dtePrefill.max} DTE) for your next load`} />
+          </Tooltip>
+        )}
         {loading && <CircularProgress size={18} />}
         {sig?.regime && (
           <Tooltip arrow title="Positive gamma: dealers dampen moves → range-bound, fade extremes. Negative gamma: dealers amplify moves → trending, don't fade.">
@@ -409,7 +452,7 @@ function TickerDashboard() {
           facts + last-known P/L even before any bundle loads (contract stats read "unavailable
           until data loads"). When a bundle exists, the panel renders below the headline instead. */}
       {!data && gt.trade && !noneSelected && (
-        <GhostTradePanel gt={gt} data={null} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} />
+        <GhostTradePanel gt={gt} data={null} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} briefing={persona.active.name} />
       )}
 
       {!noneSelected && m && (
@@ -481,7 +524,7 @@ function TickerDashboard() {
 
           {/* Ghost-trade panel (paper sim) — below the headline/grid. Durable parts never blank;
               P/L + mark degrade with the live stream only. */}
-          <GhostTradePanel gt={gt} data={data} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} />
+          <GhostTradePanel gt={gt} data={data} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} briefing={persona.active.name} />
 
           {data?.strike_profile && (
             <GexProfileChart
@@ -651,6 +694,14 @@ function TickerDashboard() {
         onClose={() => setEntryOpen(false)}
         onConfirm={(form) => { gt.openTrade(form); setEntryOpen(false); }}
       />
+
+      {/* Persona hand-off viewer + customize — presentation-only, off the compute path. */}
+      <HandoffDialog
+        open={handoffOpen} onClose={() => setHandoffOpen(false)}
+        handoff={persona.handoff} data={data} stale={fresh?.stale ?? false}
+        dataAge={fresh ? humanAge(fresh.data_age_seconds) : null}
+      />
+      <PersonaCustomizeForm open={customizeOpen} onClose={() => setCustomizeOpen(false)} persona={persona} />
     </Container>
   );
 }
