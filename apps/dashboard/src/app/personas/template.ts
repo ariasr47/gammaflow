@@ -11,12 +11,12 @@ import type { PersonaDefinition, PersonaRisk, Handoff, HandoffPrompt, HandoffSec
 // The verbatim trader-disposition phrase in today's prompt (A1 relocation target).
 const GREED = 'prone to greed and poor risk management';
 
-// A1 disposition map — fills the persona-variable disposition slot. NOTE: per the authoritative A1
-// map + UX clarifying note, `conservative` uses the SOFTENED text below (it does NOT contain the
-// literal "prone to greed"); the harsh phrase survives only under Default. (The FE-contract/interface
-// "conservative includes 'prone to greed'" summary disagrees with this concrete copy — flagged.)
+// A1 disposition map — fills the persona-variable disposition slot. The interface amendment resolved
+// the A1-map-vs-prose inconsistency with a SUPERSET for `conservative`: the verbatim harsh phrase
+// PLUS the softened map text (so conservative + Default both contain "prone to greed", per the
+// verification). Moderate/aggressive carry no greed/discipline-deficit characterization.
 const DISPOSITION: Record<PersonaRisk, string> = {
-  conservative: 'risk-averse; values capital preservation; benefits from imposed discipline (guard against over-trading)',
+  conservative: 'prone to greed and poor risk management; risk-averse, values capital preservation, benefits from imposed discipline (guard against over-trading)',
   moderate: 'disciplined; balanced risk',
   aggressive: 'accepts higher variance for higher reward',
 };
