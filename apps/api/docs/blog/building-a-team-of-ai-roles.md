@@ -103,6 +103,15 @@ The result is a kind of memory that doesn't rot. Nothing important is lost, and 
 is ever re-explained. Each new session inherits a tidy summary and the shared rulebook —
 and starts clean.
 
+There's now a third piece, and it's the one we're proudest of: **a rule that promotes
+itself.** Every binding decision a session locks gets jotted in a running ledger. When the
+same decision has earned its keep across enough features, it *graduates* on its own — its
+wording is lifted into the shared rulebook, and from then on every future session inherits
+it for free. Nobody has to remember to write it down; sheer recurrence does the writing.
+It's the cow-path rule: walk the same shortcut across the grass enough times, and eventually
+someone paves it. (This one started life on the wish-list further down — it's since become
+real.)
+
 ---
 
 ## It's not a straight line: gateways
@@ -204,21 +213,31 @@ clean handoff, one more lane nobody else is allowed to cross.
 ## Where this goes next
 
 The version above is real and working today. The interesting part is that it's a
-*foundation* you can keep compounding. A few directions that make it dramatically better:
+*foundation* you can keep compounding. A few directions that make it dramatically better —
+and one that's already crossed from wish-list to working:
 
 - **Automated gate-checks.** Today a gate is a human judgment call. Tomorrow it's also a
   *linter for handoffs* — an automatic check that a contract is complete and that no role
   coloured outside its lane, before the next session is even allowed to start.
 - **Parallel feature lanes.** One Orchestrator can run several features at once, scheduling
   sessions and using a shared "open threads" list so two features never quietly collide.
-- **A memory that compounds.** When the same decision keeps showing up across features, it
-  should *graduate* from a one-off note into the shared rulebook automatically — so the
-  system literally gets wiser with every feature it ships.
+- **A memory that compounds — ✓ now shipped.** When the same decision keeps showing up
+  across features, it *graduates* from a one-off note into the shared rulebook automatically
+  — so the system literally gets wiser with every feature it ships. This one is live today
+  (see *a rule that promotes itself* above); in the flywheel below it's lit up, while the
+  other three are still ahead of us.
 - **Close the loop with reality.** The product already measures its own performance. Feed
   those live metrics back into Discovery and ideas stop being guesses — the loop becomes
   **build → measure → discover → build**, a flywheel that speeds up as it spins.
 
 ![A compounding flywheel of discover, decide, build, measure, with four upgrades around it](img/evolution-flywheel.svg)
+
+To be clear, the flywheel doesn't *replace* the relay — it **is** the relay, run lap after
+lap. Its four stations map straight onto the team you already met: **Discover** is the
+Discovery role grooming the backlog, **Decide** is the Architect / PM / UX thinking, **Build**
+is the two builders, and **Measure** is the live metrics plus that self-promoting memory. The
+relay is one lap; the flywheel is what happens across many — each turn a little smarter than
+the one before.
 
 The endgame isn't "AI writes code faster." It's a small, self-improving studio that gets
 **cheaper, safer, and smarter every time it ships** — because every loop leaves behind

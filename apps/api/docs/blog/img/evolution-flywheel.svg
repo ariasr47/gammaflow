@@ -64,10 +64,10 @@
     <text class="ups" x="710" y="180">scheduled by the orchestrator</text>
   </g>
   <g>
-    <rect x="34" y="430" width="232" height="74" rx="11" fill="#EEF0F6" stroke="#C7CCDC"/>
-    <text class="upt" x="50" y="456">Memory that compounds</text>
-    <text class="ups" x="50" y="476">proven decisions graduate</text>
-    <text class="ups" x="50" y="492">into the shared rulebook</text>
+    <rect x="34" y="430" width="232" height="74" rx="11" fill="#DCEBE8" stroke="#2E6F69"/>
+    <text class="upt" x="50" y="456" fill="#1c4f4a">Memory that compounds</text>
+    <text class="ups" x="50" y="476" fill="#2E6F69" font-weight="700">&#10003; now shipped — proven</text>
+    <text class="ups" x="50" y="492" fill="#3a6b66">decisions graduate to canon</text>
   </g>
   <g>
     <rect x="694" y="430" width="232" height="74" rx="11" fill="#EEF0F6" stroke="#C7CCDC"/>
