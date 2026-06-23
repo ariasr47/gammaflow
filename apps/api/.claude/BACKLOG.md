@@ -57,6 +57,15 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   "the wall" far from spot. *Impact:* wall levels stay near the tradable zone. *Value M · Effort S.*
   **Invariant watch:** walls stay the gamma-based max/min net-GEX strike — a guard, not a redefinition.
   Bite only if it shows up live. (`OPEN_THREADS` §7)
+- **Decision-Ledger crossing-detection hook** *(methodology/tooling — not a trading feature)* —
+  mechanize the DETECT step of compounding memory: a `settings.json` hook (or small script) that
+  tallies `DECISION_LEDGER.md` keys and flags when one crosses the promotion threshold (≥3 shipped
+  features / ≥2 if binding), so at GATE S the Orchestrator is *told* "key X just crossed" instead of
+  tallying by hand. *Impact:* orchestration reliability — a promotion can't be silently missed; the
+  compounding loop fires even on a tired/long session. *Value M · Effort S.* **Note:** the
+  decision-impact cull (trading-decision test) is **N/A** here — judge it on loop-fidelity, not edge;
+  the promotion *judgement* + prose still stay with the Orchestrator (the hook only counts). Follow-on
+  to the just-shipped Decision Ledger (`.claude/DECISION_LEDGER.md`; ORCHESTRATOR §3a).
 
 ### C. Strategic / blocked (high value, gated on a decision or heavy lift)
 - **Data-vendor decision + overnight coverage** — Massive vs Databento (Blue Ocean overnight, full
