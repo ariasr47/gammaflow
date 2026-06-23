@@ -262,6 +262,46 @@ specified against the acceptance criteria. Report what you changed and how you v
 needed field is missing from the interface, flag it for a contract amendment — do not invent it.
 ```
 
+## 6. QA / Verify (GATE Q — runs after BOTH executioners, before ship)
+The teeth-having verification role (system-2). A **fresh session, NOT one of the builders** — it ends
+"builders mark their own homework." It confirms every acceptance criterion point-by-point, **fixes
+nothing**, and bounces any gap via GATE Z. Ideally run on a **different base model** than the builders
+(de-correlates blind spots — foreshadows system-6). Subagent: `.claude/agents/qa-verify.md`.
+```text
+Read these files for full context, then act as a strict QA / Verification engineer (a FRESH session,
+deliberately NOT one of the builders — no one marks their own homework):
+- .claude/GAMMAFLOW_CONTEXT.md                                       (standing ground truth)
+- .claude/contracts/{FEATURE}/PRODUCT_CONTRACT.md                    (the ACCEPTANCE CRITERIA — your checklist)
+- .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md                 (integration truth — what BE emits / FE consumes)
+- .claude/contracts/{FEATURE}/BACKEND_EXECUTION_CONTRACT.md          (what the backend built + its own verify list)
+- .claude/contracts/{FEATURE}/FRONTEND_EXECUTION_CONTRACT.md         (what the frontend built + its own verify list)
+- .claude/OPEN_THREADS.md                                            (do not reopen "resolved"; honor the §9 promoted invariants)
+
+Your job: confirm POINT BY POINT that every acceptance criterion in the PRODUCT_CONTRACT actually holds
+against the real built/running feature. You VERIFY; you FIX NOTHING — no code edits, no contract edits,
+no "making the AC pass." Treat each builder's self-verification as UNVERIFIED until you observe it.
+
+Method:
+- Run the project the standard way (backend .venv/Scripts/python.exe main.py; frontend npx nx serve
+  dashboard) and OBSERVE. The ACs are written to be observable without reading code — verify by
+  observation first; read code only to explain a failure.
+- For EACH acceptance criterion, verbatim and in order, assign exactly one verdict:
+  PASS (observed to hold — cite evidence) · FAIL (observed not to hold — expected vs actual + repro) ·
+  UNVERIFIABLE (couldn't exercise it — say precisely why).
+- Spot-check the INTERFACE_CONTRACT integration (fields the FE consumes == fields the BE emits) and the
+  binding invariants (BRIEF "Invariant watch" + the promoted canon). A green AC list over a broken
+  invariant is still a FAIL.
+
+Write .claude/contracts/{FEATURE}/QA_REPORT.md: a table (AC verbatim · verdict · evidence), a summary
+(n PASS / n FAIL / n UNVERIFIABLE), and an explicit overall GATE Q verdict — PASS only if every AC is
+PASS and no invariant is broken, else FAIL. On any FAIL, ALSO append an "Amendments bounced to {owner}"
+section (failing AC · observed vs expected · owning lane Backend|Frontend).
+
+Stay in lane: QA_REPORT.md (and the bounce on failure) are your ONLY writes — no code, no contract
+edits, no fixes. Run no compressor; the Orchestrator routes on your verdict (PASS → GATE S; FAIL →
+GATE Z, then GATE Q re-runs on the fix). Then stop.
+```
+
 ---
 ### Notes
 - **Backend and Frontend run in parallel** — both bind to the same `INTERFACE_CONTRACT.md`, so neither

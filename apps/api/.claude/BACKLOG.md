@@ -136,16 +136,24 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   *Impact:* closes the most dangerous unguarded seam — integration drift currently caught only by a
   human reading code, late. *Value H · Effort M.* **Note:** runs at/after GATE U·X and at GATE S;
   complements, doesn't replace, the contract.
-- **system-2 · QA / Verify role (a 6th role, with teeth)** — a fresh session that takes the shipped
-  feature + its acceptance criteria and confirms point-by-point that each holds; it **fixes nothing**,
-  bouncing any gap back via GATE Z. Adds a gate between the executioners and GATE S. *Impact:* ends
-  "builders mark their own homework" — the one place the no-self-review principle breaks. *Value H ·
-  Effort M.* **Invariant watch:** QA stays in lane (verifies, never repairs).
-- **system-3 · Contract linter (mechanical gate-check)** — a script/hook the Orchestrator runs at each
-  gateway: required sections present, lane-keyword violations flagged (e.g. endpoints in an
-  ARCHITECTURE_CONTRACT, server internals in a FRONTEND file), every AC maps to a component state.
-  *Impact:* gate-checks stop being pure human judgement; a malformed handoff can't advance. *Value M ·
-  Effort M.* Pairs with the §B ledger-crossing hook (same hook surface).
+- **system-2 · QA / Verify role (a 6th role, with teeth)** — `✓ LANDED (2026-06-23)`: new **GATE Q**
+  (ORCHESTRATOR §3, between the executioners and GATE S) + role launch prompt (`ROLE_LAUNCH_PROMPTS.md`
+  §6) + subagent (`.claude/agents/qa-verify.md`, tools: Read/Grep/Glob/Bash/Write — no Edit) + manifest
+  `QA (GATE Q):` field + the §6 invariant "GATE S requires a passing `QA_REPORT.md`." A fresh session
+  confirms each AC point-by-point, **fixes nothing**, bounces gaps via GATE Z; GATE Q re-runs on the
+  fix. *Impact:* ends "builders mark their own homework." *Value H · Effort M.* **Invariant watch:** QA
+  stays in lane (verifies, never repairs). **Best run on a DIFFERENT model** than the builders — partial
+  down-payment on system-6 (correlated-error fix).
+- **system-3 · Contract linter (mechanical gate-check)** — `✓ LANDED (2026-06-23) →
+  .claude/tools/contract_lint.py`; wired into ORCHESTRATOR §0 step 7 (runs every gateway, ERROR blocks
+  the handoff). **Implemented checks:** _MANIFEST present + required keys; files the manifest marks
+  locked/draft exist; execution contracts bind to INTERFACE_CONTRACT (NO_*_CHANGE stubs exempt); BRIEF
+  has all required fields; NEW-endpoint-in-architect/PM-lane flagged (existing endpoints exempt via
+  ground-truth); server-internals-in-FE / UI-in-BE lane-purity warns; promoted-canon single-source
+  (every ledger Promoted key has prose in GAMMAFLOW_CONTEXT §5). *Value M · Effort M.* Pairs with the
+  §B ledger-crossing hook (same script surface). **Deferred extensions:** AC↔component-state mapping
+  check; optional `settings.json` PreToolUse/Stop hook to auto-run it (offer made); the legacy 4
+  archived features predate `_MANIFEST.md` (flag only on `--all`, not on live gating).
 - **system-4 · Lane enforcement via role subagents** — define `.claude/agents/*` per role with tool
   allowlists so e.g. the Architect *cannot* Write code and a builder *cannot* rewrite a contract;
   optional path-guard hooks for finer control. *Impact:* lanes become enforced, not trusted. *Value M ·

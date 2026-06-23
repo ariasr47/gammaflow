@@ -22,10 +22,15 @@
    deliberation, keep decisions).
 5. **Write** the output contract(s) to the exact paths in §3 (correct repo — see §2).
 6. **Update** `.claude/contracts/{FEATURE}/_MANIFEST.md` (§4).
-7. **Capture** any *binding* decision the gateway locked into `.claude/DECISION_LEDGER.md` — one row
+7. **Gate-check (mechanical, system-3):** run
+   `.venv/Scripts/python.exe .claude/tools/contract_lint.py {FEATURE}`. A non-zero exit (**ERROR** —
+   missing file/manifest key, an execution contract not bound to the interface, a promoted key missing
+   from canon) **blocks the handoff**; fix the structural violation before routing. WARNINGs
+   (lane-purity heuristics) are advisory — judge them.
+8. **Capture** any *binding* decision the gateway locked into `.claude/DECISION_LEDGER.md` — one row
    per decision (`key · feature · gate · statement · binding`). This is the compounding-memory intake
    (§3a); only log decisions a future feature could violate (same bar as the GATE I cull).
-8. **Print** the status block (§5) + the pre-filled launch prompt for the next role.
+9. **Print** the status block (§5) + the pre-filled launch prompt for the next role.
 
 I act on EXIT events ("Architect's done", "lock the UX", "math drift in the flip") — packaging the
 session that just finished into the one that comes next. I never enforce a rigid path; I open the
@@ -51,12 +56,13 @@ gateway you name.
   Ship → move the folder to `_archive/`.
 
 Pipeline (canonical): **Discovery (GATE I, optional) → Architect → PM → UX/Tech-Writer →
-{Backend ‖ Frontend}** (the two executioners run in parallel, both bound to
-`INTERFACE_CONTRACT.md`). Discovery precedes the pipeline: it grooms the backlog and emits the
-`BRIEF.md` whose `{GOAL}` opens the entry role. Two entry orderings exist
-(Architect-first default; PM-first for product-dominated features) — see `ROLE_LAUNCH_PROMPTS.md`
-"Choosing the entry point." Executioners have **no outbound contract** (they ship code), so no
-gateway closes after them except SHIP (§3, GATE S).
+{Backend ‖ Frontend} → QA/Verify → Ship** (the two executioners run in parallel, both bound to
+`INTERFACE_CONTRACT.md`; **QA/Verify (GATE Q) gates the ship**). Discovery precedes the pipeline: it
+grooms the backlog and emits the `BRIEF.md` whose `{GOAL}` opens the entry role. Two entry orderings
+exist (Architect-first default; PM-first for product-dominated features) — see `ROLE_LAUNCH_PROMPTS.md`
+"Choosing the entry point." Executioners have **no outbound contract** (they ship code), so the next
+gateway after them is **QA/Verify (GATE Q)**, then **SHIP (GATE S)** — QA is a fresh session, never the
+builder verifying itself.
 
 ## 2. Two repos (route writes correctly)
 - **Backend** work + all `.claude/` contracts live in `C:\Dev\GammaFlow` (this repo).
@@ -197,8 +203,24 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Write:** `RESUME.md` (objective, done + files changed, in-progress & exactly where it stopped,
   next concrete step, gotchas). Self-contained against `GAMMAFLOW_CONTEXT.md`.
 
+### GATE Q — QA / Verify (post-executioners → Ship or Bounce)   *(system-2)*
+- **Trigger:** "both lanes built / QA it / verify the feature before ship."
+- **Use when:** the executioners report done — **always before GATE S** (ship now requires a QA pass).
+- **Audit:** `PRODUCT_CONTRACT.md` (the ACs — the checklist), `INTERFACE_CONTRACT.md`, both execution
+  contracts, the shipped code in both repos, the BRIEF "Invariant watch" + the promoted canon (§5).
+- **Role:** a FRESH QA/Verify session (`ROLE_LAUNCH_PROMPTS.md` §6; subagent `.claude/agents/qa-verify.md`)
+  — a different session from the builders (no marking own homework; ideally a different model →
+  foreshadows system-6). Confirms every AC point-by-point, **fixes nothing**.
+- **Write:** `QA_REPORT.md` (AC verbatim · verdict {PASS|FAIL|UNVERIFIABLE} · evidence + overall verdict).
+  On any FAIL, the QA session also writes the GATE Z bounce ("Amendments bounced to {owner}").
+- **Route:** all PASS (no invariant broken) → **GATE S**. Any FAIL → **GATE Z** to the owning lane; the
+  executioner fixes, then **GATE Q RE-RUNS** (re-verify the fix — never trust it unobserved).
+- **Guard:** QA verifies, never repairs. GATE S MUST NOT fire without a passing `QA_REPORT.md`.
+
 ### GATE S — Ship / archive  (also the GRADUATE step of compounding memory, §3a)
 - **Trigger:** "shipped / both lanes done / archive {FEATURE}."
+- **Precondition:** a passing `QA_REPORT.md` exists (GATE Q) — "verified end-to-end" now means the QA
+  role's point-by-point pass, not a human checkbox.
 - **Do:** move `.claude/contracts/{FEATURE}/` → `.claude/contracts/_archive/{FEATURE}/`; refresh
   `OPEN_THREADS.md` (flip the thread to SHIPPED + ARCHIVED) and `GAMMAFLOW_CONTEXT.md` (fold the
   new capability into §6 / conventions) **only if the feature is verified end-to-end**.
@@ -236,6 +258,7 @@ Contracts:
   - BACKEND_EXECUTION_CONTRACT.md   locked | draft | NO_BACKEND_CHANGE | n/a
   - FRONTEND_EXECUTION_CONTRACT.md  locked | draft | NO_UI_CHANGE | n/a
 Open amendments: none | <file> CONTESTED (owner: <role>)
+QA (GATE Q):  n/a | pending | QA_REPORT PASS | QA_REPORT FAIL (bounced: <owner>)
 Last gateway:  <GATE id> @ <YYYY-MM-DD>
 ```
 
@@ -285,4 +308,11 @@ NEXT      : <role(s) to launch> — launch prompt below
   graduate a key at GATE S once it recurs across ≥3 shipped features (≥2 if binding). A promoted rule's
   **prose is single-sourced** in `GAMMAFLOW_CONTEXT.md` §5 / `OPEN_THREADS.md` §9 — the ledger only
   indexes it (no duplicated prose). Promotion is contestable via GATE Z, never silent canon.
+- **Mechanical gate-check (system-3):** `.claude/tools/contract_lint.py` runs at every gateway (§0
+  step 7); a structural ERROR blocks the handoff. It checks **structure**, not code — code-level
+  integration (system-1, interface-conformance) is a separate, still-trusted gate until it lands.
+- **QA gates the ship (system-2):** GATE S requires a passing `QA_REPORT.md` from a FRESH QA/Verify
+  session (GATE Q, `ROLE_LAUNCH_PROMPTS.md` §6) — never the builder's self-verification. QA confirms
+  every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs
+  on the fix. (Run QA on a different model where possible — de-correlates blind spots, system-6.)
 - Frontend writes target `C:\Dev\gammaflow-web`; contracts always live in this repo.
