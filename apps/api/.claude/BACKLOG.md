@@ -42,12 +42,11 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
-- **trader-personas** — `→ promoted (GATE I, 2026-06-22) → .claude/contracts/trader-personas/`.
-  Persona (investment goal + risk/reward + customizations) selects/parametrizes the `strategy_prompt`
-  handed to the external AI. *Impact:* tailors the AI's entry calls to the trader's actual
-  objective/risk tolerance. *Value H · Effort M.* **Invariant watch:** prompt + presentation layer
-  ONLY — gate / `opportunity_score` / `state_fingerprint` stay byte-identical; AI stays external (§8).
-  *Entry:* architect-first (the prompt-vs-gate boundary is the pivotal call).
+- *(empty — pipeline drained; next feature TBD at the next GATE I)*
+- **trader-personas** — `✓ SHIPPED + ARCHIVED (2026-06-22)` → `_archive/trader-personas/`. Both lanes
+  landed (backend `1026190`; frontend `6dcdbe1`/`1233718`); persona reframes the AI hand-off only,
+  gate/score/tier/fingerprint byte-identical, FE-rendered assembly. Seams it left → section D.
+  (`OPEN_THREADS` §7)
 
 ### B. Ready candidates (feasible, small, unscheduled)
 - **Live gamma-flip anchoring** — outside RTH, anchor the flip search to `gex_spot` (close) not the
@@ -82,3 +81,18 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 - **Multi-ticker scanner** — the observability baseline data supports it. *Value M · Effort M-L.*
   **Invariant watch:** revisits the deliberate "single-ticker, on-demand" decision (the watchlist scan
   was dropped for being too slow) — re-justify before promoting. (`OPEN_THREADS` §6, `GAMMAFLOW_CONTEXT` §5)
+- **Persona data single-sourcing (FE↔BE reconciliation)** — the backend ships the canonical
+  decomposed template + 7 presets at `GET /api/personas` (transport filed as a late interface
+  amendment, after the FE froze), but the FE **embeds** a faithful copy and assembles client-side, so
+  the canonical preset/prompt data is **dual-sourced** (drift risk). *Impact:* an operator edit to a
+  preset/prompt would reach the AI briefing instead of silently diverging — concrete need = first time
+  presets are edited server-side. *Fix:* FE hydrates presets/template from `GET /api/personas`, keeping
+  the embedded copy as offline/assembly-failure fallback. *Value M · Effort S.* Behaviour is correct
+  today; not blocking. (`OPEN_THREADS` §7)
+- **Persona conservative-disposition cleanup** — UX/FE gave `conservative` the *softened* disposition
+  text, but the backend Verification required it to contain "prone to greed"; resolved pragmatically as
+  a **superset** (harsh phrase + map text). *Fix:* decide whether conservative should be softened-only
+  and amend the prompt template + contract if so. *Value L · Effort S.* (`OPEN_THREADS` §7)
+- **Persona deferred extensions** — multi-device sync, operator-shared persona library, richer
+  customization knobs, per-persona acceptance analytics (decision-history harvest). *Value M · Effort
+  M.* Park until a concrete need pulls them. (`OPEN_THREADS` §7)
