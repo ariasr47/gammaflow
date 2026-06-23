@@ -36,15 +36,19 @@ gateway you name.
 - **Standing references (I route to, don't duplicate):**
   `.claude/COMPRESSOR_PROMPTS.md` (#1 Universal · #2 Session-Transition · #3 Split · #4 Resume) ·
   `.claude/ROLE_LAUNCH_PROMPTS.md` (§1 Architect · §1b Architect-after-PM · §2 PM · §2b PM-first ·
-  §3 UX · §4 Backend · §5 Frontend).
+  §3 UX · §4 Backend · §5 Frontend) ·
+  `.claude/BACKLOG.md` (the standing idea pool + roadmap-discovery method — feeds GATE I).
 - **Variable (per feature — what I produce):** `.claude/contracts/{FEATURE}/` containing some of
   `ARCHITECTURE_CONTRACT.md`, `PRODUCT_CONTRACT.md`, `UX_BLUEPRINT.md`, **`INTERFACE_CONTRACT.md`
   (the FE↔BE single source of truth — both lanes bind to it)**, `BACKEND_EXECUTION_CONTRACT.md`,
-  `FRONTEND_EXECUTION_CONTRACT.md`, plus `_MANIFEST.md` (§4), and as needed
-  `*_AMENDMENTS_REQUESTED.md` / `RESUME.md`. Ship → move the folder to `_archive/`.
+  `FRONTEND_EXECUTION_CONTRACT.md`, plus `_MANIFEST.md` (§4) and `BRIEF.md` (the chosen idea that
+  seeds the pipeline — output of GATE I), and as needed `*_AMENDMENTS_REQUESTED.md` / `RESUME.md`.
+  Ship → move the folder to `_archive/`.
 
-Pipeline (canonical): **Architect → PM → UX/Tech-Writer → {Backend ‖ Frontend}** (the two
-executioners run in parallel, both bound to `INTERFACE_CONTRACT.md`). Two entry orderings exist
+Pipeline (canonical): **Discovery (GATE I, optional) → Architect → PM → UX/Tech-Writer →
+{Backend ‖ Frontend}** (the two executioners run in parallel, both bound to
+`INTERFACE_CONTRACT.md`). Discovery precedes the pipeline: it grooms the backlog and emits the
+`BRIEF.md` whose `{GOAL}` opens the entry role. Two entry orderings exist
 (Architect-first default; PM-first for product-dominated features) — see `ROLE_LAUNCH_PROMPTS.md`
 "Choosing the entry point." Executioners have **no outbound contract** (they ship code), so no
 gateway closes after them except SHIP (§3, GATE S).
@@ -60,6 +64,35 @@ gateway closes after them except SHIP (§3, GATE S).
 
 ## 3. Gateway catalog
 Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs next.
+
+### GATE I — Discovery / roadmap (PRE-pipeline)  → entry role (Architect-first or PM-first)
+> The only divergent gate. It exists so that, when the in-mind queue drains, there's a repeatable
+> method for advancing the roadmap instead of ad-hoc whim. I **route to** a discovery session and
+> **package** its output; the generative thinking happens there, not in me (same separation as
+> every other gate — see §6).
+- **Trigger:** "what's next / groom the backlog / roadmap review / out of queued work."
+- **Use when:** the active pipeline has drained, or on a periodic review, to generate + cull the
+  next wave of features/improvements.
+- **Audit:** `GAMMAFLOW_CONTEXT.md` (what exists), `OPEN_THREADS.md` (deferred §7 + open §1/§9 +
+  the "deferred seams" noted inside each shipped thread), `BACKLOG.md` (the standing pool), plus
+  any usage-friction notes I name.
+- **Method (diverge → converge):**
+  1. **Harvest** signal from the five sources: deferred items · shipped-feature seams · usage
+     friction · downstream-AI quality (strategy/reassessment prompt fit) · lifted data/vendor
+     constraints.
+  2. **Decision-impact test** (the cull) — every candidate must answer *"which trading decision
+     does this improve, and how would I observe the improvement?"* Anything that can't answer is
+     **parked, not promoted** (mirrors the AC-observable rule + the AI over-trading gate).
+  3. **Feasibility gate** — data coverage / math invariants. A blocked item names its blocker
+     (e.g. "needs the vendor decision") and is **not** scheduled.
+  4. **Score** the survivors: Value (H/M/L to the trading edge) × Effort (S/M/L); flag any locked
+     invariant it would touch.
+  5. **Cull to ONE** next feature.
+- **Write:** update `BACKLOG.md` (the full prioritized pool — diverge) **and** create
+  `.claude/contracts/{FEATURE}/BRIEF.md` for the chosen one (converge — see §4a).
+- **Route:** the chosen `BRIEF.md`'s `{GOAL}` opens the entry role per the Architect-first vs
+  PM-first rule (`ROLE_LAUNCH_PROMPTS.md` "Choosing the entry point"). GATE I then hands off into
+  GATE A·X's opening move.
 
 ### GATE A·X — Architect exit  → PM (default) or UX (if PM already ran)
 - **Trigger:** "Architect's done / lock the architecture / shape is set."
@@ -163,6 +196,7 @@ I create/update it on **every** gateway. Format:
 Entry:        architect-first | pm-first
 Stage:        <last gateway fired, e.g. "UX exit — split, lanes loaded">
 Repos:        backend | frontend | both
+Brief:        BRIEF.md present | n/a (came in pre-formed)
 Contracts:
   - ARCHITECTURE_CONTRACT.md   locked | draft | n/a
   - PRODUCT_CONTRACT.md        locked | draft | n/a
@@ -173,6 +207,23 @@ Contracts:
 Open amendments: none | <file> CONTESTED (owner: <role>)
 Last gateway:  <GATE id> @ <YYYY-MM-DD>
 ```
+
+## 4a. BRIEF.md (output of GATE I — the one chosen idea)
+The bridge from the divergent `BACKLOG.md` to the convergent pipeline. It IS the `{GOAL}` the entry
+role opens on, so it must stand alone against `GAMMAFLOW_CONTEXT.md`. Format:
+
+```markdown
+# {FEATURE} — brief
+Goal:            <one short paragraph — becomes {GOAL} in the launch prompt>
+Decision impact: <which trading decision this improves + how it's observed>  (the cull test)
+Feasibility:     pass | blocked-on: <X>
+Effort:          S | M | L
+Invariant watch: <any locked rule it must not touch, e.g. gate/score/fingerprint, gamma sourcing>
+Entry point:     architect-first | pm-first — <one-line why>
+Source:          <backlog item / deferred seam / friction note it came from>
+```
+The Orchestrator drafts `BRIEF.md` at GATE I, then immediately feeds `Goal` into GATE A·X's opening
+move (§3) so discovery flows straight into the pipeline.
 
 ## 5. Status block (print after every gateway)
 ```text
