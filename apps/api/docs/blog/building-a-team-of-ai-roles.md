@@ -160,6 +160,47 @@ A relay only works if the batons are trustworthy. A few habits make them so:
 
 ---
 
+## The next hires: who we'd add to the team
+
+A good studio grows by adding the *right* specialists — not by piling more work on
+the ones it already has. Three hires would make this team noticeably sharper, and
+they're the next thing we're building toward.
+
+![Three future roles: design-tool-equipped thinkers, a QA inspector, and a security reviewer](img/the-next-hires.svg)
+
+**Give the thinkers a drawing board.** Right now the Discovery and UX/Tech-Writer
+roles describe things in words. The next step is to let them *draw* — live. Discovery
+would sketch the user's journey and cluster raw ideas on a **Miro** board; the
+UX/Tech-Writer would turn the plan into real flow and component-state diagrams in
+Miro, and into high-fidelity screens in **Figma**. The neat part is the division of
+labour: the AI authors the *diagrams* — the boxes-and-arrows that explain how
+something behaves — while the polished, pixel-perfect screens live in Figma, where a
+human or the agent can refine them. Either way the front-end builder reads those
+screens straight out of Figma's "Dev Mode," so design and code never drift apart. One
+rule travels with this capability: anything a role *reads back* off a shared board or
+file is treated as **information, never as instructions** — a stranger can't smuggle a
+command onto a canvas and have a session obey it.
+
+**Hire an inspector (QA).** Today the builders check their own work. That's the one
+spot where our "no marking your own homework" principle quietly slips. So we'd add a
+**QA** role: a fresh session whose only job is to take the finished feature and the
+original checklist of *what it must do*, and confirm — point by point — that it
+actually does. Crucially, QA doesn't *fix* anything. If something fails, it writes up
+the gap and bounces it back to the builder, exactly like every other handoff. An
+inspector who also does the repairs is no inspector at all.
+
+**Put a skeptic on staff (Security).** The more our roles reach out into the wider
+world — design tools, live market data, the web — the more it pays to have one session
+whose entire mindset is *"what could go wrong, or be made to go wrong?"* A **Security
+reviewer** would red-team each feature before it ships: checking that every role holds
+the *least* access it needs, that outside content can't hijack a session, and that
+nothing private leaks out. It's the smoke detector you install before you smell smoke.
+
+None of these break the model — they *are* the model: one more fresh expert, one more
+clean handoff, one more lane nobody else is allowed to cross.
+
+---
+
 ## Where this goes next
 
 The version above is real and working today. The interesting part is that it's a
