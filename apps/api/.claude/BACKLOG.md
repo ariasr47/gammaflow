@@ -236,3 +236,17 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   convention** in `PRODUCT_CONTRACT` so an AC can be matched to a named test (likely the first sub-step);
   (c) **cross-repo read** — the linter runs in this repo but the specs live in `C:\Dev\gammaflow-web`
   (reads aren't fenced). Follow-on to the FE-tests rule + system-2/3.
+- **system-11 · Cross-repo role-context on dispatch** — `PARKED for consideration (2026-06-23) — do NOT
+  encode until decided`. Dispatching an executioner for the FRONTEND repo must use `spawn_task --cwd`
+  (the Agent tool can't cross the path_guard fence — ORCHESTRATOR §2), which **bypasses the role
+  framework**: no `gammaflow-frontend` lane/subagent, no `context_for.py` pack, no role launch prompt,
+  and the chip is named by action, not role. **Question to settle:** should a cross-repo *executioner
+  (feature)* brief be REQUIRED to (a) re-adopt the role — instruct the spawned session to read
+  `ROLE_LAUNCH_PROMPTS.md §5` + the INTERFACE/FRONTEND_EXECUTION contracts + run
+  `context_for.py {FEATURE} --print` itself — and (b) title the chip `gammaflow-frontend · {FEATURE}`
+  for traceability (maintenance tasks keep the action-name)? *Impact:* closes the implicit "spawn_task
+  drops the role context" hole so cross-repo feature work carries the same lane/context discipline as
+  in-repo work. *Value M · Effort S (a convention + ORCHESTRATOR §2 edit; no code).* **Build-system
+  class:** trading-decision cull **N/A**. **Origin:** raised 2026-06-23 after two *maintenance* tasks
+  (test-tooling setup, path-guard parity) were dispatched ad-hoc with bespoke briefs; user deferred for
+  further consideration. Relates to system-9-lite + the ORCHESTRATOR §2 cross-repo dispatch convention.
