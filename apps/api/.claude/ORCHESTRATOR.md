@@ -81,6 +81,22 @@ builder verifying itself.
   `.claude/contracts/{FEATURE}/`; only the *implementation* is in the web repo.
 - When auditing "what was built," read backend files here and frontend files under
   `C:\Dev\gammaflow-web`. Neither repo has a remote.
+- **Cross-repo dispatch + reconciliation — by ARTIFACT, not notification.** The two spawn paths trade
+  off callback vs cross-repo reach; pick by where the work writes:
+  - **In-repo work** (backend + `.claude/` contracts — this repo): spawn the role as a `gammaflow-*`
+    **subagent via the Agent tool**. Its final report returns to the conductor automatically (sync
+    result; or `run_in_background` ⇒ a `<task-notification>` on completion), and `path_guard` allows the
+    writes. This is the system-9-lite path — use it whenever the work stays in this repo.
+  - **Cross-repo work** (`C:\Dev\gammaflow-web`): the Agent tool can't reach it (an Agent runs in *this*
+    repo's session, so `path_guard` blocks the frontend write), so dispatch with **`spawn_task` +
+    `cwd: C:\Dev\gammaflow-web`** — the only way past the fence. But a spawned task is an INDEPENDENT
+    sibling session: **no result returned, no completion notification, and not in the conductor's
+    TaskList** (`dismiss_task` only withdraws an un-started chip). So the brief MUST leave a **durable
+    signal** — a commit on a named branch and/or a status line in `OPEN_THREADS.md` or the feature
+    `_MANIFEST.md` — and the conductor **reconciles by POLLING that artifact** on its next run
+    (`git -C C:\Dev\gammaflow-web log`, or read the marker; reads across repos are never fenced). Do NOT
+    wait for a ping that never comes — the conductor↔cross-repo link is the artifact, consistent with
+    this system's "state in files, not chat" premise.
 
 ---
 
