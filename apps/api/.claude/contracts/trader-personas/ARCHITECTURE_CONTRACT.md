@@ -4,6 +4,12 @@
 > Reader has only `.claude/GAMMAFLOW_CONTEXT.md` + `BRIEF.md` + this file. No chat history.
 > Lane: data-structure *content*, data-flow, component boundaries, isolation/error rules, non-goals.
 > **No UI/layout, no endpoint signatures, no payload/JSON field names, no copy.**
+>
+> **Amendment A1 (GATE Z) — RESOLVED · ACCEPTED.** Trader-disposition characterization moved from the
+> FIXED risk-first floor to the persona-variable slot family (see PromptTemplate decomposition); the
+> universal risk-discipline floor stays FIXED; Default (no persona) still reproduces today's prompt
+> verbatim (greed line included). No analytics/scoring/gate/fingerprint/transport change. **CONTESTED
+> status cleared.**
 
 ## Goal
 Let a trader **persona** (investment goal + risk/reward profile + customizations) select and
@@ -65,20 +71,31 @@ ready/changed/state_fingerprint)  →  [ FREEZE ]  →  persona projection (asse
   slot-fillers (framing emphasis); a version. It carries **no executable logic** and **no analytics
   parameters**.
 - **PromptTemplate decomposition** (applies to BOTH `strategy_prompt.md` and `reassessment_prompt.md`):
-  - **FIXED sections (persona-invariant — the contract + risk floor):** "When to invoke / When to
-    reassess" (gate + dedupe), "What to send" (full bundle + glossary + DTE window — persona may not
-    drop fields), the **required output / verdict schema**, the caps + **no-auto-apply** + Roll
-    constraint + `status` semantics (reassessment), and the **risk-first floor** (lead with risk;
-    `no_trade`/`Hold` is valid; JSON-only; anchor to `gex_spot`; reliability order; respect regime).
-  - **PERSONA-VARIABLE slots:** the **objective framing** + **risk-tolerance calibration** + injected
-    **customizations** that tune *how a setup is framed* (income vs directional; conservative vs
-    aggressive; reassessment disposition lean — e.g. conservative leans Exit/Trim, aggressive more
-    open to Add **within the fixed cap**). Slots fill text only; they cannot edit fixed sections.
+  - **FIXED sections (persona-invariant — the contract + universal risk-discipline floor):** "When to
+    invoke / When to reassess" (gate + dedupe), "What to send" (full bundle + glossary + DTE window —
+    persona may not drop fields), the **required output / verdict schema**, the caps + **no-auto-apply**
+    + Roll constraint + `status` semantics (reassessment), and the **universal risk-first floor** (lead
+    with risk; `no_trade`/`Hold` is valid; JSON-only; anchor to `gex_spot`; reliability order; respect
+    regime). **(A1) This floor is universal *discipline* only — it carries NO characterization of who
+    the trader is.** The trader-disposition line (e.g. "prone to greed and poor risk management") is
+    **NOT** part of the fixed floor; it is a persona-variable slot (below).
+  - **PERSONA-VARIABLE slots:** the **objective framing** + **risk-tolerance calibration** + the
+    **trader-disposition characterization** (A1 — *how the AI characterizes the trader it is briefing*,
+    e.g. conservative = "risk-averse, values capital preservation," aggressive = "accepts higher
+    variance for higher reward") + injected **customizations** that tune *how a setup is framed* (income
+    vs directional; conservative vs aggressive; reassessment disposition lean — e.g. conservative leans
+    Exit/Trim, aggressive more open to Add **within the fixed cap**). Slots fill text only; they cannot
+    edit fixed sections.
 - **PersonaParametrizedHandoff** (the output): a **pure read-only projection of (frozen bundle,
   active persona)** = fixed template + persona-filled slots, plus the unchanged bundle reference +
   `market_state_glossary.md`. No bundle field is mutated.
 - **Active-persona selection:** a presentation-layer pointer to one PersonaDefinition (or none).
-  **No persona selected ⇒ the current static prompt verbatim** (today's behavior, byte-identical).
+  **No persona selected ⇒ the current static prompt verbatim** (today's behavior, byte-identical) —
+  **including the existing trader-disposition ("prone to greed…") line, which is relocated, not
+  deleted.** (A1) The disposition reclassification changes the rendered prompt **only when a persona is
+  active**; the byte-identical guarantee for `market_state`/`signals`/`opportunity_score`/`ai_eval`/
+  `state_fingerprint` is untouched (prompt-template-only — no analytics/scoring/gate/fingerprint/
+  transport change).
 
 ## Data-flow & component boundaries
 - **New persona module** owns the PersonaDefinition handling, the template decomposition, and the
