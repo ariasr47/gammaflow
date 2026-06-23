@@ -10,7 +10,13 @@ Goal:            Add an in-app action to query a downstream LLM (latest Claude) 
                  hand-off stays** and is augmented by the same JSON state export (so the external path
                  gains the structured context it lacks today). Querying is **on-demand but gated by
                  guardrails**: the UI honors `ai_eval` (de-emphasized / "no fresh edge" when not ready)
-                 and applies a cooldown/rate-limit so it can't become a firehose.
+                 and applies a cooldown/rate-limit so it can't become a firehose. The returned
+                 recommendation is **structured** (the risk-first `strategy_prompt` schema — entry / stop
+                 / targets / sizing), so the UI both renders it readably AND lets the user **act on it**:
+                 an **Accept** maps the rec into the existing **ghost-trade tracker** (paper-sim) —
+                 pre-filling / creating a tracked `GhostTrade`. **No real-order path** (that stays the
+                 deliberately parked "going-live" scope shift — OPEN_THREADS §5 / BACKLOG §D); the AI rec
+                 is **advisory** — the user explicitly accepts, nothing auto-acts.
 
 Decision impact: Improves the "should I enter, and how (risk-first)?" decision by giving an integrated,
                  persona-aware AI read **in-app** instead of manual copy-paste. Observed as a rendered
@@ -28,6 +34,11 @@ Feasibility:     pass. Buildable but introduces GammaFlow's FIRST LLM integratio
                  "going-live-adjacent" (data egress + a generated-content surface) and may re-trigger
                  the deferred **system-6** red-team consideration — Architect should weigh least-
                  privilege secret handling + exactly what state leaves the machine.
+                 **Credential model (decided 2026-06-23):** GammaFlow calls the LLM with a **server-side
+                 key** (`ANTHROPIC_API_KEY` in `.env`, mirroring `MASSIVE_API_KEY`) + a rate cap — the key
+                 NEVER reaches the browser; ALL calls route through the backend proxy. BYO-key (per-user)
+                 is a **designed-for seam** (like the vendor provider port), **not built now** — single
+                 user today; build it only when multi-tenancy is real (a lifted-constraint trigger).
 
 Effort:          L — new external integration + secret handling + a state→JSON context exporter +
                  the in-app call path + gate integration + UX rendering; first time GammaFlow calls an LLM.
@@ -53,6 +64,12 @@ Invariant watch:
                    cooldown); preserve the risk-first output contract.
                  - persona — source the canonical decomposed template + presets from `GET /api/personas`
                    (resolves the persona dual-sourcing flag — the FE embed becomes offline fallback only).
+                 - **no-real-order-path** (CONTEXT §6 ghost-trade / OPEN_THREADS §5) — "action" = Accept
+                   the rec into the **paper-sim ghost-trade tracker** only; `SIMULATED` everywhere; the AI
+                   rec is **advisory** (the user explicitly accepts; nothing auto-acts; never a real
+                   broker order). Crossing to real orders stays the deliberately parked scope shift,
+                   out of scope here. Accept reuses the shipped ghost-trade tracker (`TradeEntryDialog` /
+                   durable store), so this is an integration, not a new order system.
 
 Context tags:    ai,personas,architecture,backend,api,signals,features,observability
                  (context_for.py loads these + the always-load floor §3 math, §5 decisions/invariants).
