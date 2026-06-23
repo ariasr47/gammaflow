@@ -119,3 +119,55 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 - **Persona deferred extensions** — multi-device sync, operator-shared persona library, richer
   customization knobs, per-persona acceptance analytics (decision-history harvest). *Value M · Effort
   M.* Park until a concrete need pulls them. (`OPEN_THREADS` §7)
+
+### E. Methodology / system-of-building improvements *(improve the AI-role system itself, not the trading product)*
+> Source: `docs/SYSTEM_ANALYSIS.md` (2026-06-23). The trading-decision cull is **N/A** for this class —
+> judge each on **correctness, throughput, or cost of the build system**, not trading edge (same
+> convention as the §B Decision-Ledger hook). Sibling already in the pool: the **Decision-Ledger
+> crossing-detection hook** (§B) is the DETECT-step mechanization and belongs to this class.
+> **Binding sequencing:** *system-1 … system-6 land before system-9* — automating the conductor before
+> the mechanical gates + adversarial roles removes the human review that currently provides
+> error-correction (SYSTEM_ANALYSIS §7).
+
+- **system-1 · Interface-conformance check** — a script/test that verifies the built backend EMITS
+  exactly the fields/types/presence the frontend CONSUMES, both checked against `INTERFACE_CONTRACT.md`.
+  *Impact:* closes the most dangerous unguarded seam — integration drift currently caught only by a
+  human reading code, late. *Value H · Effort M.* **Note:** runs at/after GATE U·X and at GATE S;
+  complements, doesn't replace, the contract.
+- **system-2 · QA / Verify role (a 6th role, with teeth)** — a fresh session that takes the shipped
+  feature + its acceptance criteria and confirms point-by-point that each holds; it **fixes nothing**,
+  bouncing any gap back via GATE Z. Adds a gate between the executioners and GATE S. *Impact:* ends
+  "builders mark their own homework" — the one place the no-self-review principle breaks. *Value H ·
+  Effort M.* **Invariant watch:** QA stays in lane (verifies, never repairs).
+- **system-3 · Contract linter (mechanical gate-check)** — a script/hook the Orchestrator runs at each
+  gateway: required sections present, lane-keyword violations flagged (e.g. endpoints in an
+  ARCHITECTURE_CONTRACT, server internals in a FRONTEND file), every AC maps to a component state.
+  *Impact:* gate-checks stop being pure human judgement; a malformed handoff can't advance. *Value M ·
+  Effort M.* Pairs with the §B ledger-crossing hook (same hook surface).
+- **system-4 · Lane enforcement via role subagents** — define `.claude/agents/*` per role with tool
+  allowlists so e.g. the Architect *cannot* Write code and a builder *cannot* rewrite a contract;
+  optional path-guard hooks for finer control. *Impact:* lanes become enforced, not trusted. *Value M ·
+  Effort M.* **Note:** keeps each role's fresh-context isolation (subagents start clean).
+- **system-5 · Ground-truth + ledger sharding (retrieval)** — load only the canon a feature's
+  `BRIEF.md` cites instead of re-reading the whole `GAMMAFLOW_CONTEXT.md` every session. *Impact:*
+  decouples per-session token cost from total system size — the economics that otherwise worsen as you
+  ship more (SYSTEM_ANALYSIS §4.6/§6). *Value H (cost) · Effort M–L.* **Invariant watch:** every
+  session must still see the invariants it could violate — shard by relevance, never drop a binding rule.
+- **system-6 · Adversarial Security/red-team role (different model)** — a session whose whole mindset is
+  "what could be made to go wrong?": least-privilege per role, injection from fetched/external content,
+  data leakage — run on a **different base model** so its blind spots don't correlate with the builders'.
+  *Impact:* the only structural fix for correlated error (one model, all hats — SYSTEM_ANALYSIS §5).
+  *Value H (correctness) · Effort M.*
+- **system-7 · Promoted-canon demotion path** — a trigger that demotes a graduated invariant (via
+  GATE Z) when a runtime signal or a later bounce contradicts it, so the ledger tracks *truth*, not just
+  *recurrence*. *Impact:* stops compounding memory from calcifying a wrong-but-repeated decision into
+  law. *Value M · Effort S–M.* Follow-on to the Decision Ledger.
+- **system-8 · Close the flywheel (observability → GATE I)** — add the shipped metrics as a first-class
+  GATE I harvest source so Discovery grooms from measured reality, not guesses. *Impact:* the
+  build→measure→discover loop becomes real. *Value M · Effort S.* **Depends-on:** `latency-visualizer`
+  / the observability readout (§A/§D).
+- **system-9 · Orchestrator-as-subagent-pipeline + parallel feature lanes** — automate the conductor so
+  you *approve* gates instead of *running* them, and run several feature lanes at once (shared
+  OPEN_THREADS to avoid collisions). *Impact:* removes the human-as-bottleneck. *Value H · Effort L.*
+  **Binding:** do NOT promote before system-1…system-6 land (see the sequencing note above) — this one
+  removes the human review the system currently leans on for correctness.
