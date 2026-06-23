@@ -26,14 +26,28 @@
 
 ---
 
+## Last GATE I — 2026-06-22 (pipeline had drained; 4 features archived)
+**Chosen → `trader-personas`** (the only candidate clearing both decision-impact + feasibility;
+Value H × Effort M). Brief at `.claude/contracts/trader-personas/BRIEF.md`; entry = architect-first.
+Cull verdicts (so the next discovery doesn't re-litigate):
+- **Parked, cleanliness/no observed friction:** flip-anchoring (user confirmed flip is fine),
+  wall-distance guard (hasn't shown up live).
+- **Blocked-on a decision/measurement (not a build):** vendor/overnight (cost-eval decision first),
+  flip fixed-IV modeling (measure the divergence first).
+- **Parked, scope/justification:** ghost-trade→real path (scope shift off paper-sim), multi-session
+  dark-pool (dark-pool is locked context-only, never directional — §8), observability extensions
+  (operator-facing, not a trading decision), multi-ticker scanner (revisits the single-ticker
+  decision; needs re-justification).
+
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
-- **trader-personas** — persona (investment goal + risk/reward + customizations) selects/parametrizes
-  the `strategy_prompt` handed to the external AI. *Impact:* tailors the AI's entry calls to the
-  trader's actual objective/risk tolerance. *Value H · Effort M.* **Invariant watch:** prompt +
-  presentation layer ONLY — gate / `opportunity_score` / `state_fingerprint` stay byte-identical; AI
-  stays external (§8). *Entry:* architect-first (the prompt-vs-gate boundary is the pivotal call).
+- **trader-personas** — `→ promoted (GATE I, 2026-06-22) → .claude/contracts/trader-personas/`.
+  Persona (investment goal + risk/reward + customizations) selects/parametrizes the `strategy_prompt`
+  handed to the external AI. *Impact:* tailors the AI's entry calls to the trader's actual
+  objective/risk tolerance. *Value H · Effort M.* **Invariant watch:** prompt + presentation layer
+  ONLY — gate / `opportunity_score` / `state_fingerprint` stay byte-identical; AI stays external (§8).
+  *Entry:* architect-first (the prompt-vs-gate boundary is the pivotal call).
 
 ### B. Ready candidates (feasible, small, unscheduled)
 - **Live gamma-flip anchoring** — outside RTH, anchor the flip search to `gex_spot` (close) not the
