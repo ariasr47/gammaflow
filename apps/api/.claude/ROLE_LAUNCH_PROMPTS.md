@@ -11,6 +11,14 @@ Pipeline: **Architect → Product Manager → UX/Tech-Writer → Backend & Front
 > as the Orchestrator (`.claude/ORCHESTRATOR.md`) and announce the transition; it drives these
 > prompts + the compressors for you instead of manual copy-paste.
 
+> **Lane-fenced subagents (system-4):** each role also has a tool-fenced subagent in `.claude/agents/`
+> (`gammaflow-architect` · `gammaflow-pm` · `gammaflow-ux` · `gammaflow-backend` · `gammaflow-frontend`
+> · `qa-verify`). A role spawned via the Agent tool is mechanically held to its lane — contract authors
+> (architect/pm/ux) + QA have **no `Edit` and no `Bash`** (cannot modify or run code); executioners get
+> the build toolset. Tool-allowlists are a PARTIAL guard; repo/path fencing (a backend agent can't write
+> the frontend repo) is the deferred PreToolUse-hook follow-on. Running each role still works as a manual
+> session with the prompts below — the subagents just make the lane enforceable when spawned.
+
 Placeholders to fill before pasting:
 - `{FEATURE}` = kebab folder name under `.claude/contracts/` (e.g. `dark-pool-stream-isolation`).
 - `{GOAL}` = one short paragraph: what this feature must accomplish for the user/system.

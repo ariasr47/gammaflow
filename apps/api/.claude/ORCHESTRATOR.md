@@ -47,7 +47,10 @@ gateway you name.
   §3 UX · §4 Backend · §5 Frontend) ·
   `.claude/BACKLOG.md` (the standing idea pool + roadmap-discovery method — feeds GATE I) ·
   `.claude/DECISION_LEDGER.md` (the compounding-memory ledger + promotion rule — captured every
-  gateway, graduated at GATE S, fed forward into GATE I).
+  gateway, graduated at GATE S, fed forward into GATE I) ·
+  `.claude/agents/*` (per-role lane-fenced subagents — system-4) ·
+  `.claude/tools/*` (`contract_lint.py` — system-3 gate-check; `interface_conformance.py` — system-1
+  runtime conformance).
 - **Variable (per feature — what I produce):** `.claude/contracts/{FEATURE}/` containing some of
   `ARCHITECTURE_CONTRACT.md`, `PRODUCT_CONTRACT.md`, `UX_BLUEPRINT.md`, **`INTERFACE_CONTRACT.md`
   (the FE↔BE single source of truth — both lanes bind to it)**, `BACKEND_EXECUTION_CONTRACT.md`,
@@ -322,6 +325,11 @@ NEXT      : <role(s) to launch> — launch prompt below
   `.claude/tools/interface_conformance.py` runs the live backend's response against the
   `## Conformance spec` embedded in `INTERFACE_CONTRACT.md` — proving the BE emits the fields the
   interface promises (= what the FE consumes). A conformance FAIL bounces to Backend (GATE Z).
+- **Lane enforcement via subagents (system-4):** each role has a tool-fenced subagent in
+  `.claude/agents/` — contract authors (architect/pm/ux) + QA have no `Edit`/`Bash` (cannot modify or
+  run code); executioners get the build toolset. Tool-allowlists are a PARTIAL guard (a `Write` could
+  still target an out-of-lane path); the repo/path fencing that completes it is the deferred PreToolUse
+  hook half. Lanes stay enforced-where-mechanical, trusted-where-not, until those hooks land.
 - **QA gates the ship (system-2):** GATE S requires a passing `QA_REPORT.md` from a FRESH QA/Verify
   session (GATE Q, `ROLE_LAUNCH_PROMPTS.md` §6) — never the builder's self-verification. QA confirms
   every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs

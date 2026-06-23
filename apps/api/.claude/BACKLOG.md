@@ -161,10 +161,15 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   §B ledger-crossing hook (same script surface). **Deferred extensions:** AC↔component-state mapping
   check; optional `settings.json` PreToolUse/Stop hook to auto-run it (offer made); the legacy 4
   archived features predate `_MANIFEST.md` (flag only on `--all`, not on live gating).
-- **system-4 · Lane enforcement via role subagents** — define `.claude/agents/*` per role with tool
-  allowlists so e.g. the Architect *cannot* Write code and a builder *cannot* rewrite a contract;
-  optional path-guard hooks for finer control. *Impact:* lanes become enforced, not trusted. *Value M ·
-  Effort M.* **Note:** keeps each role's fresh-context isolation (subagents start clean).
+- **system-4 · Lane enforcement via role subagents** — `✓ LANDED (2026-06-23, tools-allowlist half)`:
+  `.claude/agents/{gammaflow-architect,gammaflow-pm,gammaflow-ux,gammaflow-backend,gammaflow-frontend}.md`
+  + the earlier `qa-verify.md`. Contract authors (architect/pm/ux) + QA have **no `Edit`/`Bash`** (cannot
+  modify or run code); executioners get the build toolset (Read/Grep/Glob/Edit/Write/Bash). Wired into
+  ROLE_LAUNCH intro + ORCHESTRATOR §1/§6. *Value M · Effort M.* Keeps each role's fresh-context
+  isolation (subagents start clean). **Deferred follow-on — `system-4b · PreToolUse path-guard hooks`:**
+  tool-allowlists are partial (a `Write` could still hit an out-of-lane path); add `.claude/settings.json`
+  PreToolUse hooks so a backend agent can't write the frontend repo and contract authors can't touch
+  `src/`. *Value M · Effort S–M.* That completes "lanes enforced, not trusted."
 - **system-5 · Ground-truth + ledger sharding (retrieval)** — load only the canon a feature's
   `BRIEF.md` cites instead of re-reading the whole `GAMMAFLOW_CONTEXT.md` every session. *Impact:*
   decouples per-session token cost from total system size — the economics that otherwise worsen as you
