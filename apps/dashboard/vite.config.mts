@@ -35,6 +35,11 @@ export default defineConfig(() => ({
     watch: false,
     globals: true,
     environment: 'jsdom',
+    setupFiles: ['./src/test-setup.ts'],
+    // MUI's ESM build imports react-transition-group via a directory import that Node's native ESM
+    // loader can't resolve when these packages are externalized. Inline them so Vite transforms the
+    // modules and resolves those imports itself.
+    server: { deps: { inline: [/@mui\//, 'react-transition-group'] } },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default'],
     coverage: {
