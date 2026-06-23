@@ -71,8 +71,19 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   (I/O|CPU from `kind`, p50/p95/max/count/ok-err-skip), total/cache/vendor lines, recent-traces with
   warm/cold inspect. Honest: empty → `—`, `skipped` shown, headroom `null` → `unknown`, non-alerting.
   The **trader dashboard ignores** the new `meta.trace_id`/`meta.timings` (renders neither).
+- `apps/dashboard/src/app/personas/` — **trader personas**: a prompt-layer presentation overlay,
+  assembled **FE-side** (locus PINNED FE-rendered). A faithful **embedded** decomposed hand-off
+  template (Default renders today's prompt byte-identical; A1 disposition slot relocated) + 7 built-in
+  presets + client-local custom personas + `active_persona_id` (persisted). `usePersona` +
+  `PersonaPicker`/`HandoffDialog` (Entry/Reassessment tabs, FIXED/PERSONA badges, invariance readout
+  "Unchanged by persona…", Copy)/`PersonaCustomizeForm`. **Switching persona is pure presentation —
+  no getTicker/streamTicker, no recompute; score/tier/gate/fingerprint are invariant.** A visible/
+  overridable DTE pre-fill chip (one-shot on explicit navigation, never recomputes). NOTE: the FE
+  embeds the template/presets rather than consuming the backend's `GET /api/personas` — correct
+  output, but dual-sourced (see OPEN_THREADS thread 7 reconciliation flag).
 - `libs/api/src/lib/gammaflow.ts` — typed API client (`@org/api`): `getTicker`, `streamTicker`,
-  `fetchTrackedContract`, `fetchMetrics`; `Meta` tolerates optional `trace_id?`/`timings?`.
+  `fetchTrackedContract`, `fetchMetrics`; `Meta` tolerates optional `trace_id?`/`timings?`;
+  `PersonaDefinition`/`Handoff` persona types.
 - Vite dev proxy `/api → 127.0.0.1:8000` (no CORS); SSE via `EventSource`.
 
 **Transport:** heavy bundle over REST (polled ~60s, cached); light live payload over **SSE**.

@@ -143,7 +143,7 @@ shipped backend. **Archived** under `_archive/` (per DoD).
 **Deferred (specified, not built):** OTel/Prometheus export, latency/headroom alert thresholds,
 persisted/cross-restart baselines, the multi-ticker scanner (baseline data supports it).
 
-## 7. Trader personas (BACKEND SHIPPED — coordinate FE archive)
+## 7. Trader personas (SHIPPED + ARCHIVED — both lanes done)
 Contracts in `.claude/contracts/trader-personas/` (A1 RESOLVED·ACCEPTED). Persona is a **read-only,
 post-FREEZE prompt projection** — a non-input to scoring by construction. **Backend shipped**
 (`C:\Dev\GammaFlow`): `prompts/strategy_prompt.md` + `reassessment_prompt.md` decomposed (FIXED vs
@@ -162,9 +162,27 @@ contract shipped no transport for the separate-repo FE); (2) **contract inconsis
 gives conservative the *softened* text, but the prose + BACKEND Verification require conservative to
 contain "prone to greed"; resolved by the **superset** clause (harsh phrase + verbatim map text).
 Flag for clean-up amendment if conservative was meant to be softened-only.
-**Still open:** FE lane (`PersonaPicker`/`HandoffDialog`/`PersonaCustomizeForm`, client-local store,
-FE-side assembly + fallback, ReassessCard `Briefing:` label). **Archive
-`.claude/contracts/trader-personas/` once the FE lane lands.**
+**Frontend SHIPPED** (`C:\Dev\gammaflow-web`, committed `6dcdbe1`/`1233718`): `apps/dashboard/src/app/
+personas/` — `PersonaDefinition`/`Handoff` types; a **FE-embedded faithful decomposed template**
+(canonical strategy/reassessment prompts; Default byte-identical incl. greed line; A1 disposition slot
+relocated) with `assembleHandoff` (pure + synchronous + default-prompt fallback); 7 presets (exact
+UX §B copy) + client-local custom personas + `active_persona_id` persisted; `usePersona`;
+`PersonaPicker`/`HandoffDialog` (Entry/Reassessment tabs, FIXED/PERSONA badges, invariance readout,
+Copy)/`PersonaCustomizeForm` (binding caveat); toolbar `View AI hand-off` + visible/overridable DTE
+pre-fill (one-shot, applied only on explicit navigation — no recompute on switch); ReassessCard
+`Briefing:` label. Verified: materially different prompt per persona; Default verbatim; switching kept
+the invariance readout identical with **zero `/api/ticker`|`/api/stream` calls** (devtools 3→3);
+FIXED/PERSONA badges; hostile "ignore the Add cap" note stayed in its PERSONA slot; DTE pre-fill;
+reload persistence. Conservative disposition fixed to the **superset** (contains "prone to greed").
+**Reconciliation flag (FE↔BE seam):** the backend ships the canonical template + presets at
+**`GET /api/personas`** (its chosen transport, filed as an interface amendment AFTER the FE's frozen
+interface), but the FE **embeds** a faithful copy and assembles client-side (matching the user's
+explicit "assemble client-side, no `meta.handoff`/`?persona=`" FE directive + the FE-rendered
+"avoid round-trip" rationale). Output is correct + verified, but the canonical preset/prompt data is
+now **dual-sourced** (drift risk). **Recommended follow-up:** have the FE hydrate presets/template
+from `GET /api/personas` with the embedded copy as offline/assembly-failure fallback — single-sources
+the operator-editable canonical data. (Not blocking; behaviour is correct today.)
+**Archived** under `_archive/` (per DoD).
 **Deferred (specified, not built):** multi-device sync, operator-shared persona library, richer
 customization, per-persona acceptance analytics.
 
