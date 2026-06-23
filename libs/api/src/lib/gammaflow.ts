@@ -96,6 +96,8 @@ export interface Setup {
   conviction: 'low' | 'medium' | 'high';
 }
 
+export type OpportunityTier = 'dormant' | 'watch' | 'actionable' | 'prime';
+
 export interface Signals {
   ticker: string;
   regime: 'positive_gamma' | 'negative_gamma' | null;
@@ -104,7 +106,17 @@ export interface Signals {
   distances: Record<string, number | null>;
   setups: Setup[];
   opportunity_score: number;
+  // Opportunity escalation (backend-emitted; bands are backend env). Vocabulary is fixed.
+  opportunity_tier: OpportunityTier;
+  prime_prompt_eligible: boolean; // true only at prime AND actionable (gates the sim-entry prompt)
   dark_pool_confluence?: { off_exchange_price: number; coincides_with: string; level: number }[];
+}
+
+/** Sibling of ai_eval, present only when the bundle request carries an open-position context
+ *  (pos_* query params); null otherwise. Drives once-per-event reassessment-alert de-dupe. */
+export interface PositionEval {
+  changed: boolean;     // raw de-dupe: flips once when the position fingerprint moves
+  fingerprint: string;
 }
 
 export interface AiEval {
@@ -167,6 +179,35 @@ export interface TickerBundle {
   ai_eval: AiEval;
   meta: Meta;
   off_exchange?: OffExchange; // present only when dark_pool is enabled
+  position_eval: PositionEval | null; // present only when pos_* context is supplied
+}
+
+// ---- Ghost-trade tracker: tracked-contract stats + reassessment boundary types --------------
+export type OptionRight = 'call' | 'put';
+export interface OptionQuote { bid: number; ask: number; mid: number; }
+/** Each greek may be null (unpriced contract). */
+export interface OptionGreeks { delta: number | null; gamma: number | null; theta: number | null; vega: number | null; }
+/** Filter-independent stats for one option contract (GET /api/contract). `option_quote` null ⇒
+ *  no live NBBO ⇒ the FE falls back to a theoretical (Black-Scholes) mark — not an error. */
+export interface TrackedContract {
+  ticker: string;
+  expiration: string; // YYYY-MM-DD
+  strike: number;
+  right: OptionRight;
+  option_quote: OptionQuote | null;
+  greeks: OptionGreeks;
+  iv: number | null;
+  dte: number;
+}
+
+export interface ReplacementContract { expiration: string; strike: number; right: OptionRight; }
+/** Ingested reassessment verdict (operator-mediated; pasted JSON treated as `ready` in phase-1). */
+export interface Recommendation {
+  verdict: 'Hold' | 'Trim' | 'Add' | 'Exit' | 'Roll';
+  replacement_contract: ReplacementContract | null; // present only for Roll
+  rationale: string;
+  verdict_id: string;
+  status: 'pending' | 'ready' | 'failed';
 }
 
 export interface TickerQuery {
@@ -174,6 +215,8 @@ export interface TickerQuery {
   maxDte?: number;
   expirations?: string[]; // explicit YYYY-MM-DD dates; omitted/empty = all
   darkPool?: boolean;     // include off-exchange context + confluence (default backend setting)
+  // Open-position context → makes the bundle compute position_eval. Absent ⇒ position_eval null.
+  position?: { expiration: string; strike: number; right: OptionRight; plPct?: number };
 }
 
 export class ApiError extends Error {
@@ -227,16 +270,23 @@ export function streamTicker(
   return () => es.close();
 }
 
-/** Full bundle for one ticker, optionally filtered by DTE window or explicit expirations. */
+/** Full bundle for one ticker, optionally filtered by DTE window or explicit expirations. When
+ *  `position` is supplied, the bundle additionally returns `position_eval` (else null). */
 export async function getTicker(
   symbol: string,
-  { minDte, maxDte, expirations, darkPool }: TickerQuery = {}
+  { minDte, maxDte, expirations, darkPool, position }: TickerQuery = {}
 ): Promise<TickerBundle> {
   const params = new URLSearchParams();
   if (minDte != null) params.set('min_dte', String(minDte));
   if (maxDte != null) params.set('max_dte', String(maxDte));
   if (expirations && expirations.length) params.set('expirations', expirations.join(','));
   if (darkPool != null) params.set('dark_pool', String(darkPool));
+  if (position) {
+    params.set('pos_expiration', position.expiration);
+    params.set('pos_strike', String(position.strike));
+    params.set('pos_right', position.right);
+    if (position.plPct != null) params.set('pos_pl_pct', String(position.plPct));
+  }
   const qs = params.toString();
   const res = await fetch(`/api/ticker/${symbol.toUpperCase()}${qs ? `?${qs}` : ''}`);
   if (!res.ok) {
@@ -245,4 +295,22 @@ export async function getTicker(
     throw new ApiError(detail, res.status);
   }
   return (await res.json()) as TickerBundle;
+}
+
+/**
+ * Filter-independent stats for one tracked option contract (GET /api/contract). Resolves from the
+ * full snapshot regardless of the display DTE filter; no new vendor fetch.
+ * Returns `null` when the contract is **not in the snapshot** (HTTP 404 → FE "tracking unavailable").
+ * A 200 with `option_quote: null` is a valid result (FE → theoretical mark), NOT null here.
+ * Other failures throw (the caller treats a throw as "tracking unavailable" too).
+ */
+export async function fetchTrackedContract(
+  symbol: string,
+  { expiration, strike, right }: { expiration: string; strike: number; right: OptionRight }
+): Promise<TrackedContract | null> {
+  const params = new URLSearchParams({ expiration, strike: String(strike), right });
+  const res = await fetch(`/api/contract/${symbol.toUpperCase()}?${params.toString()}`);
+  if (res.status === 404) return null; // not in snapshot
+  if (!res.ok) throw new ApiError(`Contract lookup failed (${res.status})`, res.status);
+  return (await res.json()) as TrackedContract;
 }

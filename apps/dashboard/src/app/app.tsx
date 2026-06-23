@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom';
 import { styled, useTheme } from '@mui/material/styles';
 import {
@@ -11,8 +11,12 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip as RTooltip,
 } from 'recharts';
-import { getTicker, streamTicker, TickerBundle, LiveUpdate, IvSkew, TermStructure } from '@org/api';
+import { getTicker, streamTicker, TickerBundle, LiveUpdate, IvSkew, TermStructure, OptionRight } from '@org/api';
 import { GexProfileChart } from './gex-profile-chart';
+import { useGhostTrade } from './ghost-trade/useGhostTrade';
+import { GhostTradePanel } from './ghost-trade/GhostTradePanel';
+import { TradeEntryDialog } from './ghost-trade/TradeEntryDialog';
+import { PrimeBanner, tierMeta, OPPORTUNITY_TIER_INFO } from './ghost-trade/OpportunityTier';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
 // A healthy SSE session pushes a payload every ~1.5s (the live broadcast throttle) even when
@@ -137,12 +141,14 @@ const StatTile = styled(Card)<{ accent?: 'up' | 'down' | 'neutral' }>(
   })
 );
 
-function Stat({ label, value, accent, info, offline }:
-  { label: string; value: string; accent?: 'up' | 'down' | 'neutral'; info?: string; offline?: boolean }) {
+function Stat({ label, value, accent, info, offline, accentColor }:
+  { label: string; value: string; accent?: 'up' | 'down' | 'neutral'; info?: string; offline?: boolean; accentColor?: string }) {
   const tile = (
     // Stream Offline: dim the (live-derived) tile and caption it `⏸ offline` so a kept last
     // value is never mistaken for a current one. Static tiles never receive `offline`.
-    <StatTile accent={accent} variant="outlined" sx={offline ? { opacity: 0.5 } : undefined}>
+    // `accentColor` overrides the left border (used for non-directional tier emphasis).
+    <StatTile accent={accent} variant="outlined"
+      sx={{ ...(offline ? { opacity: 0.5 } : {}), ...(accentColor ? { borderLeftColor: accentColor } : {}) }}>
       <CardContent>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Typography variant="caption" color="text.secondary">{label}</Typography>
@@ -202,14 +208,21 @@ function TickerDashboard() {
   // Dark-pool (off-exchange) context: off => excluded from the bundle AND the opportunity score.
   const [darkPool, setDarkPool] = useState(true);
 
+  // "Live" only if a real tick arrived recently AND the transport isn't offline. Declared early so
+  // the ghost-trade hook + the bundle's position context can use it.
+  const isLive = (live?.live ?? false) && !streamOffline;
+  // Ghost trade (paper sim): owns the durable position, mark/P-L, alerts, and the reassessment
+  // boundary. `positionQuery` (set when a trade is open) makes the bundle compute position_eval.
+  const gt = useGhostTrade(ticker, data, live, isLive, streamOffline);
+
   const load = useCallback(() => {
     if (selected !== null && selected.length === 0) return; // nothing selected -> nothing to fetch
     setLoading(true);
-    getTicker(ticker, { expirations: selected ?? undefined, darkPool })
+    getTicker(ticker, { expirations: selected ?? undefined, darkPool, position: gt.positionQuery })
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [ticker, selected, darkPool]);
+  }, [ticker, selected, darkPool, gt.positionQuery]);
 
   // Reset the filter to "all" whenever the ticker changes; clear data so we show a spinner.
   // Clear any prior error too, so a stale cold-start error never flashes over the new ticker.
@@ -260,10 +273,26 @@ function TickerDashboard() {
   const allDates = data?.expirations.map((e) => e.date) ?? [];
   const noneSelected = selected !== null && selected.length === 0;
   const checked = selected ?? allDates; // dates shown ticked in the menu
-  // "Live" only if a real tick arrived recently AND the transport isn't offline — once offline,
-  // the last payload's `live:true` must not keep live values on screen as if current.
-  const isLive = (live?.live ?? false) && !streamOffline;
   const ls = liveStatus(live);          // session-aware live/stale status for the chip
+
+  // Ghost-trade entry dialog + Prime banner (over-trading guard: the banner shows only on the
+  // change INTO Prime + prime_prompt_eligible, is dismissible, and never re-shows every poll).
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entryPrefill, setEntryPrefill] = useState<{ expiration: string; strike: number; right: OptionRight } | undefined>();
+  const [showPrimeBanner, setShowPrimeBanner] = useState(false);
+  const prevTierRef = useRef<string | null>(null);
+  const tradeOpen = gt.trade?.status === 'open';
+  useEffect(() => {
+    const t = sig?.opportunity_tier;
+    if (t === 'prime' && sig?.prime_prompt_eligible && prevTierRef.current !== 'prime') setShowPrimeBanner(true);
+    if (t !== 'prime') setShowPrimeBanner(false);
+    prevTierRef.current = t ?? null;
+  }, [sig?.opportunity_tier, sig?.prime_prompt_eligible]);
+  const openEntry = (prefill?: { expiration: string; strike: number; right: OptionRight }) => {
+    setEntryPrefill(prefill); setEntryOpen(true);
+  };
+  const strikeList = Array.from(new Set((data?.strike_profile.strikes ?? []).map((s) => s.strike))).sort((a, b) => a - b);
+  const tm = tierMeta(theme, sig?.opportunity_tier ?? 'dormant');
 
   // Hover label for a term-structure point: real tenor + expiration + ATM IV (auditable).
   const TermPointTooltip = ({ active, payload }:
@@ -375,8 +404,18 @@ function TickerDashboard() {
         </Alert>
       )}
 
+      {/* Cold-start with a durable ghost trade: the trade record never blanks — show its entry
+          facts + last-known P/L even before any bundle loads (contract stats read "unavailable
+          until data loads"). When a bundle exists, the panel renders below the headline instead. */}
+      {!data && gt.trade && !noneSelected && (
+        <GhostTradePanel gt={gt} data={null} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} />
+      )}
+
       {!noneSelected && m && (
         <>
+          {showPrimeBanner && !tradeOpen && (
+            <PrimeBanner onSimulate={() => openEntry()} onDismiss={() => setShowPrimeBanner(false)} />
+          )}
           <Typography variant="h1" gutterBottom>
             {m.ticker} · ${(isLive ? live!.mid : m.price)?.toFixed(2)}
             <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
@@ -435,9 +474,13 @@ function TickerDashboard() {
                   data.off_exchange.levels.slice(0, 3).map((l) => `$${l.price} (${l.share_of_offex_pct}%)`).join(', ') || '—'
                 }. Side/intent unknown — context only, not a directional signal.`} />
             )}
-            <Stat label="Opportunity" value={`${sig?.opportunity_score ?? 0}`} accent="neutral"
-              info="0–100 triage score for how actionable the setup is now (closeness to a key level + volatility extremity + confluence). Not a trade signal." />
+            <Stat label="Opportunity" value={`${sig?.opportunity_score ?? 0} · ${tm.word}`} accent="neutral" accentColor={tm.color}
+              info={"0–100 triage score for how actionable the setup is now (closeness to a key level + volatility extremity + confluence). Not a trade signal." + OPPORTUNITY_TIER_INFO} />
           </Box>
+
+          {/* Ghost-trade panel (paper sim) — below the headline/grid. Durable parts never blank;
+              P/L + mark degrade with the live stream only. */}
+          <GhostTradePanel gt={gt} data={data} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} />
 
           {data?.strike_profile && (
             <GexProfileChart
@@ -594,6 +637,19 @@ function TickerDashboard() {
           )}
         </>
       )}
+
+      {/* Ghost-trade entry. One open trade per ticker is enforced by the panel (no open affordance
+          while a trade is open) + the hook's openTrade guard. */}
+      <TradeEntryDialog
+        open={entryOpen && !tradeOpen}
+        ticker={ticker}
+        expirations={allDates}
+        strikes={strikeList}
+        spot={m?.price ?? 0}
+        prefill={entryPrefill}
+        onClose={() => setEntryOpen(false)}
+        onConfirm={(form) => { gt.openTrade(form); setEntryOpen(false); }}
+      />
     </Container>
   );
 }
