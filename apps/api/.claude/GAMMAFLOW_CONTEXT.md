@@ -232,10 +232,14 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - **Run:** backend `.venv/Scripts/python.exe main.py` (uvicorn :8000); frontend
   `npx nx serve dashboard` (Vite :4200, proxies /api). Node via nvm-windows at `C:\nvm4w\nodejs`.
 - **Frontend tests (standing rule — part of every FE feature):** `npx nx test dashboard`
-  (and `nx test api` for `libs/api`) — Vitest + jsdom + Testing Library + v8 coverage, already wired via
-  `@nx/vite`; colocated `*.spec.tsx`/`*.spec.ts`. The FE executioner writes unit/component/integration
-  tests for each feature (assert the contract's component states + degraded paths + promoted invariants,
-  not a coverage %); QA re-runs the suite at GATE Q. E2E (Playwright/Cypress) not required by default.
+  (and `nx test api` for `libs/api`) — Vitest + jsdom + Testing Library (+ `@testing-library/user-event`
+  + `jest-dom`) + v8 coverage, wired via `@nx/vite`; colocated `*.spec.tsx`/`*.spec.ts`. The FE
+  executioner writes unit + component + **flow-integration** tests for each feature; the
+  flow-integration test is the centerpiece — it drives the actual user flow end-to-end through every
+  edge case, mocking only the network boundary (never a live backend). Assert the contract's component
+  states + degraded paths + promoted invariants, not a coverage %; QA re-runs the suite at GATE Q.
+  **E2E = Playwright** (`@nx/playwright`), adopted nearer go-live for the critical flow; optional before
+  then (the BE↔FE seam is already verified by `interface_conformance.py`).
 - Two git repos: `C:\Dev\GammaFlow` (backend) and `C:\Dev\gammaflow-web` (frontend); no remotes.
 
 ## 8. Downstream-AI contract

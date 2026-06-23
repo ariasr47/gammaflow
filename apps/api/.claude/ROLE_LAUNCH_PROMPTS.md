@@ -317,19 +317,24 @@ MUST persist on live-stream loss; only live fields show offline/stale; never bla
 refresh once a bundle has loaded; auto-reconnect). Do not touch server internals or math.
 
 Automated tests are PART OF THE DELIVERABLE for every feature (standing rule — the FE repo is wired
-for Vitest + jsdom + Testing Library via @nx/vite). Colocate `*.spec.tsx`/`*.spec.ts` with the code
-and write, at the level each fits best:
+for Vitest + jsdom + Testing Library, plus @testing-library/user-event + jest-dom, via @nx/vite).
+Colocate `*.spec.tsx`/`*.spec.ts` with the code. Three levels, the flow-integration one is the
+CENTERPIECE:
 - unit — pure logic (hooks' reducers/derivations, mark-ladder math, persona assembleHandoff,
   ring-buffer/formatters), deterministic, no DOM;
 - component — render each component state from the contract (default/loading/stale/offline/empty/
-  error) + the key interactions, asserting observable output (Testing Library);
-- integration — mock the network boundary (fetch / EventSource at the client seam, NEVER a live
-  backend) to drive SSE-drop→live-tiles-dim-while-static-persists, cold-start-fail vs post-success-
-  refresh-fail, 404/no-quote, per-field nulls.
+  error) + the key interactions, asserting observable output (Testing Library + user-event);
+- integration (CENTERPIECE) — drive the actual USER FLOW end-to-end through every edge case/variation:
+  mount the feature subtree, mock ONLY the network boundary (the @org/api client, or fetch/EventSource
+  — NEVER a live backend), then walk the journey with user-event (e.g. open a ghost trade -> tier
+  banner -> SSE drops -> live tiles dim while the static chart persists -> reconnect), plus
+  cold-start-fail vs post-success-refresh-fail, 404/no-quote, per-field nulls. These are the manual
+  mock checks every shipped lane did by hand, made re-runnable.
 Assert the contract's observable behaviors + the promoted invariants (live-vs-static isolation,
-best-effort-isolated-or-null), not a coverage %. E2E (Playwright/Cypress) is not required by default.
-Run `npx nx test dashboard` (and `nx test api` if you touched libs/api) and make it GREEN before
-reporting done — QA will re-run it at GATE Q.
+best-effort-isolated-or-null), not a coverage %. E2E: Playwright (@nx/playwright) is the chosen tool
+for real-browser flow tests — adopted nearer go-live, optional before then. Run `npx nx test dashboard`
+(and `nx test api` if you touched libs/api) and make it GREEN before reporting done — QA re-runs it at
+GATE Q.
 
 Run the project the standard way and verify the live-loss / stale / cold-start states behave as
 specified against the acceptance criteria. A controllable mock backend behind the Vite proxy (used by

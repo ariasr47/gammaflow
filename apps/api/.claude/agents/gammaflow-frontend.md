@@ -22,18 +22,24 @@ Lane (hard):
 - Do NOT touch server internals or math, the backend repo, or any contract. If a needed field is missing
   from the interface, flag it for a GATE Z amendment — do not invent it.
 - **Tests are part of the deliverable (required for every feature).** Stack: Vitest + jsdom + Testing
-  Library (already wired via `@nx/vite`); colocate `*.spec.tsx`/`*.spec.ts` with the code; run
-  `npx nx test dashboard` (and `nx test api` if you touched `libs/api`) and make it GREEN before
-  reporting done. Cover, at the level each fits best:
+  Library (+ `@testing-library/user-event` + `@testing-library/jest-dom`), wired via `@nx/vite`;
+  colocate `*.spec.tsx`/`*.spec.ts` with the code; run `npx nx test dashboard` (and `nx test api` if you
+  touched `libs/api`) and make it GREEN before reporting done. Three levels — the flow-integration one is
+  the **centerpiece**:
   - **unit** — pure logic (hooks' reducers/derivations, mark-ladder math, persona `assembleHandoff`,
     ring-buffer/formatters): deterministic, no DOM;
   - **component** — render each component state from the execution contract (default/loading/stale/
-    offline/empty/error) and the key interactions, asserting observable output (Testing Library);
-  - **integration** — mock the network boundary (`fetch` / `EventSource` at the client seam, NEVER a
-    live backend) to drive SSE-drop→live-tiles-dim-while-static-persists, cold-start-fail vs
-    post-success-refresh-fail, 404/no-quote, per-field nulls — the same paths you'd exercise by hand.
+    offline/empty/error) + key interactions, asserting observable output (Testing Library + user-event);
+  - **integration (centerpiece) — drive the actual USER FLOW end-to-end through every edge case /
+    variation:** mount the feature subtree, mock ONLY the network boundary (the `@org/api` client, or
+    `fetch`/`EventSource` — NEVER a live backend), then walk the journey with user-event — e.g. open a
+    ghost trade → tier banner → SSE drops → live tiles dim while the static chart persists → reconnect;
+    plus cold-start-fail vs post-success-refresh-fail, 404/no-quote, per-field nulls. These are the
+    manual mock checks every shipped lane did by hand, made re-runnable.
   Assert the contract's observable behaviors + the promoted invariants (live-vs-static isolation,
-  best-effort-isolated-or-null) — not a coverage %. E2E (Playwright/Cypress) is NOT required by default.
+  best-effort-isolated-or-null) — not a coverage %. **E2E:** Playwright (`@nx/playwright`) is the chosen
+  tool for real-browser flow tests — adopted nearer go-live for the critical happy path + key edge cases,
+  optional before then (the BE↔FE seam is already verified by `interface_conformance.py`).
 - Run the project the standard way (`npx nx serve dashboard`) and verify the live-loss / stale /
   cold-start states behave as specified. Report what you changed + how you verified (include the
   `nx test` result). No outbound contract; run no compressor.
