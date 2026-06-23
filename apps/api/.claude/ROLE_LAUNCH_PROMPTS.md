@@ -288,9 +288,12 @@ Method:
 - For EACH acceptance criterion, verbatim and in order, assign exactly one verdict:
   PASS (observed to hold — cite evidence) · FAIL (observed not to hold — expected vs actual + repro) ·
   UNVERIFIABLE (couldn't exercise it — say precisely why).
-- Spot-check the INTERFACE_CONTRACT integration (fields the FE consumes == fields the BE emits) and the
-  binding invariants (BRIEF "Invariant watch" + the promoted canon). A green AC list over a broken
-  invariant is still a FAIL.
+- Verify INTERFACE_CONTRACT integration with the runtime conformance check (system-1): with the
+  backend running, run `.venv/Scripts/python.exe .claude/tools/interface_conformance.py --contract
+  .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000`. A conformance FAIL
+  (the live BE omits/mistypes a field the interface promises) is a GATE Q FAIL → bounce to Backend.
+- Also check the binding invariants (BRIEF "Invariant watch" + the promoted canon). A green AC list
+  over a broken invariant is still a FAIL.
 
 Write .claude/contracts/{FEATURE}/QA_REPORT.md: a table (AC verbatim · verdict · evidence), a summary
 (n PASS / n FAIL / n UNVERIFIABLE), and an explicit overall GATE Q verdict — PASS only if every AC is

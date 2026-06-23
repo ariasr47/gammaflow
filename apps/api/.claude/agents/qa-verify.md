@@ -31,9 +31,12 @@ Method:
    - **PASS** — observed to hold; cite the concrete evidence (what you did + saw).
    - **FAIL** — observed not to hold; expected vs actual + the minimal repro.
    - **UNVERIFIABLE** — could not exercise it; say precisely why (missing fixture, needs live data…).
-3. Spot-check the INTERFACE_CONTRACT integration (the fields the FE consumes are the fields the BE
-   emits) and the binding invariants from the BRIEF "Invariant watch" + the promoted canon
-   (`GAMMAFLOW_CONTEXT.md` §5). A green AC list over a broken invariant is still a FAIL.
+3. Verify INTERFACE_CONTRACT integration with the runtime conformance check (system-1): with the
+   backend running, run `.venv/Scripts/python.exe .claude/tools/interface_conformance.py --contract
+   .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000`. A conformance FAIL
+   (the live BE omits/mistypes a field the interface promises = what the FE consumes) is a GATE Q FAIL
+   → bounce to Backend. Also check the binding invariants from the BRIEF "Invariant watch" + the
+   promoted canon (`GAMMAFLOW_CONTEXT.md` §5). A green AC list over a broken invariant is still a FAIL.
 
 Output — write ONLY:
 - `.claude/contracts/{FEATURE}/QA_REPORT.md` — a table (AC verbatim · verdict · evidence), a summary

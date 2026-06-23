@@ -145,6 +145,16 @@ def lint_feature(folder: Path, f: Findings, known_endpoints: set[str]) -> None:
                     f.warn(f"{name}/{fname_sub}:{ln_no}", f"lane-purity: {why}")
                     break  # one flag per rule per file is enough signal
 
+    # M7 — a locked INTERFACE_CONTRACT should carry a machine-checkable conformance spec (system-1),
+    # so interface_conformance.py can verify the live backend against it at GATE Q.
+    iface = folder / "INTERFACE_CONTRACT.md"
+    if statuses.get("INTERFACE_CONTRACT.md") == "locked" and iface.exists():
+        ibody = read(iface)
+        if "Conformance spec" not in ibody and "NO_BACKEND_CHANGE" not in ibody:
+            f.warn(f"{name}/INTERFACE_CONTRACT.md",
+                   "no '## Conformance spec' block — system-1 runtime conformance cannot check this "
+                   "interface (interface_conformance.py needs the embedded machine-checkable spec)")
+
     # M6 — NEW endpoint design in the Architect/PM lane (referencing an EXISTING endpoint is fine).
     for fname_sub in NEW_ENDPOINT_FILES:
         fpath = folder / fname_sub

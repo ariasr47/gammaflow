@@ -131,11 +131,18 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 > the mechanical gates + adversarial roles removes the human review that currently provides
 > error-correction (SYSTEM_ANALYSIS §7).
 
-- **system-1 · Interface-conformance check** — a script/test that verifies the built backend EMITS
-  exactly the fields/types/presence the frontend CONSUMES, both checked against `INTERFACE_CONTRACT.md`.
-  *Impact:* closes the most dangerous unguarded seam — integration drift currently caught only by a
-  human reading code, late. *Value H · Effort M.* **Note:** runs at/after GATE U·X and at GATE S;
-  complements, doesn't replace, the contract.
+- **system-1 · Interface-conformance check** — `✓ LANDED (2026-06-23, runtime variant) →
+  .claude/tools/interface_conformance.py`. Each `INTERFACE_CONTRACT.md` embeds a machine-checkable
+  `## Conformance spec` ```json block (endpoints → required field paths/types/presence); the tool hits
+  the live backend (`--url`) — or a captured `--sample` for CI/offline — and validates the emitted JSON
+  against it (dot-paths, `name[]` array fan-out, `type|null` unions, `?` optional). A FAIL = the live BE
+  omits/mistypes a field the interface promises (= what the FE consumes). Wired into **GATE Q** (QA runs
+  it; FAIL → GATE Z to Backend) + GATE U·X (interface must embed the spec) + the §3 linter (WARNs if a
+  locked interface lacks the block — system-3 ensures the spec EXISTS, system-1 ensures the live
+  response MATCHES it). Tested vs the real `/api/_metrics` shape (pass / array-fanout / drift-fail).
+  *Value H · Effort M.* **Deferred:** static FE-type cross-check (`@org/api` TS vs the interface) — the
+  runtime path already proves BE-emits ⊇ interface; FE-consumes ⊆ interface is held by the FE binding +
+  the linter's interface-binding check.
 - **system-2 · QA / Verify role (a 6th role, with teeth)** — `✓ LANDED (2026-06-23)`: new **GATE Q**
   (ORCHESTRATOR §3, between the executioners and GATE S) + role launch prompt (`ROLE_LAUNCH_PROMPTS.md`
   §6) + subagent (`.claude/agents/qa-verify.md`, tools: Read/Grep/Glob/Bash/Write — no Edit) + manifest

@@ -151,7 +151,10 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Compress:** Compressor **#3** (Split Context).
 - **Write THREE files (this is the whole point — never collapse them):**
   1. `INTERFACE_CONTRACT.md` — FE↔BE truth ONLY: endpoints, payload fields (name/type/presence),
-     error + SSE semantics. Both lanes bind here.
+     error + SSE semantics. Both lanes bind here. **Include a machine-checkable `## Conformance spec`
+     ```json block** (endpoints → required field paths/types/presence) so `interface_conformance.py`
+     (system-1) can verify the live backend against it at GATE Q. (A `NO_BACKEND_CHANGE` interface that
+     consumes an existing endpoint may point at that endpoint's existing spec instead.)
   2. `BACKEND_EXECUTION_CONTRACT.md` — server work only; references the interface for what it
      EMITS; NO UI detail. (→ repo `C:\Dev\GammaFlow`.)
   3. `FRONTEND_EXECUTION_CONTRACT.md` — UI work + component states (default/loading/stale/offline/
@@ -211,6 +214,11 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Role:** a FRESH QA/Verify session (`ROLE_LAUNCH_PROMPTS.md` §6; subagent `.claude/agents/qa-verify.md`)
   — a different session from the builders (no marking own homework; ideally a different model →
   foreshadows system-6). Confirms every AC point-by-point, **fixes nothing**.
+- **Runtime conformance (system-1):** against the running backend, run
+  `.venv/Scripts/python.exe .claude/tools/interface_conformance.py --contract
+  .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000`. A conformance
+  **FAIL** (the live BE does not emit a field the interface promises / the FE consumes) is a **GATE Q
+  FAIL** → bounce to Backend. Integration is now **verified, not asserted**.
 - **Write:** `QA_REPORT.md` (AC verbatim · verdict {PASS|FAIL|UNVERIFIABLE} · evidence + overall verdict).
   On any FAIL, the QA session also writes the GATE Z bounce ("Amendments bounced to {owner}").
 - **Route:** all PASS (no invariant broken) → **GATE S**. Any FAIL → **GATE Z** to the owning lane; the
@@ -309,8 +317,11 @@ NEXT      : <role(s) to launch> — launch prompt below
   **prose is single-sourced** in `GAMMAFLOW_CONTEXT.md` §5 / `OPEN_THREADS.md` §9 — the ledger only
   indexes it (no duplicated prose). Promotion is contestable via GATE Z, never silent canon.
 - **Mechanical gate-check (system-3):** `.claude/tools/contract_lint.py` runs at every gateway (§0
-  step 7); a structural ERROR blocks the handoff. It checks **structure**, not code — code-level
-  integration (system-1, interface-conformance) is a separate, still-trusted gate until it lands.
+  step 7); a structural ERROR blocks the handoff. It checks **structure**, not code.
+- **Integration is verified, not asserted (system-1):** at GATE Q,
+  `.claude/tools/interface_conformance.py` runs the live backend's response against the
+  `## Conformance spec` embedded in `INTERFACE_CONTRACT.md` — proving the BE emits the fields the
+  interface promises (= what the FE consumes). A conformance FAIL bounces to Backend (GATE Z).
 - **QA gates the ship (system-2):** GATE S requires a passing `QA_REPORT.md` from a FRESH QA/Verify
   session (GATE Q, `ROLE_LAUNCH_PROMPTS.md` §6) — never the builder's self-verification. QA confirms
   every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs
