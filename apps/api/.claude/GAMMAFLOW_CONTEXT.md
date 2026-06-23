@@ -165,6 +165,10 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - **`[live-vs-static-isolation]`** — every new datum declares **live-derived vs static**: live-derived
   UI degrades on an SSE drop (dim + offline, never blank) while static reads keep rendering the last
   bundle. *(dark-pool, the four metrics, ghost-trade, trader-personas — 4.)*
+- **`[operator-vs-trader-path-separation]`** — an operator/diagnostic surface stays on its own route
+  (e.g. `/_ops/metrics`), **OFF every trader/bundle route and unlinked from the trader UI**; it is
+  **read-only + side-effect-free** (no vendor fetch, recompute, cache mutation, or trader-route call)
+  and leaves the trader path + SSE untouched. *(backend-observability, latency-visualizer — 2 binding.)*
 
 ## 6. Current feature state (works end-to-end)
 - On-demand bundle: `GET /{ticker}` & `/api/ticker/{ticker}` (+ slices) with DTE/expiration filter.

@@ -229,3 +229,6 @@ customization, per-persona acceptance analytics.
   `opportunity_score` / `opportunity_tier` / `state_fingerprint` byte-identical; never a scoring input.
 - **`[live-vs-static-isolation]`** (4 features) — live-derived UI degrades on SSE drop; static reads
   keep rendering the last bundle.
+- **`[operator-vs-trader-path-separation]`** (promoted 2026-06-23, 2 binding) — operator/diagnostic
+  surfaces stay off every trader/bundle route + unlinked from the trader UI; read-only + side-effect-
+  free (no vendor fetch / recompute / cache mutation / trader-route call). See GAMMAFLOW_CONTEXT §5.

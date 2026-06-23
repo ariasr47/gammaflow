@@ -26,14 +26,14 @@
 | `best-effort-isolated-or-null` | an optional/added computation fails to a null/omitted field, **never an HTTP error**; `market_state`/`strike_profile` + SSE stay intact | CONTEXT §5 · THREADS §9 | 2026-06-22 | dark-pool, dex-voloi-skew-term, trade-tracker-sim, backend-observability, trader-personas (5) |
 | `additive-keeps-score-byte-identical` | an additive feature leaves gate / `opportunity_score` / `opportunity_tier` / `state_fingerprint` **byte-identical**; never a scoring input | CONTEXT §5 · THREADS §9 | 2026-06-22 | dex-voloi-skew-term, trade-tracker-sim, backend-observability, trader-personas (4) |
 | `live-vs-static-isolation` | every datum declares live-derived vs static; live UI degrades on SSE drop (dim+offline, never blank) while static reads keep rendering | CONTEXT §5 · THREADS §9 | 2026-06-22 | dark-pool, dex-voloi-skew-term, trade-tracker-sim, trader-personas (4) |
+| `operator-vs-trader-path-separation` | an operator/diagnostic surface stays off every trader/bundle route + unlinked from the trader UI; read-only + side-effect-free (no vendor fetch / recompute / cache mutation / trader-route call); trader path + SSE untouched | CONTEXT §5 · THREADS §9 | 2026-06-23 | backend-observability, latency-visualizer (2 binding) |
 
 > Pre-existing canon (recorded by the ledger, already a rule before it existed — not re-promoted):
 > `ai-external-no-llm` (CONTEXT §8) · `dark-pool-context-only` (THREADS §9) · `gamma-sourcing-split`
 > (CONTEXT §3 / THREADS §9).
 
 ## Watch list (keys logged, not yet at threshold)
-- `operator-vs-trader-path-separation` (1 — backend-observability) — an operator-facing surface leaves
-  the trader path + computed values untouched and stays off the trader routes. Promote on next recurrence.
+- *(none — `operator-vs-trader-path-separation` graduated 2026-06-23 at the latency-visualizer GATE S.)*
 
 ## Ledger (append-only — one row per binding decision instance)
 | key | feature | gate | statement (as locked) | binding |
@@ -58,10 +58,10 @@
 | `operator-vs-trader-path-separation` | latency-visualizer | S | trend on `/_ops/metrics` only, never linked from a trader route; the page's sole network call stays `GET /api/_metrics`; no control triggers a vendor fetch / recompute / cache mutation / trader-route call | yes |
 | `best-effort-isolated-or-null` | latency-visualizer | S | a failed poll keeps the last series behind a soft notice + self-heals (no retry storm, no error page); never affects the page, snapshot tables, or any other surface; the in-browser series is ephemeral (only Export persists, to the operator's machine) | yes |
 
-> Note (GATE S, latency-visualizer): `operator-vs-trader-path-separation` now has **2 binding:yes
-> instances** (backend-observability, latency-visualizer) → crosses the "≥2 if all binding" promotion
-> threshold; flagged for the Orchestrator to graduate into canon (CONTEXT §5 + THREADS §9) at the
-> next gateway.
+> Note (GATE S, latency-visualizer): `operator-vs-trader-path-separation` reached **2 binding:yes
+> instances** (backend-observability, latency-visualizer) → crossed the "≥2 if all binding" threshold.
+> **RESOLVED — GRADUATED by the Orchestrator 2026-06-23** into CONTEXT §5 + THREADS §9 (see Promoted
+> canon above). The executioner detected/flagged; the Orchestrator held the promotion pen.
 
 > Seeded retroactively 2026-06-22 from the five archived features (`OPEN_THREADS.md` §3–§7). Going
 > forward, the Orchestrator appends a row per binding decision at each gateway (ORCHESTRATOR §0 step 7).
