@@ -50,7 +50,11 @@ gateway you name.
   gateway, graduated at GATE S, fed forward into GATE I) ·
   `.claude/agents/*` (per-role lane-fenced subagents — system-4) ·
   `.claude/tools/*` (`contract_lint.py` — system-3 gate-check; `interface_conformance.py` — system-1
-  runtime conformance).
+  runtime conformance; `context_for.py` — system-5 context pack; `path_guard.py` — system-4b write fence).
+- **Operating mode (system-9-lite, adopted):** run each role as a **fresh spawn** of its
+  `.claude/agents/gammaflow-*` subagent (+ a `context_for.py` pack), discarded after each handoff —
+  never a long-lived role session. The conductor stays manual (you); the role work is disposable +
+  fresh. See `ROLE_LAUNCH_PROMPTS.md` "Running a role — the LITE path."
 - **Variable (per feature — what I produce):** `.claude/contracts/{FEATURE}/` containing some of
   `ARCHITECTURE_CONTRACT.md`, `PRODUCT_CONTRACT.md`, `UX_BLUEPRINT.md`, **`INTERFACE_CONTRACT.md`
   (the FE↔BE single source of truth — both lanes bind to it)**, `BACKEND_EXECUTION_CONTRACT.md`,

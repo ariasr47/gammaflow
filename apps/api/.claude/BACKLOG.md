@@ -210,8 +210,14 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   GATE I harvest source so Discovery grooms from measured reality, not guesses. *Impact:* the
   build→measure→discover loop becomes real. *Value M · Effort S.* **Depends-on:** `latency-visualizer`
   / the observability readout (§A/§D).
+- **system-9-lite · fresh-subagent-per-gateway** — `✓ ADOPTED (2026-06-23)`: run each role as a FRESH
+  spawn of its `.claude/agents/gammaflow-*` subagent (+ `context_for.py` pack), discarded after each
+  handoff — instead of long-lived role terminals that accumulate context. Captures the freshness +
+  lane-fencing win with **no new infra and human review intact** (the conductor is still you). Wired into
+  `ROLE_LAUNCH_PROMPTS.md` ("Running a role — the LITE path"). The on-ramp to full system-9.
 - **system-9 · Orchestrator-as-subagent-pipeline + parallel feature lanes** — automate the conductor so
   you *approve* gates instead of *running* them, and run several feature lanes at once (shared
   OPEN_THREADS to avoid collisions). *Impact:* removes the human-as-bottleneck. *Value H · Effort L.*
   **Binding:** do NOT promote before system-1…system-6 land (see the sequencing note above) — this one
-  removes the human review the system currently leans on for correctness.
+  removes the human review the system currently leans on for correctness; the **lite path above is the
+  adopted interim** until then.

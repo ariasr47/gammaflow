@@ -20,9 +20,10 @@ Pipeline: **Architect → Product Manager → UX/Tech-Writer → Backend & Front
 > (`gammaflow-architect` · `gammaflow-pm` · `gammaflow-ux` · `gammaflow-backend` · `gammaflow-frontend`
 > · `qa-verify`). A role spawned via the Agent tool is mechanically held to its lane — contract authors
 > (architect/pm/ux) + QA have **no `Edit` and no `Bash`** (cannot modify or run code); executioners get
-> the build toolset. Tool-allowlists are a PARTIAL guard; repo/path fencing (a backend agent can't write
-> the frontend repo) is the deferred PreToolUse-hook follow-on. Running each role still works as a manual
-> session with the prompts below — the subagents just make the lane enforceable when spawned.
+> the build toolset. Tool-allowlists are the per-tool guard; the cross-repo write fence (a backend agent
+> can't write the frontend repo) is enforced by the `path_guard.py` PreToolUse hook (system-4b, LANDED).
+> Running each role still works as a manual session with the prompts below — the subagents just make the
+> lane enforceable when spawned.
 
 Placeholders to fill before pasting:
 - `{FEATURE}` = kebab folder name under `.claude/contracts/` (e.g. `dark-pool-stream-isolation`).
@@ -30,6 +31,39 @@ Placeholders to fill before pasting:
 
 > Convention (per COMPRESSOR_PROMPTS.md): reference files, don't paste; assume **no chat history** —
 > the reader has only `GAMMAFLOW_CONTEXT.md` + the named contract(s). One feature = one folder.
+
+---
+
+## Running a role — the LITE path (system-9-lite · ADOPTED 2026-06-23)
+**Run each role as a FRESH spawn of its lane-fenced subagent, never a long-lived terminal.** Freshness
+*is* the reliability: each session stays the pure function `output = role(ground_truth, inbound_contract)`
+— no accumulated context to drift, self-contradict, or smuggle a stale detail into a new decision (and
+no growing per-turn token cost). You (the human) still conduct — announce the transition, run the
+mechanical gates + tools, route — but the ROLE work moves into a disposable subagent.
+
+Per gateway, spawn the matching subagent with the launch prompt from the cited section + the sharded
+context pack, let it write its one contract, then **discard it** (no reuse across roles or features):
+
+| Gateway             | Spawn subagent        | Launch prompt | Writes                          |
+|---------------------|-----------------------|---------------|---------------------------------|
+| Architect (entry)   | `gammaflow-architect` | §1 / §1b      | ARCHITECTURE_CONTRACT.md        |
+| Product Manager     | `gammaflow-pm`        | §2 / §2b      | PRODUCT_CONTRACT.md             |
+| UX / Tech-Writer    | `gammaflow-ux`        | §3            | UX_BLUEPRINT.md + the split     |
+| Backend (fan-out)   | `gammaflow-backend`   | §4            | server code (binds interface)   |
+| Frontend (fan-out)  | `gammaflow-frontend`  | §5            | UI code (binds interface)       |
+| QA / Verify (GATE Q)| `qa-verify`           | §6            | QA_REPORT.md                    |
+
+- **Lean context, not the whole canon:** give each spawn the pack —
+  `.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print` (always-load invariant floor
+  + the BRIEF's `Context tags:`); it falls back to the floor if no tags.
+- **You still run the gates between spawns:** `contract_lint.py` at every gateway; at GATE Q
+  `interface_conformance.py` + the `qa-verify` spawn. Lanes are tool-fenced (the subagents) + cross-repo
+  path-fenced (`path_guard.py`).
+- **Discard, don't continue:** never reuse a subagent across gateways or features. The handoff is the
+  written contract on disk, not a living session.
+- **vs full system-9:** the *conductor is still you* (manual transitions + approvals). system-9 automates
+  that into a Conductor agent spawning these same subagents + parallel feature lanes — parked behind the
+  go-live gate. Lite = the freshness + lane-fencing win, no new infra, human review intact.
 
 ---
 
