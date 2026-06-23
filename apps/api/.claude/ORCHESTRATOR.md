@@ -201,6 +201,12 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
   section to the contested contract): name the item, why it can't stand, the closest buildable
   alternative. **Sequencing gate:** the owning role resolves it before the downstream role builds
   on the contested clause.
+- **Demotion check (system-7):** if the contested clause **contradicts a promoted canon invariant**
+  (`DECISION_LEDGER.md` "Promoted canon"), decide which it is: a one-off **exception** (the rule still
+  holds generally — note the carve-out on this feature, invariant stands) vs a **demotion** (the rule
+  itself is wrong/over-general — once the amendment is accepted, remove/narrow its prose in
+  `GAMMAFLOW_CONTEXT.md` §5 + `OPEN_THREADS.md` §9, move its key to the ledger's "Demoted" table with the
+  contradicting evidence). Same bar as promotion — demote the *rule*, not for a single carve-out.
 - **Route:** back to the owning role; mark the contract `CONTESTED` in the manifest.
 
 ### GATE R — Resume snapshot (long session, fresh tab)
@@ -322,17 +328,25 @@ NEXT      : <role(s) to launch> — launch prompt below
   graduate a key at GATE S once it recurs across ≥3 shipped features (≥2 if binding). A promoted rule's
   **prose is single-sourced** in `GAMMAFLOW_CONTEXT.md` §5 / `OPEN_THREADS.md` §9 — the ledger only
   indexes it (no duplicated prose). Promotion is contestable via GATE Z, never silent canon.
+- **Memory tracks truth, not just recurrence (system-7):** a promoted invariant contradicted by reality
+  — an accepted GATE Z amendment, or a GATE Q QA/conformance FAIL proving it false/over-general — is
+  **demoted** (prose removed/narrowed in `GAMMAFLOW_CONTEXT.md` §5 + `OPEN_THREADS.md` §9, key moved to
+  the ledger's "Demoted" table with evidence), not left standing. Demotion bar mirrors promotion: a
+  one-off feature carve-out is an exception, not a demotion. Stops the compounding memory from calcifying
+  a wrong-but-repeated rule into law.
 - **Mechanical gate-check (system-3):** `.claude/tools/contract_lint.py` runs at every gateway (§0
   step 7); a structural ERROR blocks the handoff. It checks **structure**, not code.
 - **Integration is verified, not asserted (system-1):** at GATE Q,
   `.claude/tools/interface_conformance.py` runs the live backend's response against the
   `## Conformance spec` embedded in `INTERFACE_CONTRACT.md` — proving the BE emits the fields the
   interface promises (= what the FE consumes). A conformance FAIL bounces to Backend (GATE Z).
-- **Lane enforcement via subagents (system-4):** each role has a tool-fenced subagent in
+- **Lane enforcement via subagents (system-4 + 4b):** each role has a tool-fenced subagent in
   `.claude/agents/` — contract authors (architect/pm/ux) + QA have no `Edit`/`Bash` (cannot modify or
-  run code); executioners get the build toolset. Tool-allowlists are a PARTIAL guard (a `Write` could
-  still target an out-of-lane path); the repo/path fencing that completes it is the deferred PreToolUse
-  hook half. Lanes stay enforced-where-mechanical, trusted-where-not, until those hooks land.
+  run code); executioners get the build toolset. **system-4b** adds a `.claude/settings.json` PreToolUse
+  hook (`.claude/tools/path_guard.py`) that blocks any write outside this repo root — the cross-repo
+  fence (a backend session can't write the frontend repo). What's still trusted (not mechanized): the
+  per-role *intra*-repo rule (e.g. an author Write-ing into `src/`) — a session-global hook can't see the
+  active role, so that residual rests on the tool-allowlist + prompt.
 - **Ground-truth retrieval (system-5):** a session may load the minimal context pack via
   `.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print` instead of re-reading all of
   `GAMMAFLOW_CONTEXT.md` (selected from the BRIEF's `Context tags:` + the section shard tags). The

@@ -32,6 +32,20 @@
 > `ai-external-no-llm` (CONTEXT §8) · `dark-pool-context-only` (THREADS §9) · `gamma-sourcing-split`
 > (CONTEXT §3 / THREADS §9).
 
+## Demoted (contradicted by reality — system-7)
+> The inverse of graduation: memory must track **truth**, not just recurrence. A promoted invariant that
+> reality contradicts — an **accepted GATE Z amendment**, or a **GATE Q QA/conformance FAIL** proving it
+> false or over-general — is demoted: its prose is **removed (or narrowed)** in `GAMMAFLOW_CONTEXT.md` §5
+> + `OPEN_THREADS.md` §9, its key moves out of "Promoted canon" into the table below, and its earning
+> rows stay in the Ledger as provenance. **Bar (mirrors promotion):** demote only when the *rule itself*
+> is shown wrong/over-general — a single feature's legitimate carve-out is an **exception** noted on that
+> feature, NOT a demotion. (`contract_lint.py`'s canon check follows automatically — a demoted key leaves
+> the Promoted-canon table, so it is no longer expected in canon prose.)
+
+| key | demoted | contradicting evidence (feature · gate) | disposition |
+|-----|---------|------------------------------------------|-------------|
+| *(none yet)* | | | |
+
 ## Watch list (keys logged, not yet at threshold)
 - *(none — `operator-vs-trader-path-separation` graduated 2026-06-23 at the latency-visualizer GATE S.)*
 

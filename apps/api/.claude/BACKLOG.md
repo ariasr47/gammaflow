@@ -166,10 +166,18 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   + the earlier `qa-verify.md`. Contract authors (architect/pm/ux) + QA have **no `Edit`/`Bash`** (cannot
   modify or run code); executioners get the build toolset (Read/Grep/Glob/Edit/Write/Bash). Wired into
   ROLE_LAUNCH intro + ORCHESTRATOR §1/§6. *Value M · Effort M.* Keeps each role's fresh-context
-  isolation (subagents start clean). **Deferred follow-on — `system-4b · PreToolUse path-guard hooks`:**
-  tool-allowlists are partial (a `Write` could still hit an out-of-lane path); add `.claude/settings.json`
-  PreToolUse hooks so a backend agent can't write the frontend repo and contract authors can't touch
-  `src/`. *Value M · Effort S–M.* That completes "lanes enforced, not trusted."
+  isolation (subagents start clean).
+- **system-4b · PreToolUse path-guard hooks** — `✓ LANDED (2026-06-23, cross-repo fence) →
+  .claude/tools/path_guard.py + .claude/settings.json`. A PreToolUse hook on `Write|Edit|MultiEdit|
+  NotebookEdit` blocks any write whose resolved target is OUTSIDE this repo root (exit 2) — so a session
+  in the backend repo can't write the frontend repo or arbitrary disk paths (Reads are never blocked).
+  Tested both directions; fail-open on malformed input. **Scope honesty:** a session-global hook can't
+  see WHICH role/subagent is active, so it enforces the **cross-repo / out-of-repo** fence robustly but
+  NOT per-role intra-repo rules (e.g. "the architect can't touch `src/`") — that residual stays on the
+  tool-allowlist (no `Edit`) + the role prompt. **Mirror needed:** copy `path_guard.py` + the settings
+  hook into `C:\Dev\gammaflow-web/.claude/` (identical; REPO_ROOT is computed per-repo) so the frontend
+  repo fences symmetrically — done from a gammaflow-web session, not here (that write is what the fence
+  forbids). *Value M · Effort S.* **Activation:** new `settings.json` ⇒ open `/hooks` once or restart.
 - **system-5 · Ground-truth + ledger sharding (retrieval)** — `✓ LANDED (2026-06-23, logical-slice) →
   .claude/tools/context_for.py`. Each `## N.` section in `GAMMAFLOW_CONTEXT.md` carries an inline
   `<!-- shard: tags=...; always -->` annotation; the tool assembles the minimal pack from the BRIEF's
@@ -189,10 +197,15 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   don't correlate with the builders'. *Impact:* the only structural fix for correlated error (one model,
   all hats — SYSTEM_ANALYSIS §5). *Value H (correctness, once live) · Effort M.* **Note:** the QA role's
   "run on a different model" guidance is a partial pre-payment on the de-correlation benefit.
-- **system-7 · Promoted-canon demotion path** — a trigger that demotes a graduated invariant (via
-  GATE Z) when a runtime signal or a later bounce contradicts it, so the ledger tracks *truth*, not just
-  *recurrence*. *Impact:* stops compounding memory from calcifying a wrong-but-repeated decision into
-  law. *Value M · Effort S–M.* Follow-on to the Decision Ledger.
+- **system-7 · Promoted-canon demotion path** — `✓ LANDED (2026-06-23)`: the inverse of graduation. A
+  promoted invariant contradicted by reality (an accepted **GATE Z** amendment, or a **GATE Q**
+  QA/conformance FAIL proving it false/over-general) is **demoted** — prose removed/narrowed in
+  GAMMAFLOW_CONTEXT §5 + OPEN_THREADS §9, key moved to the DECISION_LEDGER "Demoted" table with the
+  contradicting evidence (earning rows retained as provenance). `contract_lint.py`'s canon check follows
+  automatically (a demoted key leaves Promoted-canon). Wired: DECISION_LEDGER "Demoted" section + GATE Z
+  "Demotion check" step + §6 invariant. **Bar mirrors promotion:** a one-off feature carve-out is an
+  *exception*, not a demotion. *Impact:* stops compounding memory from calcifying a wrong-but-repeated
+  decision into law (SYSTEM_ANALYSIS §4.5). *Value M · Effort S–M.*
 - **system-8 · Close the flywheel (observability → GATE I)** — add the shipped metrics as a first-class
   GATE I harvest source so Discovery grooms from measured reality, not guesses. *Impact:* the
   build→measure→discover loop becomes real. *Value M · Effort S.* **Depends-on:** `latency-visualizer`
