@@ -9,5 +9,11 @@
   },
   "enabledPlugins": {
     "nx@nx-claude-plugins": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [ { "type": "command", "command": "node .claude/tools/path_guard.js", "statusMessage": "path-guard: lane fence (system-4b)" } ] }
+    ]
   }
 }
