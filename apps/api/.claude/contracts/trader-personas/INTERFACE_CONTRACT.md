@@ -14,27 +14,29 @@ For a given request input, computing with persona = A, persona = B, or no person
 **not** a parameter to `signals` / `generate_signals` / `_opportunity_score` / `state_fingerprint` /
 `evaluate_gate`.
 
-## Endpoints touched
+## Assembly locus — PINNED: FE-RENDERED (Orchestrator @ GATE U·X, 2026-06-22)
 - **Persona-parametrized hand-off (the one observable):** the user must be able to **view and copy**
   the persona-parametrized **entry** (`strategy_prompt`) and **reassessment** (`reassessment_prompt`)
-  hand-off prompts. **Assembly locus is Interface's choice**, and either of these is acceptable iff
-  the boundary above holds:
-  - **(a) Server serve-time overlay** — a read-only projection that assembles the prompt from the
-    frozen bundle + the active persona, exposed in `meta` or a dedicated read-only slice. If chosen,
-    the active persona is passed as a **read-only presentation parameter** (e.g. `?persona=<id>` for
-    built-ins; a custom persona passed as an inline declarative definition since the server stores
-    none). This parameter affects **only** the assembled-prompt projection — scoring/gate/fingerprint
-    stay byte-identical.
-  - **(b) FE-rendered** — the FE assembles the prompt from a shipped/served **decomposed template**
-    (FIXED sections + named PERSONA slots) + the active persona + the current bundle.
-- `GET /api/ticker/{ticker}` (+ slices) — **no change to any computed field.** If (a), `meta` may gain
-  an optional assembled-prompt projection; absent/failed ⇒ default one-size prompt (not an error).
+  hand-off prompts. **Assembly is FE-rendered** — locus decision is final; the server-side-overlay
+  alternative is dropped. Rationale: stateless server + client-local custom personas — the FE already
+  holds the persona store, so assembling client-side avoids round-tripping custom definitions purely
+  to render text.
+  - **Backend ships the canonical decomposed template** for both prompts — FIXED section text + named
+    PERSONA slot ids (the `fixed|persona` tagging) + the byte-identical Default rendering — plus the 7
+    built-in `PersonaDefinition`s as read-only data. The backend assembles **no** per-persona text.
+  - **FE assembles** the `handoff` projection (shape below) client-side from that decomposed template +
+    the active persona + the current bundle.
+- `GET /api/ticker/{ticker}` (+ slices) — **no change to any computed field; `meta` gains NO handoff
+  projection** (no server overlay), and there is **no `?persona=` request parameter** (persona never
+  reaches the server).
 - `GET /api/stream/{ticker}` (SSE) — **UNCHANGED.** Persona touches no live path, adds no per-tick work.
 - `GET /api/contract/{ticker}` (ghost-trade) — unchanged; the reassessment hand-off still assembles
-  its `reassessment_request` as today, now with persona framing applied to the **system-prompt** text.
+  its `reassessment_request` as today, now with persona framing applied **FE-side** to the **system-prompt** text.
 
-## Hand-off projection shape (consumed)
-The product observable is a viewable/copyable prompt **with section tagging**, for both hand-offs:
+## Hand-off projection shape (FE-assembled, from the backend's decomposed template)
+The product observable is a viewable/copyable prompt **with section tagging**, for both hand-offs. The
+FE produces this client-side (locus PINNED FE-rendered) from the FIXED text + named PERSONA slot ids
+the backend ships:
 ```jsonc
 "handoff": {                          // read-only projection; present per the chosen locus
   "persona": { "id": "balanced_swinger" | null, "name": "Balanced Swinger" },  // null ⇒ Default

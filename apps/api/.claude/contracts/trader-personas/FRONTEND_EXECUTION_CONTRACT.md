@@ -9,8 +9,10 @@
 - `libs/api/src/lib/gammaflow.ts` — add `PersonaDefinition` (`id,name,builtin,version,objective,
   risk,reassessment_lean,emphasis_note?,dte_pref?`), the `Handoff` projection type
   (`{persona{id,name|null}, entry{text,sections[]}, reassessment{text,sections[]}}`,
-  `section.kind:'fixed'|'persona'`), and the client fn to obtain the assembled hand-off (per the locus
-  Interface chose: read from `meta`/slice, or assemble FE-side from a shipped decomposed template).
+  `section.kind:'fixed'|'persona'`), the **decomposed-template** type the backend ships (FIXED text +
+  named PERSONA slot ids), and the client fn that **assembles** the hand-off FE-side (locus PINNED
+  FE-rendered) from that template + the active persona + the current bundle. **No `meta.handoff` to
+  read; no `?persona=` to send.**
 - A **client-local persona store** (browser persistent storage): the built-in preset library
   (read-only) + user-created custom personas + `active_persona_id`. Survives reload.
 - `apps/dashboard/src/app/` new components: `PersonaPicker` (toolbar `Select`), `HandoffDialog`
@@ -24,8 +26,9 @@
 
 ## Consumes (from INTERFACE_CONTRACT.md)
 - The 7 built-in `PersonaDefinition`s + client-local customs + `active_persona_id`.
-- The `Handoff` projection (entry + reassessment `text` + `sections[]` with `kind`), default-prompt
-  fallback on failure.
+- The backend's **decomposed template** (FIXED text + named PERSONA slot ids) + the 7 presets; the FE
+  **assembles** the `Handoff` projection (entry + reassessment `text` + `sections[]` with `kind`)
+  from it client-side, with default-prompt fallback on assembly failure.
 - The invariance readout (already in the bundle): `signals.opportunity_score`,
   `signals.opportunity_tier`, `ai_eval.ready`, `ai_eval.changed`, `ai_eval.state_fingerprint`.
 - Persona `dte_pref` for the pre-fill. **Read nothing persona-derived into score/gate/fingerprint;

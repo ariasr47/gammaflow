@@ -2,9 +2,10 @@
 
 > For the Backend Executioner. Binds to GAMMAFLOW_CONTEXT.md + ARCHITECTURE_CONTRACT.md (A1
 > RESOLVED·ACCEPTED) + INTERFACE_CONTRACT.md. Server work ONLY. Implement to spec; do not re-scope.
-> Scope note: persona is a **prompt + presentation projection**. Much of this feature can live FE-side
-> (Interface allows FE-rendered assembly). The backend's load-bearing job is the **canonical prompt
-> decomposition** (FIXED vs PERSONA) and, **if** server-side assembly is chosen, a read-only overlay.
+> Scope note: persona is a **prompt + presentation projection**, and the assembly locus is **PINNED
+> FE-RENDERED** (Orchestrator @ GATE U·X). The backend's load-bearing job is the **canonical prompt
+> decomposition** (FIXED vs PERSONA) + the byte-identical Default + the 7 presets as read-only data,
+> shipped for the FE to assemble. **No server overlay, no `meta.handoff`, no `?persona=` param.**
 
 ## Files / functions to modify
 - `prompts/strategy_prompt.md` + `prompts/reassessment_prompt.md` — **decompose** each into FIXED vs
@@ -16,13 +17,11 @@
 - **Built-in persona library** — ship the 7 presets (Default + 6) as **read-only built-in data**
   (objective/risk/leans/dte_pref per UX_BLUEPRINT §B; disposition text per the A1 map). No executable
   logic, no analytics parameters.
-- **(If server-side assembly — Interface's call)** a **new persona module** + a **read-only serve-time
-  overlay** (analogous to `opportunity_tier` / `position_eval`) that assembles the parametrized prompt
-  from the **frozen** bundle + the active persona and exposes it (in `meta` or a read-only slice) with
-  the `fixed|persona` section tags. The active persona arrives as a **read-only presentation param**
-  (built-in by id; custom by inline declarative definition). **(If FE-rendered)** instead expose/ship
-  the **decomposed template** (FIXED text + named PERSONA slot ids) for the FE to assemble; the backend
-  still owns the canonical template + the byte-identical Default.
+- **Locus PINNED: FE-RENDERED (no server overlay).** Expose/ship the **decomposed template** for both
+  prompts — FIXED section text + named PERSONA slot ids (`fixed|persona` tagging) — for the FE to
+  assemble. The backend owns the canonical template + the byte-identical Default + the 7 presets data,
+  but assembles **no** per-persona text, adds **no** `meta.handoff` projection, and accepts **no**
+  `?persona=` param. (The server-side serve-time-overlay option is dropped.)
 - `signals.py`, `generate_signals`, `_opportunity_score`, `state_fingerprint`, `evaluate_gate`, the
   engine — **NOT modified, gain NO persona parameter.** This module boundary is the enforcement
   mechanism for the byte-identical guarantee.
@@ -55,10 +54,11 @@
   one-size prompt; never an HTTP error, never blocks the bundle/gate/hand-off.
 
 ## Must emit (from INTERFACE_CONTRACT.md)
-- The decomposed FIXED/PERSONA templates for both prompts; the byte-identical Default rendering.
+- The decomposed FIXED/PERSONA templates for both prompts (FIXED text + named PERSONA slot ids); the
+  byte-identical Default rendering.
 - The 7 built-in `PersonaDefinition`s as read-only data.
-- (If server-side) the read-only `handoff` projection: `{persona{id,name}, entry{text,sections[]},
-  reassessment{text,sections[]}}` with `kind: fixed|persona` tags; default-prompt fallback on failure.
+- Locus is FE-rendered: emit **NO** `meta.handoff` projection and **NO** `?persona=` param; the FE
+  assembles the prompt from the shipped decomposed template.
 
 ## Verification
 - [ ] Diff `market_state`, `signals` (incl. `opportunity_score`/`opportunity_tier`) and `ai_eval`
@@ -72,8 +72,9 @@
 - [ ] An emphasis note attempting to relax the Add cap / schema / floor changes only the PERSONA slot
       text; the FIXED sections are unchanged.
 - [ ] Selecting/switching a persona triggers **no recompute** (no new vendor fetch, cache untouched).
-- [ ] Forced persona-assembly failure → default one-size prompt returned; bundle still 200, all
-      computed values identical.
+- [ ] Bundle is byte-identical with the decomposition refactor in place (no `meta.handoff`, no
+      `?persona=`); the Default template renders today's prompt verbatim. (Persona-assembly fallback
+      is FE-side under the pinned FE-rendered locus.)
 - [ ] SSE shows no change; no LLM is ever called.
 
 ## Out of scope
