@@ -1,11 +1,17 @@
 # SYSTEM ANALYSIS — the team-of-AI-roles as a solo-dev build tool
 
-> A living, candid analysis of the GammaFlow delivery system (`.claude/ORCHESTRATOR.md`,
+> A living, candid analysis of the delivery system (`.claude/ORCHESTRATOR.md`,
 > `ROLE_LAUNCH_PROMPTS.md`, `COMPRESSOR_PROMPTS.md`, `DECISION_LEDGER.md`, `PROJECT_CONTEXT.md`,
 > `OPEN_THREADS.md`, `BACKLOG.md`) **as a tool for one person to build large software fast**.
 > Purpose: drive continuous improvement of the *system itself*. The roadmap (§7) is mirrored into
 > `.claude/BACKLOG.md` §E so GATE I can cull and schedule these like any other feature.
-> Last revised: 2026-06-23. Treat as a default, not canon — revise it as the system evolves.
+> Last revised: **2026-06-24**. Treat as a default, not canon — revise it as the system evolves.
+>
+> **2026-06-24 — the framework is now a reusable kit (system-13).** What was GammaFlow's `.claude/` is
+> extracted into a standalone **delivery-kit** (separate repo); this project is **consumer #1**.
+> Framework files are byte-identical across projects, all per-project coupling pushed into one seam
+> (`.claude/project.json` + `PROJECT_CONTEXT.md`). The analysis below now covers two things — the system
+> as a build tool **and** its new portability (§2.6, §4.9, §6, §7, §8).
 
 ## 1. What it actually is (precise characterization)
 Strip the metaphors and it is **a state machine over the filesystem that uses LLM sessions as
@@ -36,6 +42,16 @@ by making the model stateless and pushing all durable state into reviewable arti
    → single-source the prose into canon → every future brief inherits it. An automatic
    Architecture-Decision-Record with a promotion rule. This is what makes the system get *wiser*,
    not merely *bigger*.
+6. **The framework/project decoupling (2026-06-24, system-13).** The whole framework is reduced to one
+   project-owned seam — `.claude/project.json` + `PROJECT_CONTEXT.md` — so every other framework file is
+   **byte-identical across projects**. That property is what makes install (kit → project) and extract
+   (project → kit) a *plain folder copy* in both directions: no templating, no re-substitution, no merge.
+   And the discipline is **mechanically guaranteed**, not trusted: `kit_lint.mjs` scans framework files
+   for project-coupling tokens and aborts an extract if any reappear. It is the *same structural move*
+   the system already makes elsewhere — the Interface Contract (single-writer typed bus), `contract_lint`
+   (structure), `interface_conformance` (integration), `path_guard` (write fence): **take a discipline
+   you'd otherwise trust a human to hold, and turn it into a mechanical gate.** Here the discipline is
+   "the framework stays project-neutral," and it caught a real re-coupling during the extraction itself.
 
 ## 3. Why it's a real force-multiplier for one person
 A solo dev usually loses four things a team has; this externalizes all four:
@@ -92,6 +108,20 @@ ledger, not in your memory. That is the scaling lever for a solo builder.
    handoff, and the `/conductor`, `/status`, `/gatecheck`, `/pack` slash commands make the steps
    one-shot. No alarm yet when you skip a *gateway* entirely (that's part of full system-9 + the
    ledger-crossing hook on the BACKLOG).
+9. **The kit introduces its own new seams (2026-06-24, system-13).** `[NEW — partly mitigated]` Making
+   the framework reusable created exactly one class of problem it didn't have before: **two copies that
+   must stay aligned.** Honest residuals: (a) **version skew** — `.claude/kit.version` records what a
+   consumer is on, but nothing *alerts* when it's behind the kit; update is a manual re-run of
+   `install.mjs`. (b) **divergence** — if two consumers refine the same framework file, `extract` is
+   last-writer-wins; there's no three-way merge. (c) **`project.json` is now a single point of
+   misconfiguration** the conductor + every tool depend on — a wrong or half-filled seam degrades the
+   gates *silently* (e.g. a bad `backend.python` just makes a gate "not run"); there's no `project.json`
+   validator yet. (d) the kit's **own scripts are untested** (install/extract/kit_lint were verified by
+   hand at extraction, not by a suite). **Mitigated by:** `kit_lint` (keeps the framework genuinely
+   generic, so the copies *can* stay byte-identical) and the byte-identical invariant itself (a clean
+   extract is a no-op diff, which makes drift visible in `git diff`). The meta-point: the system applied
+   its own "mechanize the trusted invariant" rule to the decoupling but **not yet to the kit's own
+   lifecycle** — version/skew/config are still trusted, the way integration used to be before system-1.
 
 ## 5. The deepest risk: correlated error
 The blog sells "a team of fresh experts." But every role is **the same base model wearing a
@@ -113,7 +143,15 @@ so a different-model pass adds cost/overhead with low payoff. It re-promotes on 
 So correlated error is *acknowledged and partly pre-paid*, not yet solved.
 
 ## 6. Where it sits on the scaling curve
-- Excellent at the current scale: solo, one feature at a time, six features shipped.
+- Excellent at the current scale: solo, one feature at a time, seven features shipped.
+- **A new axis as of 2026-06-24: reuse across *projects*, not just features.** Until now every scaling
+  statement was *within* one project (cost per feature, attention per feature). The kit extraction adds a
+  second axis — the *methodology itself* now compounds across projects: a framework refinement made while
+  building anything flows back via `extract` and out to every consumer via `install`. The Decision Ledger
+  made the system wiser per *feature*; the kit makes it wiser per *project*. This is a genuine
+  force-multiplier increase, but note it's **orthogonal**: it multiplies reuse, it does **not** touch the
+  two structural ceilings in §8 (correlated error, you-as-bottleneck) — those are per-build properties the
+  kit copies into every new project unchanged.
 - **Linear in human attention per feature** — you are O(features) busy as conductor. (system-9-lite
   offloads the role *work* to disposable subagents; the conducting is still yours.)
 - **Token cost ≈ O(sessions × pack size), not × whole-canon size** — system-5 sharding (`context_for.py`)
@@ -148,6 +186,13 @@ Ordered by leverage, deliberately sequenced. Status as of 2026-06-23.
   interim is adopted: each role runs as a fresh, disposable lane-fenced subagent (the freshness +
   lane-fencing win, human review intact). Full system-9 — orchestrator-as-pipeline where you *approve*
   gates instead of *running* them, plus parallel feature lanes — stays parked behind the go-live gate.
+- **Portability — extract the framework into a reusable kit: `✓ LANDED (2026-06-24, system-13)`** — the
+  framework is now a standalone kit; this project is consumer #1; all coupling lives in
+  `.claude/project.json` + `PROJECT_CONTEXT.md`; `kit_lint` mechanically guards the byte-identical
+  invariant. **Off the tier sequence** (it's an orthogonal axis — reuse, not correctness or
+  automation), so it didn't have to wait behind Tier 5. **Next on this axis:** mechanize the kit's own
+  lifecycle the way the build pipeline is mechanized — a version-skew check (consumer vs kit), a
+  `project.json` validator, and tests for install/extract/kit_lint (see §4.9 residuals).
 
 **Binding sequencing constraint:** Tier 5 is last. What makes the system trustworthy *today* is the
 human reviewing every handoff. Automate the conductor before installing the mechanical gates (Tier 1)
@@ -163,4 +208,9 @@ set by the two **structural** problems the roadmap can only partly touch pre-liv
 (one model, all hats — partly pre-paid by QA, fully addressed only by a different-model red-team once
 live) and **you-as-bottleneck** (conductor + sole reviewer — eased by system-9-lite, removed only by full
 system-9, which is deliberately parked until the guardrails are proven). Everything remaining on the
-roadmap serves those two.
+roadmap serves those two. As of 2026-06-24 the pattern is also **portable** — extracted into a reusable
+kit so it compounds across projects, not just features — which raises its value as a *tool* without
+moving either ceiling: every new project inherits the same strengths *and* the same two structural
+limits. The kit added one new discipline of its own (keep the copies aligned), and characteristically
+the system already mechanized the hard half of it (`kit_lint`) while leaving the lifecycle half
+(version/skew/config) trusted — the next thing to mechanize.

@@ -234,7 +234,7 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   build→measure→discover loop becomes real. *Value M · Effort S.* **Depends-on:** `latency-visualizer`
   / the observability readout (§A/§D).
 - **system-9-lite · fresh-subagent-per-gateway** — `✓ ADOPTED (2026-06-23)`: run each role as a FRESH
-  spawn of its `.claude/agents/gammaflow-*` subagent (+ `context_for.py` pack), discarded after each
+  spawn of its `.claude/agents/delivery-*` subagent (+ `context_for.py` pack), discarded after each
   handoff — instead of long-lived role terminals that accumulate context. Captures the freshness +
   lane-fencing win with **no new infra and human review intact** (the conductor is still you). Wired into
   `ROLE_LAUNCH_PROMPTS.md` ("Running a role — the LITE path"). The on-ramp to full system-9.
@@ -286,3 +286,28 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   (it currently only string-matches "Conformance spec"); align the system-1 heading regex with system-3's
   looser detection so they agree. *Value M · Effort S–M.* **Build-system class:** trading-decision cull
   N/A. Surfaced by the backend executioner at the ai-recommendations fan-out (GATE Z).
+- **system-13 · Framework portability — the delivery-kit extraction** — `✓ LANDED (2026-06-24)`.
+  Extracted the reusable framework (orchestrator + role subagents + tools + commands + compressor /
+  role-launch docs) out of GammaFlow into a standalone, updatable **delivery-kit** (its own repo at
+  `C:\Dev\delivery-kit`), with GammaFlow as **consumer #1**. The decoupling rule: **framework files are
+  byte-identical across projects** — all per-project coupling moved into one project-owned seam,
+  `.claude/project.json` (backend/frontend dirs, ports, serve/test commands, interpreter, context
+  filename, optional lane-purity), plus `PROJECT_CONTEXT.md` (renamed from the old context file). Tools
+  read the seam programmatically; agents/commands read it at runtime; agents renamed `gammaflow-*` →
+  `delivery-*`. `install.mjs` / `extract.mjs` forward + sync the framework as a **plain folder copy**
+  (the payoff of full externalization), and `kit_lint.mjs` is the **mechanical decoupling guarantee** —
+  a banned-token scan that ABORTS an extract if any project specific re-coupled a framework file (the
+  same move as `contract_lint` / `path_guard`: mechanize the trusted invariant; it caught a real
+  re-coupling during the build). *Impact:* the methodology now compounds **across projects**, not just
+  across features within one — a refinement made in any consumer flows back to the kit and out to all
+  (a sibling to the Decision Ledger's "get wiser per feature"). *Value H (reuse / maintainability) ·
+  Effort L.* **Build-system class:** trading-decision cull **N/A** — judge on framework
+  reusability/maintainability. **Open residuals (logged, not built):** (a) **no version-skew signal** —
+  `.claude/kit.version` records what a consumer is on, but nothing alerts when it's behind the kit;
+  (b) **no divergence reconciliation** — if two consumers refine the same framework file, `extract` is
+  last-writer-wins; (c) **`project.json` is a new single point of misconfiguration** the conductor +
+  tools now depend on (a wrong/empty seam silently degrades the gates — a `project.json` validator is
+  the obvious follow-on); (d) the kit ships **no tests of its own scripts** (install/extract/kit_lint
+  verified by hand at extraction). **Relation:** orthogonal to system-9 — portability, not conductor
+  automation; **enabled by** the monorepo merge (system-11): one repo root ⇒ no cross-repo fence ⇒ the
+  framework is a clean folder. **Origin:** owner request post-merge (2026-06-24).
