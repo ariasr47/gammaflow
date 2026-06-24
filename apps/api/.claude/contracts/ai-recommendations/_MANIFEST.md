@@ -1,7 +1,8 @@
 # ai-recommendations — pipeline manifest
 Entry:        architect-first
-Stage:        Fan-out — Backend lane DONE + verified (conformance 4/4, score byte-identical, isolation);
-              Frontend lane dispatched (spawn_task chip task_7972318d, pending) → next gateway GATE Q
+Stage:        Both lanes DONE + verified → ready for GATE Q (QA/Verify).
+              Backend: conformance 4/4, score byte-identical, best-effort isolation (this repo).
+              Frontend: gammaflow-web commit 42212f5; `nx test` 25/25 green (ai-rec.spec T1–T18/E matrix).
 Repos:        both
 Brief:        BRIEF.md present
 Contracts:
