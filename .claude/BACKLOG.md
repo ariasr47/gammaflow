@@ -23,6 +23,10 @@
   better calls? Gaps here are first-class features.
 - **Lifted constraints** — when a data/vendor limit lifts (e.g. overnight coverage), the features it
   was blocking become buildable.
+- **Nx workspace graph** *(project-specific harvest source)* — the Nx MCP (`nx_workspace` / `nx affected`)
+  surfaces what projects/targets exist and what's changed; use it during GATE I to spot structural gaps
+  or affected-but-untouched areas worth a feature. (Conductor-side at Discovery only — kept here in the
+  project-owned backlog, NOT in the generic `ORCHESTRATOR.md`.)
 
 ---
 
