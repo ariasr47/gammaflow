@@ -31,7 +31,10 @@ export interface GhostTrade {
   schema_version: number;
 }
 
-export type DecisionEvent = 'open' | 'close' | 'accept' | 'reject' | 'alert' | 'roll';
+export type DecisionEvent =
+  | 'open' | 'close' | 'accept' | 'reject' | 'alert' | 'roll'
+  // Positions-portfolio additions (UX_BLUEPRINT §2.3) — the resting-limit lifecycle events.
+  | 'limit_placed' | 'limit_filled' | 'limit_cancelled';
 
 /** Append-only, versioned, exportable (for a future back-test of AI-assisted edge). */
 export interface DecisionRecord {

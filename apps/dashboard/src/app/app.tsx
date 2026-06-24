@@ -17,6 +17,8 @@ import { useGhostTrade } from './ghost-trade/useGhostTrade';
 import { GhostTradePanel } from './ghost-trade/GhostTradePanel';
 import { TradeEntryDialog, EntryPrefill } from './ghost-trade/TradeEntryDialog';
 import { PrimeBanner, tierMeta, OPPORTUNITY_TIER_INFO } from './ghost-trade/OpportunityTier';
+import { usePortfolio } from './positions/usePortfolio';
+import { PortfolioPanel } from './positions/PortfolioPanel';
 import { OperatorMetrics } from './operator-metrics';
 import { usePersona } from './personas/usePersona';
 import { PersonaPicker, HandoffDialog, PersonaCustomizeForm } from './personas/components';
@@ -222,6 +224,10 @@ function TickerDashboard() {
   // Ghost trade (paper sim): owns the durable position, mark/P-L, alerts, and the reassessment
   // boundary. `positionQuery` (set when a trade is open) makes the bundle compute position_eval.
   const gt = useGhostTrade(ticker, data, live, isLive, streamOffline);
+  // Positions portfolio (paper sim, multi-position): the flat durable collection, per-row marks,
+  // the resting-limit lifecycle, customization + saved views. Migrates the v1 single trade over.
+  const portfolio = usePortfolio(ticker, data, live, isLive, streamOffline);
+  const [portfolioEntryOpen, setPortfolioEntryOpen] = useState(false);
   // Trader persona (prompt-layer overlay): switching is pure client-state — assembleHandoff is
   // synchronous + bundle-independent, so it triggers NO getTicker/streamTicker and NO recompute.
   const persona = usePersona();
@@ -557,6 +563,14 @@ function TickerDashboard() {
           {/* Ghost-trade panel (paper sim) — below the headline/grid. Durable parts never blank;
               P/L + mark degrade with the live stream only. */}
           <GhostTradePanel gt={gt} data={data} live={live} isLive={isLive} streamOffline={streamOffline} onOpenEntry={() => openEntry()} briefing={persona.active.name} />
+
+          {/* Positions portfolio (paper sim) — the multi-position book: central + per-ticker views,
+              Simulated/Live tabs, the 3-mode entry + resting-limit lifecycle, grouping/subtotals,
+              customization + durable saved views. Live cells degrade on an SSE drop; records persist. */}
+          <PortfolioPanel
+            pf={portfolio} data={data} live={live} isLive={isLive} streamOffline={streamOffline}
+            ticker={ticker} entryOpen={portfolioEntryOpen} onEntryOpen={setPortfolioEntryOpen}
+          />
 
           {/* AI recommendation — a dedicated, independently-nullable sibling card. A rec
               error/timeout/over-cap/no-key degrades ONLY this surface; everything above and below

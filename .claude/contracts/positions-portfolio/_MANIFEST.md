@@ -1,6 +1,6 @@
 # positions-portfolio — pipeline manifest
 Entry:        architect-first
-Stage:        UX exit — split; frontend lane loaded; awaiting Frontend executioner (GATE U·X → §5)
+Stage:        Frontend built (new apps/dashboard/src/app/positions/ module; self-reported 130 tests green, 41/41 ACs); Backend NO_BACKEND_CHANGE; awaiting QA (GATE Q)
 Repos:        frontend (NO_BACKEND_CHANGE — Q-G kept single-position, FE-only)
 Brief:        BRIEF.md present
 Contracts:
@@ -11,5 +11,5 @@ Contracts:
   - BACKEND_EXECUTION_CONTRACT.md   NO_BACKEND_CHANGE
   - FRONTEND_EXECUTION_CONTRACT.md  locked
 Open amendments: none
-QA (GATE Q):  n/a
-Last gateway:  GATE U·X @ 2026-06-24
+QA (GATE Q):  pending
+Last gateway:  GATE §5 (Frontend build) @ 2026-06-24
