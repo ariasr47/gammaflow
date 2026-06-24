@@ -74,6 +74,15 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   contract stats come from `GET /api/contract` (filter-independent; 404 → tracking-unavailable,
   `option_quote:null` → theoretical mark). Isolation: an SSE drop degrades only P/L + current mark
   (⏸ last known); the trade record/stats/history + GEX chart + all tiles persist.
+- `apps/dashboard/src/app/positions/` — **paper-sim positions portfolio** (multi-position evolution of
+  the ghost-trade tracker). Flat id-keyed durable collection (loss-free v1→v2 migration) + the entry/fill
+  resolver (manual / market / **limit** that fills only on a live cross at the limit price, `pending →
+  filled/cancelled`); `derive.ts` (filter/sort/group + P/L subtotals); `useTrends` (ephemeral per-position
+  P/L trend ring buffer, reusing the latency-trend pattern); `usePortfolio` (the brain). UI:
+  `PortfolioPanel` (Simulated/Live tabs), `PositionsView` (table↔card + density), `PositionRow`,
+  `PositionEntryDialog`, `CustomizationToolbar`, `PlSparkline`, `LiveTabPanel` (**zero-import LOCKED**
+  placeholder — no broker/order/data). Reuses `ghost-trade/mark.ts` for P/L; durable customization + named
+  saved views. `NO_BACKEND_CHANGE` (consumes `GET /api/contract` + SSE); never a scoring input; `SIMULATED`.
 - `apps/dashboard/src/app/operator-metrics.tsx` — **operator-only** metrics readout on route
   `/_ops/metrics` (its own AppBar, OFF the trader routes, not linked from the trader UI). Read-only +
   side-effect-free (`fetchMetrics` → `GET /api/_metrics` only): global + per-ticker stage tables
@@ -181,6 +190,12 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   (e.g. `/_ops/metrics`), **OFF every trader/bundle route and unlinked from the trader UI**; it is
   **read-only + side-effect-free** (no vendor fetch, recompute, cache mutation, or trader-route call)
   and leaves the trader path + SSE untouched. *(backend-observability, latency-visualizer — 2 binding.)*
+- **`[no-real-order-path]`** — "action" **never reaches a real broker or order/execution path.** A
+  simulated feature stays `SIMULATED` (paper) behind a mandatory confirm; a not-yet-built *real* surface
+  (e.g. a "Live positions" tab) ships as a **non-functional placeholder** — no broker, no order/execution
+  path, no real-position data source (enforce structurally, e.g. a zero-import lock). Reopening this is a
+  deliberate owner decision + a vendor/broker dependency, via GATE Z. *(ai-recommendations,
+  positions-portfolio — 2 binding.)*
 
 ## 6. Current feature state (works end-to-end)
 <!-- shard: tags=features,state,observability,darkpool,ghost-trade,dex,personas,metrics -->
@@ -204,6 +219,18 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   `position_eval{changed,fingerprint}|null` (sibling of `ai_eval`, via `pos_*` query params);
   `prompts/reassessment_prompt.md` hand-off. All best-effort/isolated; **stateless server, no order
   path, no LLM call**; the entry gate + `opportunity_score` + `state_fingerprint` are unchanged.
+- **Positions portfolio (sim, FE-only)** — evolves the ghost-trade tracker from a single open position
+  into a multi-position **portfolio** (`apps/dashboard/src/app/positions/`). A central all-positions view
+  + a per-ticker filter; each position shows P/L + Δ-since-entry + an ephemeral session delta + a small
+  P/L **trend sparkline**; grouping (ticker / strategy = long-call vs long-put / expiry) with P/L
+  subtotals; full customization (columns/sort/filter, table↔card, density) + **durable named saved views**
+  (restore on reload); a closed/history view. Two tabs: **Simulated** (functional paper-sim) + **Live** (a
+  zero-import **LOCKED** "coming soon / not connected" placeholder — no broker, no order path). The entry
+  simulator adds 3 fill modes (manual price / market / limit); a resting **limit** fills only on a **live
+  cross at the limit price** (never off a frozen mark), with a `pending → filled/cancelled` lifecycle.
+  `NO_BACKEND_CHANGE` — reuses `GET /api/contract` + SSE `mid`, `ghost-trade/mark.ts` (P/L) + the
+  latency-trend ring buffer. Client-local durable store (loss-free v1→v2 migration); positions are **never
+  an input** to `signals`/score/tier/`state_fingerprint`; `SIMULATED` everywhere. *(2026-06-24.)*
 - **Backend observability** (operator-facing; trader path unchanged): the six bundle stages
   (`vendor_fetch` io_vendor, `engine_build`/`off_exchange` cpu_engine, `signals` cpu_signals,
   `persist` io_disk, `serialize_wrap` serialize) are timed into a per-request trace; `meta.trace_id`

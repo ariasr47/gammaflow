@@ -228,6 +228,24 @@ in-app LLM **reassessment** of an open position (entry only shipped — the posi
 the same surface); token streaming (whole-rec render shipped); AI-rec acceptance/outcome analytics
 (leverages the ghost-trade decision history); a vendor/model swap behind the LLM seam.
 
+## 7c. Positions portfolio (SHIPPED + ARCHIVED — both lanes done)
+Contracts archived at `.claude/contracts/_archive/positions-portfolio/`. FE-only (`NO_BACKEND_CHANGE`)
+multi-position evolution of the ghost-trade tracker. **Frontend shipped** (`apps/dashboard/src/app/
+positions/`): flat id-keyed durable collection (loss-free v1→v2 migration); central all-positions +
+per-ticker views; per-position P/L + Δ-since-entry + ephemeral session delta + a P/L **trend sparkline**
+(reuses the latency-trend ring buffer); grouping (ticker / strategy=long-call vs long-put / expiry) + P/L
+subtotals; customization (columns/sort/filter, table↔card, density) + **durable named saved views**;
+closed/history view; the entry simulator's 3 fill modes (manual / market / **limit**) with a
+`pending→filled/cancelled` resting-limit that fills only on a **live cross at the limit price** (never off
+a frozen mark). Two tabs: **Simulated** (functional) + **Live** (a **zero-import LOCKED** "coming soon /
+not connected" placeholder — no broker, no order path). Reuses `ghost-trade/mark.ts` (P/L) + `GET
+/api/contract` + SSE `mid`. **QA (GATE Q)** verified on Sonnet (de-correlated from the Opus builder):
+41/41 ACs PASS, 130 tests green, AC↔test traceability confirmed, invariants clean. **GATE S promoted
+`no-real-order-path`** into canon (2 binding: ai-recommendations + this — see §9 + DECISION_LEDGER).
+Backend untouched. **Deferred seams (specified, not built):** the real **Live** broker integration
+(blocked on the vendor/broker decision — §1; the locked tab marks the seam); same-contract merge/average
+(chose stack); closed-position pruning/archive policy; multi-leg strategy grouping beyond long-call/put.
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
@@ -260,3 +278,7 @@ the same surface); token streaming (whole-rec render shipped); AI-rec acceptance
 - **`[operator-vs-trader-path-separation]`** (promoted 2026-06-23, 2 binding) — operator/diagnostic
   surfaces stay off every trader/bundle route + unlinked from the trader UI; read-only + side-effect-
   free (no vendor fetch / recompute / cache mutation / trader-route call). See PROJECT_CONTEXT §5.
+- **`[no-real-order-path]`** (promoted 2026-06-24, 2 binding) — "action" never reaches a real broker/
+  order path: a simulated feature stays `SIMULATED` (paper) + confirm; a not-yet-built real surface
+  (e.g. a "Live" tab) ships as a non-functional placeholder (no broker / order path / real-position
+  source). Reopen only via a deliberate owner + vendor decision (GATE Z). See PROJECT_CONTEXT §5.

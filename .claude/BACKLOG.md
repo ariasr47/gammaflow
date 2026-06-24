@@ -77,6 +77,13 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
+- **positions-portfolio** — `✓ SHIPPED + ARCHIVED (2026-06-24)` → `_archive/positions-portfolio/`. FE-only
+  (`NO_BACKEND_CHANGE`) multi-position evolution of the ghost-trade tracker: central all-positions +
+  per-ticker views, per-position P/L + Δ + trend sparkline, grouping + subtotals, customization + durable
+  saved views, closed/history; entry simulator with manual/market/limit fills (resting limit fills only on
+  a live cross); **Simulated** functional + **Live** zero-import LOCKED placeholder. Frontend `f7334e2`;
+  QA PASS (Sonnet, de-correlated — 41/41 ACs, 130 tests). **GATE S graduated `no-real-order-path`** into
+  canon (2 binding). Seams → OPEN_THREADS §7c.
 - **ai-recommendations** — `✓ SHIPPED + ARCHIVED (2026-06-23)` → `_archive/ai-recommendations/`. In-app
   downstream-LLM query for a risk-first **entry** rec (active-persona prompt + JSON state export →
   rendered rec; Accept → paper-sim ghost trade; manual export floor). GammaFlow's first LLM call —
