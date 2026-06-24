@@ -30,6 +30,20 @@
 
 ---
 
+## Last GATE I — 2026-06-24 (owner request: positions portfolio)
+**Chosen → `positions-portfolio`** — owner-directed: evolve the shipped ghost-trade tracker from a single
+open sim position into a **multi-position portfolio** — a central all-positions view + per-ticker filtered
+view, each position tracking its own P/L **and the change in it**, modern/organized/customizable
+(columns/sort/filter, grouping, layout+density, durable saved views). Two view tabs: **Simulated**
+(functional paper-sim) and **Live** (a present-but-**LOCKED** real-broker placeholder — no broker, no
+order path, reflected in the UI but not implemented). Options contracts; the simulator fills at a
+user-input price OR via market/limit on the live price. Decision-impact cull: passes (improves
+hold/trim/exit position management). Feasibility pass (reuses mark/store/`TradeEntryDialog`/`GET
+/api/contract`; Live is a stub ⇒ no vendor dependency). Effort L · entry = architect-first. **Invariant
+watch:** `no-real-order-path` HONORED (Live is non-functional, no order path), `additive-keeps-score-
+byte-identical`, `best-effort-isolated-or-null`, `live-vs-static-isolation`. Brief at
+`.claude/contracts/positions-portfolio/BRIEF.md`; routing to the Architect (GATE A·X).
+
 ## Last GATE I — 2026-06-23 (owner request: in-app AI recommendations)
 **Chosen → `ai-recommendations`** — owner-directed (not a queue-drain cull): an in-app query to a
 downstream LLM (latest Claude) for a **risk-first ENTRY recommendation**, fed the active persona's
