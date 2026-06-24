@@ -2,14 +2,18 @@
 """context_for.py — ground-truth retrieval / sharding (system-5).
 
 Decouples per-session token cost from total system size. Instead of re-reading the whole
-`GAMMAFLOW_CONTEXT.md` every session, a role loads only the **minimal context pack** a feature needs:
+project context file every session, a role loads only the **minimal context pack** a feature needs:
 the always-load invariant floor + the sections relevant to the feature's tags. As more features ship
 and the canon grows, the savings grow with it.
 
-Logical-slice (not a physical split): `GAMMAFLOW_CONTEXT.md` stays the single source. Each `## N.`
+Logical-slice (not a physical split): the project context file stays the single source. Each `## N.`
 section carries an inline `<!-- shard: tags=...; always -->` annotation; this tool selects sections by
 relevance. **Binding invariant: invariant-bearing sections are `always` — sharding never drops a rule
-a feature could violate** (§3 math constraints + §5 key decisions/promoted invariants are always-load).
+a feature could violate** (the math-constraint + key-decision/promoted-invariant sections are always-load).
+
+The context filename is read from `.claude/project.json` (`context_file`, default `PROJECT_CONTEXT.md`)
+— the single per-project seam. With no config the tool falls back to that default, so it runs in a
+bare project unchanged.
 
 Usage:
     python .claude/tools/context_for.py {FEATURE}            # --stat (what would load + savings)
@@ -20,13 +24,25 @@ overrides. Stdlib only.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CLAUDE = ROOT / ".claude"
-CONTEXT = CLAUDE / "GAMMAFLOW_CONTEXT.md"
+
+
+def _project_config() -> dict:
+    """Read the project seam (.claude/project.json). Absent/malformed ⇒ {} (defaults apply)."""
+    try:
+        return json.loads((CLAUDE / "project.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+_CFG = _project_config()
+CONTEXT = CLAUDE / _CFG.get("context_file", "PROJECT_CONTEXT.md")
 CONTRACTS = CLAUDE / "contracts"
 ARCHIVE = CONTRACTS / "_archive"
 SHARD_RE = re.compile(r"<!--\s*shard:\s*(.*?)\s*-->")

@@ -1,19 +1,21 @@
 ---
-description: Boot a fresh GammaFlow Delivery Conductor (orchestrator), reconstructing state from disk.
+description: Boot a fresh Delivery Conductor (orchestrator), reconstructing state from disk.
 ---
-Act as the GammaFlow Delivery Conductor (Orchestrator). Read these in full, then reconstruct state
-from disk — assume no memory of prior sessions:
+Act as the Delivery Conductor (Orchestrator) for this project. Read `.claude/project.json` first
+(the per-project seam: project name, context filename, backend/frontend dirs + commands), then read
+these in full and reconstruct state from disk — assume no memory of prior sessions:
 - .claude/ORCHESTRATOR.md       (your driver — operating loop §0, gateway catalog §3, invariants §6)
-- .claude/GAMMAFLOW_CONTEXT.md  (standing ground truth)
+- the project context file       (`project.json` → `context_file`, default PROJECT_CONTEXT.md — standing ground truth)
 - .claude/BACKLOG.md            (idea pool + roadmap §E)
 - .claude/OPEN_THREADS.md       (open/resolved log)
 - .claude/DECISION_LEDGER.md    (compounding memory: promote/demote)
 
-Operating mode = **system-9-lite**: run each role as a FRESH `gammaflow-*` subagent (via the Agent
+Operating mode = **system-9-lite**: run each role as a FRESH `delivery-*` subagent (via the Agent
 tool) per gateway — never a long-lived session — each given a `context_for.py` pack; run the mechanical
 gates (`contract_lint.py`, `interface_conformance.py`, the `qa-verify` spawn) between roles per
 ORCHESTRATOR §0/§3. Lanes are tool-fenced (subagents) + workspace path-fenced (`path_guard.js`); both
-the backend (`apps/api`) and frontend (`apps/dashboard`) lanes now spawn as in-repo Agent subagents.
+the backend and frontend lanes (see `project.json` → `backend.dir`/`frontend.dir`) spawn as in-repo
+Agent subagents.
 
 First: read every `_MANIFEST.md` under `.claude/contracts/` (live, not `_archive/`) and report the
 current pipeline state — which features are live + their stage + any open amendments/QA status, and

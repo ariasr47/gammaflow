@@ -1,10 +1,15 @@
 #!/usr/bin/env python
-"""contract_lint.py — mechanical gate-check for the GammaFlow delivery system (system-3).
+"""contract_lint.py — mechanical gate-check for the delivery system (system-3).
 
 Validates the structure + lane purity of a feature's `.claude/contracts/{FEATURE}/` folder so a
 malformed handoff cannot advance a gateway. It checks STRUCTURE, not code — code-level integration
 is system-1 (interface-conformance) and semantic ACs are system-2 (QA/Verify). Pairs with the
 Decision-Ledger crossing-detection hook (BACKLOG §B), which shares this script surface.
+
+Per-project coupling lives in `.claude/project.json` (the single seam): `context_file` (default
+`PROJECT_CONTEXT.md`) names the ground-truth file, and `lane_purity` optionally overrides the
+lane-forbidden regex patterns below. Absent config ⇒ the built-in defaults, so the tool runs in a
+bare project unchanged.
 
 Usage:
     python .claude/tools/contract_lint.py                # lint every LIVE feature (contracts/, not _archive)
@@ -13,10 +18,11 @@ Usage:
     python .claude/tools/contract_lint.py --canon-only    # only the repo-level promoted-canon single-source check
 
 Exit code: 1 if any ERROR, else 0. WARNINGs never fail the gate (heuristic lane flags).
-Stdlib only; run with the project venv: .venv/Scripts/python.exe .claude/tools/contract_lint.py
+Stdlib only; run with the project interpreter (see project.json `backend.python`).
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -26,7 +32,19 @@ ROOT = Path(__file__).resolve().parents[2]
 CLAUDE = ROOT / ".claude"
 CONTRACTS = CLAUDE / "contracts"
 ARCHIVE = CONTRACTS / "_archive"
-CONTEXT = CLAUDE / "GAMMAFLOW_CONTEXT.md"
+
+
+def _project_config() -> dict:
+    """Read the project seam (.claude/project.json). Absent/malformed ⇒ {} (defaults apply)."""
+    try:
+        return json.loads((CLAUDE / "project.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+_CFG = _project_config()
+CONTEXT_NAME = _CFG.get("context_file", "PROJECT_CONTEXT.md")
+CONTEXT = CLAUDE / CONTEXT_NAME
 LEDGER = CLAUDE / "DECISION_LEDGER.md"
 
 MANIFEST_KEYS = ["Entry", "Stage", "Repos", "Brief", "Contracts", "Last gateway"]
@@ -39,23 +57,46 @@ ENDPOINT_RE = re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+(/\S+)", re.I)
 PATH_RE = re.compile(r"/[\w/_{}.-]+")
 # Files where DESIGNING a NEW endpoint is a lane violation (referencing an EXISTING one is fine).
 NEW_ENDPOINT_FILES = ("ARCHITECTURE_CONTRACT.md", "PRODUCT_CONTRACT.md")
-LANE_FORBIDDEN = {
-    # file substring : list of (regex, why)
+
+# Lane-forbidden patterns (file substring : list of (regex, why)). Defaults are generic-enough
+# heuristics; a project may override/extend them via project.json `lane_purity` as
+# {"FILENAME.md": [["regex", "why"], ...]}.
+_DEFAULT_LANE_FORBIDDEN = {
     "ARCHITECTURE_CONTRACT.md": [
-        (re.compile(r"\.tsx\b"), "UI component reference (.tsx) in an architecture contract"),
+        (r"\.tsx\b", "UI component reference (.tsx) in an architecture contract"),
     ],
     "PRODUCT_CONTRACT.md": [
-        (re.compile(r"\bdef \w+\("), "code (def ...) in a product contract"),
+        (r"\bdef \w+\(", "code (def ...) in a product contract"),
     ],
     "BACKEND_EXECUTION_CONTRACT.md": [
-        (re.compile(r"\.tsx\b"), "UI file (.tsx) in the backend execution contract"),
-        (re.compile(r"\buseState\b|\buseEffect\b"), "React hook in the backend execution contract"),
+        (r"\.tsx\b", "UI file (.tsx) in the backend execution contract"),
+        (r"\buseState\b|\buseEffect\b", "React hook in the backend execution contract"),
     ],
     "FRONTEND_EXECUTION_CONTRACT.md": [
-        (re.compile(r"\bsignals\.py\b|\bengine\.py\b|\buvicorn\b|\bPydantic\b"),
-         "server internal in the frontend execution contract"),
+        (r"\.py\b", "a server-side (.py) file reference in the frontend execution contract"),
     ],
 }
+
+
+def _load_lane_forbidden() -> dict:
+    """Compile lane-purity patterns, preferring project.json `lane_purity` over the defaults.
+    Robust to non-rule entries (e.g. a documentation `_comment` key) and malformed rules."""
+    raw = _CFG.get("lane_purity") or _DEFAULT_LANE_FORBIDDEN
+    compiled: dict[str, list[tuple]] = {}
+    for fname, rules in raw.items():
+        if not isinstance(rules, list):
+            continue  # skip non-rule entries like a "_comment" string
+        compiled_rules = []
+        for rule in rules:
+            if isinstance(rule, (list, tuple)) and len(rule) == 2:
+                rx, why = rule
+                compiled_rules.append((re.compile(rx), why))
+        if compiled_rules:
+            compiled[fname] = compiled_rules
+    return compiled
+
+
+LANE_FORBIDDEN = _load_lane_forbidden()
 
 
 def known_endpoint_paths(context: str) -> set[str]:
@@ -180,7 +221,7 @@ def lint_feature(folder: Path, f: Findings, known_endpoints: set[str]) -> None:
 def lint_canon(f: Findings) -> None:
     """Repo-level: every key in the ledger's 'Promoted canon' table must have its prose in CONTEXT."""
     if not LEDGER.exists() or not CONTEXT.exists():
-        f.warn("repo", "DECISION_LEDGER.md or GAMMAFLOW_CONTEXT.md missing — skipping canon check")
+        f.warn("repo", f"DECISION_LEDGER.md or {CONTEXT_NAME} missing — skipping canon check")
         return
     ledger = read(LEDGER)
     context = read(CONTEXT)
@@ -192,7 +233,7 @@ def lint_canon(f: Findings) -> None:
     for key in keys:
         if f"`{key}`" not in context and key not in context:
             f.err("DECISION_LEDGER.md",
-                  f"promoted key '{key}' has no prose in GAMMAFLOW_CONTEXT.md "
+                  f"promoted key '{key}' has no prose in {CONTEXT_NAME} "
                   f"(single-source rule: canon prose must live there)")
 
 

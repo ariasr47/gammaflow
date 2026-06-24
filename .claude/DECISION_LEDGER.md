@@ -15,7 +15,7 @@
   `binding:yes`**, graduates at the next GATE S.
 - **Binding-only intake:** only a decision a *future feature could violate* enters the ledger (same
   bar as the GATE I decision-impact cull). Incidental implementation choices are not logged.
-- **Single-source:** a promoted rule's **prose lives once** in `GAMMAFLOW_CONTEXT.md` §5 (+ a locked
+- **Single-source:** a promoted rule's **prose lives once** in `PROJECT_CONTEXT.md` §5 (+ a locked
   pointer in `OPEN_THREADS.md` §9). This ledger only **indexes** it — never a second copy (drift risk).
 - **Contestable:** a promoted rule is a default, not a cage — reopen via **GATE Z**; the Orchestrator
   then updates/demotes it here and in the canon. Provenance (the earning rows) is retained.
@@ -36,7 +36,7 @@
 ## Demoted (contradicted by reality — system-7)
 > The inverse of graduation: memory must track **truth**, not just recurrence. A promoted invariant that
 > reality contradicts — an **accepted GATE Z amendment**, or a **GATE Q QA/conformance FAIL** proving it
-> false or over-general — is demoted: its prose is **removed (or narrowed)** in `GAMMAFLOW_CONTEXT.md` §5
+> false or over-general — is demoted: its prose is **removed (or narrowed)** in `PROJECT_CONTEXT.md` §5
 > + `OPEN_THREADS.md` §9, its key moves out of "Promoted canon" into the table below, and its earning
 > rows stay in the Ledger as provenance. **Bar (mirrors promotion):** demote only when the *rule itself*
 > is shown wrong/over-general — a single feature's legitimate carve-out is an **exception** noted on that

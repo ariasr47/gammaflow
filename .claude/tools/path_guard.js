@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// PreToolUse hook: block writes outside this monorepo root (system-4b workspace fence).
-// Since the GammaFlow backend + web frontend now live in ONE Nx workspace, this is the single
-// active fence (the old cross-repo mirror is moot). REPO_ROOT is computed from __dirname, so it
-// covers both lanes (apps/api + apps/dashboard) under one root.
+// PreToolUse hook: block writes outside this workspace root (system-4b workspace fence).
+// REPO_ROOT is computed from __dirname (.claude/tools -> repo root), so it covers every lane in the
+// workspace under one root regardless of the project's internal layout. No per-project config needed.
 // Carve-outs (sanctioned harness write locations outside the repo):
 //   - the per-project Claude auto-memory store (~/.claude/projects/<proj>/memory)
 //   - the approved-plan store (~/.claude/plans) — runbooks the harness writes/reads

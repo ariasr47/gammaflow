@@ -1,5 +1,5 @@
 ---
-description: Report current GammaFlow pipeline state from the manifests + backlog (no full bootstrap).
+description: Report current pipeline state from the manifests + backlog (no full bootstrap).
 ---
 Read every `_MANIFEST.md` under `.claude/contracts/` (live, not `_archive/`), plus `.claude/BACKLOG.md`
 §A and the latest "Last GATE I" note. Report concisely, as a table: each live feature · Stage · last

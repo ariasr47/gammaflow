@@ -1,7 +1,7 @@
 # Open Threads (session snapshot)
 
 > Unresolved decisions / deferred work carried out of a long working session. Pairs with
-> `GAMMAFLOW_CONTEXT.md` (the standing ground truth) — this file is the "what's still open."
+> `PROJECT_CONTEXT.md` (the standing ground truth) — this file is the "what's still open."
 > Decisions, not deliberation. As of the latest commit; the code/docs are all committed & clean.
 
 ## 1. Data-vendor decision (OPEN — no change made yet)
@@ -45,7 +45,7 @@ healthy stream pushes ~every 1.5s even when quiet, so a gap = real drop), live-d
 `⏸ offline` while the static chart/stats/blocks stay from the last bundle, and the cold-start-vs-
 refresh-failure split (cold = red error + Retry; post-success poll fail = keep bundle + soft
 "Couldn't refresh — showing data from {age} ago"). Verified all 6 acceptance states via a
-controllable mock backend behind the Vite proxy. Glossary + GAMMAFLOW_CONTEXT refreshed.
+controllable mock backend behind the Vite proxy. Glossary + PROJECT_CONTEXT refreshed.
 **Contract gap RESOLVED:** `off_exchange.block_min_shares` (int) now rides the payload
 (interface-contract amendment); the FE empty-state copy binds to it and only falls back to the
 5000 display constant for a pre-amendment bundle. **Archived** under `_archive/` (per DoD).
@@ -71,7 +71,7 @@ metric null, sparse term, empty Vol/OI, and a live-stream drop via a controllabl
 `compute_iv_skew` / `compute_term_structure` helpers; `MarketState` model + `_build_market_state`
 surface all fields; `VOL_OI_UNUSUAL_THRESHOLD` env (1.0). `signals.py` untouched — verified score +
 `state_fingerprint` byte-identical with/without the four. Verified live (TSLA) + synthetically
-(window scope, per-metric nulls, sparse term, vol_oi null-rule). Glossary + GAMMAFLOW_CONTEXT
+(window scope, per-metric nulls, sparse term, vol_oi null-rule). Glossary + PROJECT_CONTEXT
 refreshed; contract archived.
 
 ## 5. Ghost-trade tracker / sim (SHIPPED + ARCHIVED — both lanes done)
@@ -94,7 +94,7 @@ backend lane resolved all of them** with concrete, contract-compliant choices, n
 `reassessment_prompt.md`. Verified live (TSLA: contract inside/outside window, no-NBBO→null,
 missing→404, tier bands, position_eval once-per-event, full isolation) + entry gate/`opportunity_score`/
 `state_fingerprint` byte-identical to pre-feature; **no order path, no LLM call** (grep-confirmed).
-Glossary + GAMMAFLOW_CONTEXT refreshed.
+Glossary + PROJECT_CONTEXT refreshed.
 **Frontend SHIPPED** (`C:\Dev\gammaflow-web`, committed): `apps/dashboard/src/app/ghost-trade/` —
 client-local durable store (localStorage, versioned, exportable; survives reload + SSE drop); honest
 mark ladder (snapshot→modeled→theoretical→last-known→frozen) + P/L = (mark−entry)×100×qty;
@@ -106,7 +106,7 @@ fed via `getTicker` `pos_*`. Isolation verified: SSE drop degrades only P/L + cu
 known) while the trade record/stats/history + GEX chart + all tiles persist. Verified via a
 controllable mock: entry, reload-persist, SSE drop+self-heal, overnight freeze, tracking-unavailable,
 reassess Accept (Add capped), tiers + Prime banner, decision history + Export. `SIMULATED` everywhere;
-no real-order path. Glossary + GAMMAFLOW_CONTEXT refreshed; **contract archived** under `_archive/`.
+no real-order path. Glossary + PROJECT_CONTEXT refreshed; **contract archived** under `_archive/`.
 Deferred seams (specified, not built): broker `FillSource`/`PositionStore`, `BundleFeed`+clock replay,
 recorded-verdict reassessment, server-side trade store.
 
@@ -125,7 +125,7 @@ Env: `OBSERVABILITY_ENABLED` (ON), `METRICS_WINDOW_SIZE` (500), `METRICS_RECENT_
 Verified: miss records all 6 stages / hit records only `serialize_wrap` (+ lineage), per-ticker→global
 roll-up, readout read-only (0 vendor fetches), OFF ⇒ byte-identical bundle, forced span exception ⇒
 200 + identical values, SSE uninstrumented, structured logs additive (not doubled). Glossary
-(operator section) + GAMMAFLOW_CONTEXT refreshed.
+(operator section) + PROJECT_CONTEXT refreshed.
 **Finalized (were "Interface's call"):** verbose switch `?debug=1`; readout `GET /api/_metrics`; env
 flag names + window default — pinned in INTERFACE_CONTRACT (amendment note) + operator doc.
 **Frontend SHIPPED** (`C:\Dev\gammaflow-web`, committed): **Obligation 1** — `Meta` gains optional
@@ -170,7 +170,7 @@ boundary). **No `meta.handoff`, no `?persona=` param, no LLM, SSE untouched.** V
 today **verbatim** (entry+reassessment); `market_state`/`signals`/`ai_eval` **byte-identical** across
 `?persona=A/B/none` (param ignored) with **no recompute**; greed line only under Default + conservative;
 FIXED floor/schema/Add-cap present under every persona; hostile emphasis note stays in its slot.
-Glossary + GAMMAFLOW_CONTEXT refreshed.
+Glossary + PROJECT_CONTEXT refreshed.
 **Resolved (filed in INTERFACE amendment):** (1) transport = read-only `GET /api/personas` (the
 contract shipped no transport for the separate-repo FE); (2) **contract inconsistency** — the A1 map
 gives conservative the *softened* text, but the prose + BACKEND Verification require conservative to
@@ -250,7 +250,7 @@ the same surface); token streaming (whole-rec render shipped); AI-rec acceptance
 
 ### Standing build invariants (promoted from the Decision Ledger 2026-06-22 — do NOT revisit)
 > Graduated by recurrence (`.claude/DECISION_LEDGER.md`); full prose single-sourced in
-> `GAMMAFLOW_CONTEXT.md` §5. Reopen only via GATE Z.
+> `PROJECT_CONTEXT.md` §5. Reopen only via GATE Z.
 - **`[best-effort-isolated-or-null]`** (5 features) — added computations fail to null/omitted, never an
   HTTP error; bundle + SSE intact.
 - **`[additive-keeps-score-byte-identical]`** (4 features) — additive features keep gate /
@@ -259,4 +259,4 @@ the same surface); token streaming (whole-rec render shipped); AI-rec acceptance
   keep rendering the last bundle.
 - **`[operator-vs-trader-path-separation]`** (promoted 2026-06-23, 2 binding) — operator/diagnostic
   surfaces stay off every trader/bundle route + unlinked from the trader UI; read-only + side-effect-
-  free (no vendor fetch / recompute / cache mutation / trader-route call). See GAMMAFLOW_CONTEXT §5.
+  free (no vendor fetch / recompute / cache mutation / trader-route call). See PROJECT_CONTEXT §5.

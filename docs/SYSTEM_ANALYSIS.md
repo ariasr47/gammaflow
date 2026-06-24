@@ -1,7 +1,7 @@
 # SYSTEM ANALYSIS — the team-of-AI-roles as a solo-dev build tool
 
 > A living, candid analysis of the GammaFlow delivery system (`.claude/ORCHESTRATOR.md`,
-> `ROLE_LAUNCH_PROMPTS.md`, `COMPRESSOR_PROMPTS.md`, `DECISION_LEDGER.md`, `GAMMAFLOW_CONTEXT.md`,
+> `ROLE_LAUNCH_PROMPTS.md`, `COMPRESSOR_PROMPTS.md`, `DECISION_LEDGER.md`, `PROJECT_CONTEXT.md`,
 > `OPEN_THREADS.md`, `BACKLOG.md`) **as a tool for one person to build large software fast**.
 > Purpose: drive continuous improvement of the *system itself*. The roadmap (§7) is mirrored into
 > `.claude/BACKLOG.md` §E so GATE I can cull and schedule these like any other feature.
@@ -62,7 +62,7 @@ ledger, not in your memory. That is the scaling lever for a solo builder.
    you, but you still conduct; full **system-9** (orchestrator-as-pipeline + parallel lanes) is parked
    behind the go-live gate by the sequencing constraint (§7).
 2. **Nothing is mechanically enforced.** `[MOSTLY ADDRESSED]` `contract_lint.py` (system-3) now blocks a
-   handoff on a structural violation; lane-fenced subagents (system-4) + the `path_guard.py` PreToolUse
+   handoff on a structural violation; lane-fenced subagents (system-4) + the `path_guard.js` PreToolUse
    hook (system-4b) mechanically stop an author from editing code and any session from writing outside
    its repo. **Residual:** per-role *intra*-repo rules (an author touching `src/`) and "strip
    deliberation" are still trusted, not enforced — a session-global hook can't see the active role.

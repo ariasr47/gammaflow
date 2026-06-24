@@ -6,7 +6,7 @@ import type { TickerBundle } from '@org/api';
 
 import App from './app';
 
-// Flow-integration smoke test — the TEMPLATE every per-feature test follows (GAMMAFLOW_CONTEXT §7).
+// Flow-integration smoke test — the TEMPLATE every per-feature test follows (PROJECT_CONTEXT §7).
 //
 // We mock at the MODULE BOUNDARY (`fetch` + `EventSource`), not by stubbing @org/api, so the real
 // client code (URL building, status handling, JSON parsing) is exercised. NEVER hits a live backend.

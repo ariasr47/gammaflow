@@ -1,6 +1,6 @@
 # ORCHESTRATOR — Universal Session Orchestrator (standing reference)
 
-> Paste/reference this to make a session act as the **GammaFlow Delivery Conductor**. Its one job:
+> Paste/reference this to make a session act as the **Delivery Conductor**. Its one job:
 > eliminate manual copy-paste between the sidebar role sessions (Architect · PM · UX/Tech-Writer ·
 > Backend · Frontend) by **auditing the files you name, compressing the prior session's output, and
 > writing the next session's inbound contract(s) to disk** — then printing a status block + the
@@ -17,13 +17,13 @@
    question (which gateway / which feature) — otherwise just act.
 2. **Resolve the feature** = kebab folder under `.claude/contracts/{FEATURE}/`. Create it if new.
 3. **Audit** the files I name + the gateway's default audit set (§3). Read the repo, not chat
-   history — every contract must stand alone against `GAMMAFLOW_CONTEXT.md` + its inbound contract.
+   history — every contract must stand alone against `PROJECT_CONTEXT.md` + its inbound contract.
 4. **Compress** per the gateway's rule (reuse a compressor from `COMPRESSOR_PROMPTS.md`; strip
    deliberation, keep decisions).
 5. **Write** the output contract(s) to the exact paths in §3 (correct repo — see §2).
 6. **Update** `.claude/contracts/{FEATURE}/_MANIFEST.md` (§4).
 7. **Gate-check (mechanical, system-3):** run
-   `apps/api/.venv/Scripts/python.exe .claude/tools/contract_lint.py {FEATURE}`. A non-zero exit (**ERROR** —
+   `<project.json backend.python> .claude/tools/contract_lint.py {FEATURE}`. A non-zero exit (**ERROR** —
    missing file/manifest key, an execution contract not bound to the interface, a promoted key missing
    from canon) **blocks the handoff**; fix the structural violation before routing. WARNINGs
    (lane-purity heuristics) are advisory — judge them.
@@ -40,7 +40,7 @@ gateway you name.
 
 ## 1. File topology (what's constant vs variable)
 - **Constant (every session reads, I rarely write):**
-  `.claude/GAMMAFLOW_CONTEXT.md` (ground truth) · `.claude/OPEN_THREADS.md` (open/resolved log).
+  `.claude/PROJECT_CONTEXT.md` (ground truth) · `.claude/OPEN_THREADS.md` (open/resolved log).
 - **Standing references (I route to, don't duplicate):**
   `.claude/COMPRESSOR_PROMPTS.md` (#1 Universal · #2 Session-Transition · #3 Split · #4 Resume) ·
   `.claude/ROLE_LAUNCH_PROMPTS.md` (§1 Architect · §1b Architect-after-PM · §2 PM · §2b PM-first ·
@@ -50,11 +50,11 @@ gateway you name.
   gateway, graduated at GATE S, fed forward into GATE I) ·
   `.claude/agents/*` (per-role lane-fenced subagents — system-4) ·
   `.claude/tools/*` (`contract_lint.py` — system-3 gate-check; `interface_conformance.py` — system-1
-  runtime conformance; `context_for.py` — system-5 context pack; `path_guard.py` — system-4b write fence) ·
+  runtime conformance; `context_for.py` — system-5 context pack; `path_guard.js` — system-4b write fence) ·
   `.claude/commands/*` (slash commands: `/conductor` boot · `/status` pipeline state · `/gatecheck`
   {feature} mechanical gates · `/pack` {feature} context pack).
 - **Operating mode (system-9-lite, adopted):** run each role as a **fresh spawn** of its
-  `.claude/agents/gammaflow-*` subagent (+ a `context_for.py` pack), discarded after each handoff —
+  `.claude/agents/delivery-*` subagent (+ a `context_for.py` pack), discarded after each handoff —
   never a long-lived role session. The conductor stays manual (you); the role work is disposable +
   fresh. See `ROLE_LAUNCH_PROMPTS.md` "Running a role — the LITE path." **Exception:** GATE I
   (Discovery) has no subagent — the conductor runs it **inline** (rationale in §3 GATE I); every other
@@ -75,23 +75,20 @@ exist (Architect-first default; PM-first for product-dominated features) — see
 gateway after them is **QA/Verify (GATE Q)**, then **SHIP (GATE S)** — QA is a fresh session, never the
 builder verifying itself.
 
-## 2. One Nx monorepo (route writes correctly)
-- **Backend** code lives under `apps/api` (the Python service; `npx nx serve api` on :8000).
-- **Frontend** code lives under `apps/dashboard` (React; `npx nx serve dashboard` on :4200). The
-  shared TS API client is `libs/api` (`@org/api`).
+## 2. Project layout (route writes correctly — read `.claude/project.json`)
+The per-project seam is `.claude/project.json`. It names the **backend** lane (`backend.dir` +
+`backend.serve_cmd`/`port`/`python`) and the **frontend** lane (`frontend.dir` +
+`frontend.serve_cmd`/`port`/`test_cmd`). Resolve every path/command/port from there — never hardcode a
+project's internal layout into a contract or a launch.
 - **All `.claude/` contracts** live in `.claude/contracts/{FEATURE}/` at the workspace root — the
   single FE↔BE truth, shared by both lanes.
-- When auditing "what was built," read backend files under `apps/api` and frontend files under
-  `apps/dashboard`. One git repo (`monorepo-merge` branch during the merge); no remote.
-- **Dispatch — both lanes are in-repo Agent subagents now (report-back, no polling).** Since the
-  merge folded both lanes under one workspace root, `path_guard.js` covers both — there is no
-  cross-repo fence to route around. Spawn either role (`gammaflow-backend`, `gammaflow-frontend`,
-  …) as a **subagent via the Agent tool**: its final report returns to the conductor automatically
-  (sync result; or `run_in_background` ⇒ a `<task-notification>` on completion), and the fence allows
-  the writes. This is the system-9-lite path for **every** lane.
-  - **`spawn_task`-for-frontend is RETIRED.** It existed only to reach the separate web repo past the
-    fence; with one repo it is no longer used. (Durable-signal/artifact reconciliation is still fine
-    if you deliberately fire-and-forget, but it is no longer *required* for the frontend lane.)
+- When auditing "what was built," read backend files under `backend.dir` and frontend files under
+  `frontend.dir`. Single workspace; the `path_guard.js` fence covers everything under the repo root.
+- **Dispatch — both lanes are in-repo Agent subagents (report-back, no polling).** `path_guard.js`
+  covers both lanes under one root, so there is no cross-repo fence to route around. Spawn either role
+  (`delivery-backend`, `delivery-frontend`, …) as a **subagent via the Agent tool**: its final report
+  returns to the conductor automatically (sync result; or `run_in_background` ⇒ a `<task-notification>`
+  on completion), and the fence allows the writes. This is the system-9-lite path for **every** lane.
 
 ---
 
@@ -102,7 +99,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 > gets wiser per feature, not just bigger:
 > **CAPTURE** (every gateway, §0 step 7) → append each binding decision to `DECISION_LEDGER.md`.
 > **DETECT + GRADUATE** (GATE S) → tally; a key recurring across **≥3 shipped features (≥2 if binding)**
-> promotes into the canon (`GAMMAFLOW_CONTEXT.md` §5 + `OPEN_THREADS.md` §9), single-sourced, with
+> promotes into the canon (`PROJECT_CONTEXT.md` §5 + `OPEN_THREADS.md` §9), single-sourced, with
 > provenance. **REUSE** (GATE I step 0 + every role's "restate binding constraints") → the BRIEF cites
 > promoted keys; §6 forbids reopening them. Net: each ship can only *add* to the constraint envelope
 > the next feature inherits. The generative judgement (is this decision binding? does the prose read
@@ -110,7 +107,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 
 ### GATE I — Discovery / roadmap (PRE-pipeline)  → entry role (Architect-first or PM-first)
 > The only divergent gate — and the **one role the conductor runs INLINE itself**, not as a fresh
-> `gammaflow-*` subagent. This is a deliberate, reasoned exception to fresh-subagent-per-gateway
+> `delivery-*` subagent. This is a deliberate, reasoned exception to fresh-subagent-per-gateway
 > (system-9-lite), on three concrete grounds:
 > 1. **Inputs = the conductor's boot state.** Discovery's audit set (CONTEXT + OPEN_THREADS + BACKLOG +
 >    LEDGER) is exactly what the conductor reconstructs at boot. A discovery subagent would re-read all of
@@ -133,7 +130,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Trigger:** "what's next / groom the backlog / roadmap review / out of queued work."
 - **Use when:** the active pipeline has drained, or on a periodic review, to generate + cull the
   next wave of features/improvements.
-- **Audit:** `GAMMAFLOW_CONTEXT.md` (what exists), `OPEN_THREADS.md` (deferred §7 + open §1/§9 +
+- **Audit:** `PROJECT_CONTEXT.md` (what exists), `OPEN_THREADS.md` (deferred §7 + open §1/§9 +
   the "deferred seams" noted inside each shipped thread), `BACKLOG.md` (the standing pool),
   `DECISION_LEDGER.md` (the **Promoted canon** — the accumulated invariants every candidate must
   respect), plus any usage-friction notes I name.
@@ -165,7 +162,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 
 ### GATE A·X — Architect exit  → PM (default) or UX (if PM already ran)
 - **Trigger:** "Architect's done / lock the architecture / shape is set."
-- **Audit:** `GAMMAFLOW_CONTEXT.md`, `OPEN_THREADS.md`, the Architect's notes/changes, any
+- **Audit:** `PROJECT_CONTEXT.md`, `OPEN_THREADS.md`, the Architect's notes/changes, any
   `PRODUCT_CONTRACT.md` already present (PM-first flow).
 - **Compress:** Compressor **#2** (Session-Transition) targeting the next role.
 - **Write:** `ARCHITECTURE_CONTRACT.md` (data structures/contracts, data-flow & component
@@ -176,7 +173,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 
 ### GATE P·X — PM exit  → UX (default) or Architect (PM-first validation)
 - **Trigger:** "PM's done / product contract is locked."
-- **Audit:** `GAMMAFLOW_CONTEXT.md`, `OPEN_THREADS.md`, `ARCHITECTURE_CONTRACT.md` (if it exists).
+- **Audit:** `PROJECT_CONTEXT.md`, `OPEN_THREADS.md`, `ARCHITECTURE_CONTRACT.md` (if it exists).
 - **Compress:** Compressor **#2** targeting UX (or Architect for PM-first).
 - **Write:** `PRODUCT_CONTRACT.md` (user stories, scope In/Out/Future, dashboard behavior,
   acceptance criteria observable *without reading code*, "Product decisions made here," and — for
@@ -185,7 +182,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 
 ### GATE U·X — UX exit (THE FAN-OUT)  → Backend ‖ Frontend   *(= your Routine A tail)*
 - **Trigger:** "UX is locked / split it for execution / load the build tracks."
-- **Audit:** `GAMMAFLOW_CONTEXT.md`, `PRODUCT_CONTRACT.md`, `UX_BLUEPRINT.md`,
+- **Audit:** `PROJECT_CONTEXT.md`, `PRODUCT_CONTRACT.md`, `UX_BLUEPRINT.md`,
   `ARCHITECTURE_CONTRACT.md`.
 - **Compress:** Compressor **#3** (Split Context).
 - **Write THREE files (this is the whole point — never collapse them):**
@@ -195,22 +192,23 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
      (system-1) can verify the live backend against it at GATE Q. (A `NO_BACKEND_CHANGE` interface that
      consumes an existing endpoint may point at that endpoint's existing spec instead.)
   2. `BACKEND_EXECUTION_CONTRACT.md` — server work only; references the interface for what it
-     EMITS; NO UI detail. (→ `apps/api`.)
+     EMITS; NO UI detail. (→ `backend.dir`.)
   3. `FRONTEND_EXECUTION_CONTRACT.md` — UI work + component states (default/loading/stale/offline/
      empty/error) only; references the interface for what it CONSUMES; NO server internals.
-     (→ `apps/dashboard`.)
+     (→ `frontend.dir`.)
 - **Route:** Backend (`ROLE_LAUNCH_PROMPTS.md` §4) and Frontend (§5) **in parallel**.
 
 ### GATE M — Math / Infra drift fast-path: Architect → Backend (skip PM + UX)   *(= your Routine B)*
 - **Trigger:** "math drift / fix the calc / schema change / model divergence in {function}."
 - **Use when:** a calculation, API/provider change, or data-type change with **no UI implication**.
-- **Audit:** `GAMMAFLOW_CONTEXT.md` §3 (core math constraints) + §5 (resolved decisions — do NOT
-  reopen), `OPEN_THREADS.md`, and the exact source you name (e.g. `src/core/engine.py`,
-  `src/core/signals.py`, `src/providers/base.py`).
+- **Audit:** `PROJECT_CONTEXT.md` §3 (core math/domain constraints) + §5 (resolved decisions — do NOT
+  reopen), `OPEN_THREADS.md`, and the exact source file(s) you name (e.g. a core calc/engine module, a
+  signals module, a provider/port adapter — under `backend.dir`).
 - **Compress:** Compressor **#2** targeting Backend; isolate affected functions + data types.
 - **Write:** overwrite `INTERFACE_CONTRACT.md` (only the changed types/fields/presence) +
   `BACKEND_EXECUTION_CONTRACT.md` with **strict types and explicit computational constraints**
-  (units, sign conventions, null rules, the gamma-source split, `MIN_GREEK_T`, rates, DTE scope).
+  (units, sign conventions, null rules, and the domain-specific computational constraints the context
+  file names).
 - **Token-saving isolation:** do **not** spin up a frontend lane. Write a one-line
   `FRONTEND_EXECUTION_CONTRACT.md` containing only:
   `> NO_UI_CHANGE — backend-only drift {FEATURE}; FE consumes the unchanged interface. No build.`
@@ -223,8 +221,8 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
   math."
 - **Use when:** component states, layout, copy, or stream-degradation behavior change with **no
   engine/endpoint change**.
-- **Audit:** `GAMMAFLOW_CONTEXT.md` (the stream-isolation + live-vs-stale rules), `UX_BLUEPRINT.md`,
-  the named frontend files under `apps/dashboard` (e.g. `apps/dashboard/src/app/app.tsx`).
+- **Audit:** `PROJECT_CONTEXT.md` (the live-vs-static / degradation rules), `UX_BLUEPRINT.md`,
+  the named frontend file(s) under `frontend.dir` (e.g. the main view/component you name).
 - **Compress:** compile exact visual expectations, state changes, and component touchpoints.
 - **Write:** overwrite `FRONTEND_EXECUTION_CONTRACT.md` (new design blueprint + component states).
 - **Token-saving isolation:** backend untouched — flag `NO_BACKEND_CHANGE` in the manifest; do not
@@ -241,7 +239,7 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
   (`DECISION_LEDGER.md` "Promoted canon"), decide which it is: a one-off **exception** (the rule still
   holds generally — note the carve-out on this feature, invariant stands) vs a **demotion** (the rule
   itself is wrong/over-general — once the amendment is accepted, remove/narrow its prose in
-  `GAMMAFLOW_CONTEXT.md` §5 + `OPEN_THREADS.md` §9, move its key to the ledger's "Demoted" table with the
+  `PROJECT_CONTEXT.md` §5 + `OPEN_THREADS.md` §9, move its key to the ledger's "Demoted" table with the
   contradicting evidence). Same bar as promotion — demote the *rule*, not for a single carve-out.
 - **Route:** back to the owning role; mark the contract `CONTESTED` in the manifest.
 
@@ -249,20 +247,20 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Trigger:** "snapshot to resume / continuing this elsewhere."
 - **Compress:** Compressor **#4** (Session-Resume).
 - **Write:** `RESUME.md` (objective, done + files changed, in-progress & exactly where it stopped,
-  next concrete step, gotchas). Self-contained against `GAMMAFLOW_CONTEXT.md`.
+  next concrete step, gotchas). Self-contained against `PROJECT_CONTEXT.md`.
 
 ### GATE Q — QA / Verify (post-executioners → Ship or Bounce)   *(system-2)*
 - **Trigger:** "both lanes built / QA it / verify the feature before ship."
 - **Use when:** the executioners report done — **always before GATE S** (ship now requires a QA pass).
 - **Audit:** `PRODUCT_CONTRACT.md` (the ACs — the checklist), `INTERFACE_CONTRACT.md`, both execution
-  contracts, the shipped code in both lanes (`apps/api` + `apps/dashboard`), the BRIEF "Invariant
+  contracts, the shipped code in both lanes (`backend.dir` + `frontend.dir`), the BRIEF "Invariant
   watch" + the promoted canon (§5).
 - **Role:** a FRESH QA/Verify session (`ROLE_LAUNCH_PROMPTS.md` §6; subagent `.claude/agents/qa-verify.md`)
   — a different session from the builders (no marking own homework; ideally a different model →
   foreshadows system-6). Confirms every AC point-by-point, **fixes nothing**.
-- **Runtime conformance (system-1):** against the running backend (`npx nx serve api`), run
-  `apps/api/.venv/Scripts/python.exe .claude/tools/interface_conformance.py --contract
-  .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000`. A conformance
+- **Runtime conformance (system-1):** against the running backend (`backend.serve_cmd`), run
+  `<project.json backend.python> .claude/tools/interface_conformance.py --contract
+  .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url <backend-base-url>`. A conformance
   **FAIL** (the live BE does not emit a field the interface promises / the FE consumes) is a **GATE Q
   FAIL** → bounce to Backend. Integration is now **verified, not asserted**.
 - **Write:** `QA_REPORT.md` (AC verbatim · verdict {PASS|FAIL|UNVERIFIABLE} · evidence + overall verdict).
@@ -276,11 +274,11 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Precondition:** a passing `QA_REPORT.md` exists (GATE Q) — "verified end-to-end" now means the QA
   role's point-by-point pass, not a human checkbox.
 - **Do:** move `.claude/contracts/{FEATURE}/` → `.claude/contracts/_archive/{FEATURE}/`; refresh
-  `OPEN_THREADS.md` (flip the thread to SHIPPED + ARCHIVED) and `GAMMAFLOW_CONTEXT.md` (fold the
+  `OPEN_THREADS.md` (flip the thread to SHIPPED + ARCHIVED) and `PROJECT_CONTEXT.md` (fold the
   new capability into §6 / conventions) **only if the feature is verified end-to-end**.
 - **Promote (compounding memory):** finalize the feature's `DECISION_LEDGER.md` rows, then **DETECT** —
   tally the ledger; any key now in **≥3 distinct shipped features (or ≥2 if every instance is
-  `binding:yes`)** **GRADUATES**: write its prose **once** into `GAMMAFLOW_CONTEXT.md` §5 + a locked
+  `binding:yes`)** **GRADUATES**: write its prose **once** into `PROJECT_CONTEXT.md` §5 + a locked
   pointer in `OPEN_THREADS.md` §9, add it to the ledger's "Promoted canon" index with provenance, and
   move near-threshold keys to the ledger watch list. Single-source: canon prose lives in CONTEXT/§9;
   the ledger only indexes it.
@@ -318,7 +316,7 @@ Last gateway:  <GATE id> @ <YYYY-MM-DD>
 
 ## 4a. BRIEF.md (output of GATE I — the one chosen idea)
 The bridge from the divergent `BACKLOG.md` to the convergent pipeline. It IS the `{GOAL}` the entry
-role opens on, so it must stand alone against `GAMMAFLOW_CONTEXT.md`. Format:
+role opens on, so it must stand alone against `PROJECT_CONTEXT.md`. Format:
 
 ```markdown
 # {FEATURE} — brief
@@ -328,8 +326,8 @@ Feasibility:     pass | blocked-on: <X>
 Effort:          S | M | L
 Invariant watch: <canonical keys from DECISION_LEDGER.md "Promoted canon" this feature touches (e.g.
                  additive-keeps-score-byte-identical, best-effort-isolated-or-null) + any other locked
-                 rule it must not touch (gamma sourcing, etc.)>
-Context tags:    <optional (system-5): GAMMAFLOW_CONTEXT section tags this feature needs, e.g.
+                 rule it must not touch (the named domain invariants, etc.)>
+Context tags:    <optional (system-5): PROJECT_CONTEXT section tags this feature needs, e.g.
                  architecture,backend,personas,observability — context_for.py loads these + the
                  always-load invariant floor (§3,§5). Omit ⇒ invariant floor only.>
 Entry point:     architect-first | pm-first — <one-line why>
@@ -352,7 +350,7 @@ NEXT      : <role(s) to launch> — launch prompt below
 ```
 
 ## 6. Invariants I never break
-- One feature = one folder; contracts are self-contained against `GAMMAFLOW_CONTEXT.md` + the named
+- One feature = one folder; contracts are self-contained against `PROJECT_CONTEXT.md` + the named
   inbound contract — **never** chat history.
 - `INTERFACE_CONTRACT.md` is the only FE↔BE truth; execution contracts reference it, never restate
   or contradict it. A real interface change is an amendment (GATE Z), not a silent lane edit.
@@ -360,14 +358,14 @@ NEXT      : <role(s) to launch> — launch prompt below
   internals; the split keeps server internals out of the FE file and UI out of the BE file.
 - Strip deliberation, ship decisions. Reference files, don't paste.
 - Respect `OPEN_THREADS.md` §9 "Resolved (do NOT revisit)" (incl. the **promoted build invariants**)
-  and the math invariants in `GAMMAFLOW_CONTEXT.md` §3/§5 — never reopen them through a gateway.
+  and the math invariants in `PROJECT_CONTEXT.md` §3/§5 — never reopen them through a gateway.
 - **Compounding memory (§3a):** capture binding decisions to `DECISION_LEDGER.md` every gateway;
   graduate a key at GATE S once it recurs across ≥3 shipped features (≥2 if binding). A promoted rule's
-  **prose is single-sourced** in `GAMMAFLOW_CONTEXT.md` §5 / `OPEN_THREADS.md` §9 — the ledger only
+  **prose is single-sourced** in `PROJECT_CONTEXT.md` §5 / `OPEN_THREADS.md` §9 — the ledger only
   indexes it (no duplicated prose). Promotion is contestable via GATE Z, never silent canon.
 - **Memory tracks truth, not just recurrence (system-7):** a promoted invariant contradicted by reality
   — an accepted GATE Z amendment, or a GATE Q QA/conformance FAIL proving it false/over-general — is
-  **demoted** (prose removed/narrowed in `GAMMAFLOW_CONTEXT.md` §5 + `OPEN_THREADS.md` §9, key moved to
+  **demoted** (prose removed/narrowed in `PROJECT_CONTEXT.md` §5 + `OPEN_THREADS.md` §9, key moved to
   the ledger's "Demoted" table with evidence), not left standing. Demotion bar mirrors promotion: a
   one-off feature carve-out is an exception, not a demotion. Stops the compounding memory from calcifying
   a wrong-but-repeated rule into law.
@@ -380,15 +378,14 @@ NEXT      : <role(s) to launch> — launch prompt below
 - **Lane enforcement via subagents (system-4 + 4b):** each role has a tool-fenced subagent in
   `.claude/agents/` — contract authors (architect/pm/ux) + QA have no `Edit`/`Bash` (cannot modify or
   run code); executioners get the build toolset. **system-4b** adds a `.claude/settings.json` PreToolUse
-  hook (`.claude/tools/path_guard.js`) that blocks any write outside the monorepo root — the workspace
-  fence. (The old cross-repo fence is moot now that both lanes share one repo; lane separation between
-  `apps/api` and `apps/dashboard` is reinforced mechanically by the ESLint `@nx/enforce-module-boundaries`
-  rule keyed to the project tags.) What's still trusted (not mechanized): the per-role *intra*-lane rule
-  (e.g. an author Write-ing into `src/`) — a session-global hook can't see the active role, so that
-  residual rests on the tool-allowlist + prompt.
+  hook (`.claude/tools/path_guard.js`) that blocks any write outside the workspace root — the workspace
+  fence. (Lane separation between `backend.dir` and `frontend.dir` is reinforced mechanically by the
+  project's module-boundary tooling where one is configured.) What's still trusted (not mechanized): the
+  per-role *intra*-lane rule (e.g. an author Write-ing into source) — a session-global hook can't see the
+  active role, so that residual rests on the tool-allowlist + prompt.
 - **Ground-truth retrieval (system-5):** a session may load the minimal context pack via
-  `apps/api/.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print` instead of re-reading all of
-  `GAMMAFLOW_CONTEXT.md` (selected from the BRIEF's `Context tags:` + the section shard tags). The
+  `<project.json backend.python> .claude/tools/context_for.py {FEATURE} --print` instead of re-reading all of
+  `PROJECT_CONTEXT.md` (selected from the BRIEF's `Context tags:` + the section shard tags). The
   invariant-bearing sections (§3 math, §5 decisions/promoted invariants) are **`always`-load** — sharding
   cuts tokens by relevance but NEVER drops a binding rule a feature could violate. Decouples per-session
   cost from total canon size; the whole file stays the single source (logical slice, not a split).
@@ -396,5 +393,5 @@ NEXT      : <role(s) to launch> — launch prompt below
   session (GATE Q, `ROLE_LAUNCH_PROMPTS.md` §6) — never the builder's self-verification. QA confirms
   every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs
   on the fix. (Run QA on a different model where possible — de-correlates blind spots, system-6.)
-- Frontend writes target `apps/dashboard`, backend writes target `apps/api`; contracts always live
-  in `.claude/contracts/` at the workspace root.
+- Frontend writes target `frontend.dir`, backend writes target `backend.dir` (both from `project.json`);
+  contracts always live in `.claude/contracts/` at the workspace root.

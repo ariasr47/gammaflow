@@ -1,6 +1,6 @@
 # Role Launch Prompts (standing reference)
 
-Reusable, generalized prompts to **open** each role-scoped session in the GammaFlow handoff
+Reusable, generalized prompts to **open** each role-scoped session in the delivery handoff
 pipeline. Each role reads the constant ground truth + its inbound contract, does only its lane's
 work, writes its outbound contract, then runs the matching **compressor** from
 `.claude/COMPRESSOR_PROMPTS.md` to hand off to the next role.
@@ -14,27 +14,28 @@ spawned roles + QA.
 > as the Orchestrator (`.claude/ORCHESTRATOR.md`) and announce the transition; it drives these
 > prompts + the compressors for you instead of manual copy-paste.
 
-> **Context retrieval (system-5):** instead of re-reading all of `GAMMAFLOW_CONTEXT.md`, a session can
-> load the minimal pack — `apps/api/.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print`
+> **Context retrieval (system-5):** instead of re-reading all of `PROJECT_CONTEXT.md`, a session can
+> load the minimal pack — `<project.json backend.python> .claude/tools/context_for.py {FEATURE} --print`
 > (the always-load invariant floor §3+§5 + the sections the BRIEF's `Context tags:` select). Opt-in; the
 > whole file stays valid + single-source. Decouples per-session token cost from canon size.
 
 > **Lane-fenced subagents (system-4):** each role also has a tool-fenced subagent in `.claude/agents/`
-> (`gammaflow-architect` · `gammaflow-pm` · `gammaflow-ux` · `gammaflow-backend` · `gammaflow-frontend`
+> (`delivery-architect` · `delivery-pm` · `delivery-ux` · `delivery-backend` · `delivery-frontend`
 > · `qa-verify`). A role spawned via the Agent tool is mechanically held to its lane — contract authors
 > (architect/pm/ux) + QA have **no `Edit` and no `Bash`** (cannot modify or run code); executioners get
 > the build toolset. Tool-allowlists are the per-tool guard; the workspace write fence (no writes outside
-> the monorepo root) is enforced by the `path_guard.js` PreToolUse hook (system-4b, LANDED). Both lanes
-> (`apps/api`, `apps/dashboard`) live in one repo, so each spawns as an in-repo Agent subagent.
+> the workspace root) is enforced by the `path_guard.js` PreToolUse hook (system-4b, LANDED). Both lanes
+> (`backend.dir`, `frontend.dir` — see `.claude/project.json`) live in one repo, so each spawns as an
+> in-repo Agent subagent.
 > Running each role still works as a manual session with the prompts below — the subagents just make the
 > lane enforceable when spawned.
 
 Placeholders to fill before pasting:
-- `{FEATURE}` = kebab folder name under `.claude/contracts/` (e.g. `dark-pool-stream-isolation`).
+- `{FEATURE}` = kebab folder name under `.claude/contracts/` (e.g. `user-auth-flow`).
 - `{GOAL}` = one short paragraph: what this feature must accomplish for the user/system.
 
 > Convention (per COMPRESSOR_PROMPTS.md): reference files, don't paste; assume **no chat history** —
-> the reader has only `GAMMAFLOW_CONTEXT.md` + the named contract(s). One feature = one folder.
+> the reader has only `PROJECT_CONTEXT.md` + the named contract(s). One feature = one folder.
 
 ---
 
@@ -50,18 +51,18 @@ context pack, let it write its one contract, then **discard it** (no reuse acros
 
 | Gateway             | Spawn subagent        | Launch prompt | Writes                          |
 |---------------------|-----------------------|---------------|---------------------------------|
-| Architect (entry)   | `gammaflow-architect` | §1 / §1b      | ARCHITECTURE_CONTRACT.md        |
-| Product Manager     | `gammaflow-pm`        | §2 / §2b      | PRODUCT_CONTRACT.md             |
-| UX / Tech-Writer    | `gammaflow-ux`        | §3            | UX_BLUEPRINT.md + the split     |
-| Backend (fan-out)   | `gammaflow-backend`   | §4            | server code (binds interface)   |
-| Frontend (fan-out)  | `gammaflow-frontend`  | §5            | UI code (binds interface)       |
+| Architect (entry)   | `delivery-architect` | §1 / §1b      | ARCHITECTURE_CONTRACT.md        |
+| Product Manager     | `delivery-pm`        | §2 / §2b      | PRODUCT_CONTRACT.md             |
+| UX / Tech-Writer    | `delivery-ux`        | §3            | UX_BLUEPRINT.md + the split     |
+| Backend (fan-out)   | `delivery-backend`   | §4            | server code (binds interface)   |
+| Frontend (fan-out)  | `delivery-frontend`  | §5            | UI code (binds interface)       |
 | QA / Verify (GATE Q)| `qa-verify`           | §6            | QA_REPORT.md                    |
 
 - **Discovery has no subagent:** the table starts at the Architect because GATE I (Discovery) runs
   **inline in the conductor**, not as a spawn — its inputs are the conductor's boot state and it precedes
   the BRIEF that the pack keys off (full rationale: ORCHESTRATOR §3 GATE I). Every gateway below spawns.
 - **Lean context, not the whole canon:** give each spawn the pack —
-  `apps/api/.venv/Scripts/python.exe .claude/tools/context_for.py {FEATURE} --print` (always-load invariant floor
+  `<project.json backend.python> .claude/tools/context_for.py {FEATURE} --print` (always-load invariant floor
   + the BRIEF's `Context tags:`); it falls back to the floor if no tags.
 - **You still run the gates between spawns:** `contract_lint.py` at every gateway; at GATE Q
   `interface_conformance.py` + the `qa-verify` spawn. Lanes are tool-fenced (the subagents) + workspace
@@ -75,11 +76,11 @@ context pack, let it write its one contract, then **discard it** (no reuse acros
 ---
 
 ## Choosing the entry point (Architect-first vs PM-first)
-The **default is Architect-first** (sections 1→5 below), because most GammaFlow features are
-**feasibility-gated**: what's buildable is dominated by data/vendor coverage and the math
-invariants (gamma sourcing, rates, DTE-filter scope, dark-pool-is-context). Front-loading that
-constraint envelope stops the PM from writing acceptance criteria the data can't satisfy (e.g.
-"show the live overnight price" — not a product call, a sourcing fact).
+The **default is Architect-first** (sections 1→5 below), for projects where most features are
+**feasibility-gated**: what's buildable is dominated by data/vendor coverage and the domain/math
+invariants the context file names. Front-loading that constraint envelope stops the PM from writing
+acceptance criteria the data can't satisfy (e.g. an AC that depends on data the source simply can't
+provide — not a product call, a sourcing fact).
 
 **Flip to PM-first (section 2b) when the dominant uncertainty is product, not feasibility** — the
 user need is fuzzy, several product shapes are plausible, and all of them are technically cheap.
@@ -89,7 +90,7 @@ There, Architect-first only adds latency. Rule of thumb:
 
 Only the *order* changes — and which Architect prompt you use: **section 1** (Architect-first,
 hands off to the PM) vs **section 1b** (validation pass after PM-first, hands off to the UX/Tech-
-Writer). Every role still reads `GAMMAFLOW_CONTEXT.md`, writes exactly one contract into
+Writer). Every role still reads `PROJECT_CONTEXT.md`, writes exactly one contract into
 `.claude/contracts/{FEATURE}/`, and hands off via a compressor. From the UX/Tech-Writer onward
 (section 3+) both orderings are identical.
 
@@ -98,15 +99,15 @@ Writer). Every role still reads `GAMMAFLOW_CONTEXT.md`, writes exactly one contr
 ## 1. Architect (Session 1)
 ```text
 Read these files for full context, then act as a senior Software Architect:
-- .claude/GAMMAFLOW_CONTEXT.md      (standing project ground truth)
+- .claude/PROJECT_CONTEXT.md      (standing project ground truth)
 - .claude/OPEN_THREADS.md           (background: what's open / resolved — do not reopen "resolved")
 
 Goal: {GOAL}
 
 Your job is the technical shape only: data structures/contracts, data-flow and component
 boundaries, isolation/error-handling rules, and explicit non-goals. Restate every binding
-constraint from GAMMAFLOW_CONTEXT that this feature must not violate (gamma sourcing, rates,
-DTE-filter scope, dark-pool-is-context, etc.). Do NOT design UI/layout, endpoints, payload
+constraint from PROJECT_CONTEXT that this feature must not violate (the domain/math invariants and
+promoted build invariants it names). Do NOT design UI/layout, endpoints, payload
 shapes, or copy — leave those for downstream and list them as open questions for the PM.
 
 Write your output to .claude/contracts/{FEATURE}/ARCHITECTURE_CONTRACT.md. Stay in your lane
@@ -125,7 +126,7 @@ UX/Tech-Writer (the PM has already run). Everything from section 3 onward is unc
 Read these files for full context, then act as a senior Software Architect validating a
 PM-first feature (the Product Manager has ALREADY run; you run second to set the constraint
 envelope and confirm buildability):
-- .claude/GAMMAFLOW_CONTEXT.md                          (standing project ground truth)
+- .claude/PROJECT_CONTEXT.md                          (standing project ground truth)
 - .claude/contracts/{FEATURE}/PRODUCT_CONTRACT.md       (your input: stories, scope, behavior, ACs,
                                                          the PM's product decisions + feasibility questions)
 - .claude/OPEN_THREADS.md                               (background: what's open / resolved — do not reopen "resolved")
@@ -146,10 +147,10 @@ Because the PM ran first, you MUST:
 - HONOR the "Design-for" seams the PM flagged (future-dated capabilities): specify the seam so the
   later feature isn't precluded, without building it now.
 
-Restate every binding constraint from GAMMAFLOW_CONTEXT this feature must not violate — math
-invariants (gamma sourcing, rates, DTE-filter scope) AND product invariants (dark-pool-is-context,
-live-vs-cached isolation, honest live-vs-stale, no overnight data, the external-AI contract, the
-over-trading guard). Leave UI/endpoints/payloads/copy as open questions for downstream.
+Restate every binding constraint from PROJECT_CONTEXT this feature must not violate — its domain/math
+invariants AND its product invariants (the isolation/degradation rules, data-coverage limits, the
+external-AI/integration contract, and any promoted build invariants it names). Leave
+UI/endpoints/payloads/copy as open questions for downstream.
 
 Write your output to .claude/contracts/{FEATURE}/ARCHITECTURE_CONTRACT.md.
 
@@ -171,7 +172,7 @@ is unchanged.
 Read these files for full context, then act as a strict Product Manager running second, after the
 Architect (the ARCHITECTURE_CONTRACT is your input and already frames what is being built — there is
 no separate goal to restate):
-- .claude/GAMMAFLOW_CONTEXT.md                                  (standing ground truth)
+- .claude/PROJECT_CONTEXT.md                                  (standing ground truth)
 - .claude/contracts/{FEATURE}/ARCHITECTURE_CONTRACT.md         (your input: technical shape, constraint
                                                                 envelope, non-goals, open questions for you)
 - .claude/OPEN_THREADS.md                                       (background: what's open / resolved — do not reopen "resolved")
@@ -215,7 +216,7 @@ unchanged.
 ```text
 Read these files for full context, then act as a strict Product Manager opening a NEW feature
 (PM-first entry — you are the FIRST role; there is NO ARCHITECTURE_CONTRACT yet):
-- .claude/GAMMAFLOW_CONTEXT.md      (standing ground truth)
+- .claude/PROJECT_CONTEXT.md      (standing ground truth)
 - .claude/OPEN_THREADS.md           (background: what's open / resolved — do not reopen "resolved")
 
 Goal: {GOAL}
@@ -242,10 +243,10 @@ Be a STRICT PM — decide, don't survey:
   data structures, endpoints, payloads, math, or UI).
 
 Because no Architect has set the constraint envelope, you MUST also:
-- Restate the binding constraints from GAMMAFLOW_CONTEXT this feature must respect — math invariants
-  (gamma sourcing, rates, DTE-filter scope) AND the product invariants (dark-pool-is-context,
-  live-vs-cached isolation, honest live-vs-stale, no overnight data, the external-AI contract, the
-  over-trading guard) — and avoid acceptance criteria that obviously violate them.
+- Restate the binding constraints from PROJECT_CONTEXT this feature must respect — its domain/math
+  invariants AND its product invariants (the isolation/degradation rules, data-coverage limits, the
+  external-AI/integration contract, and any promoted build invariants it names) — and avoid acceptance
+  criteria that obviously violate them.
 - Restate any product-level constraint the NEXT role must not violate.
 - If the goal names an adjacent or future capability, capture it as Future-dated + a "Design-for"
   seam note (what must not be precluded) + a feasibility question — do NOT scope it into this phase.
@@ -266,14 +267,14 @@ UX. Then stop.
 ## 3. UX/Tech-Writer (Session 3)
 ```text
 Read these files for full context, then act as a UX designer + technical writer:
-- .claude/GAMMAFLOW_CONTEXT.md                          (standing ground truth)
+- .claude/PROJECT_CONTEXT.md                          (standing ground truth)
 - .claude/contracts/{FEATURE}/PRODUCT_CONTRACT.md       (your input: stories, scope, behavior, ACs)
 
 Do NOT change product scope or invent new behavior — translate the PRODUCT_CONTRACT into concrete
 UI/interaction design and user-facing copy. Your job: component states (default / loading / stale /
-offline / empty / error), where each datum surfaces, microcopy and labels (honoring binding
-framing — e.g. dark-pool blocks are "context, not a signal"), tooltip/glossary text, and the exact
-degraded-state wording for live-stream loss vs bundle-fetch loss. Map each acceptance criterion to
+offline / empty / error), where each datum surfaces, microcopy and labels (honoring any binding
+framing the context file pins), tooltip/glossary text, and the exact degraded-state wording for
+live-stream loss vs data-fetch loss. Map each acceptance criterion to
 the component state(s) that satisfy it — this mapping IS the required-tests matrix. In the
 FRONTEND_EXECUTION_CONTRACT's "Tests to write" note (emitted by compressor #3) enumerate the required
 cases (each AC × component state × edge/invariant) so the FE implements them and never decides the
@@ -290,20 +291,20 @@ INTERFACE_CONTRACT.md, BACKEND_EXECUTION_CONTRACT.md, FRONTEND_EXECUTION_CONTRAC
 ## 4. Backend Executioner
 ```text
 Read these files for full context, then implement the backend, acting as a backend engineer:
-- .claude/GAMMAFLOW_CONTEXT.md                                  (standing ground truth)
+- .claude/PROJECT_CONTEXT.md                                  (standing ground truth)
 - .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md            (the single source of integration truth)
 - .claude/contracts/{FEATURE}/BACKEND_EXECUTION_CONTRACT.md    (your server work)
 
 Build only the server side. Emit exactly the fields/types/presence-and-error semantics the
 INTERFACE_CONTRACT specifies — that contract is binding; do not deviate from it unilaterally (if it
-is wrong, flag it, don't silently diverge). Honor every constraint in GAMMAFLOW_CONTEXT (gamma
-sourcing, rates, DTE-filter scope, best-effort dark-pool, path isolation). Do not touch UI.
+is wrong, flag it, don't silently diverge). Honor every constraint in PROJECT_CONTEXT (its
+domain/math invariants, best-effort isolation, and any promoted build invariants). Do not touch UI.
 
 Run the project the standard way and verify your output matches the INTERFACE_CONTRACT (shape,
 presence rules, and the failure/degradation semantics). Before reporting done, run the same
 machine check QA will run at GATE Q — with the backend up:
-`apps/api/.venv/Scripts/python.exe .claude/tools/interface_conformance.py --contract
-.claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000` — and make it PASS
+`<project.json backend.python> .claude/tools/interface_conformance.py --contract
+.claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url <backend-base-url>` — and make it PASS
 (it proves the live response emits every field the interface promises = what the FE consumes). A
 self-caught conformance FAIL now is one you fix in-lane instead of bouncing back from QA later.
 Report what you changed and how you verified it (include the conformance result). If you discover
@@ -314,40 +315,38 @@ diverging or breaking the frontend's assumptions.
 ## 5. Frontend Executioner
 ```text
 Read these files for full context, then implement the frontend, acting as a frontend engineer:
-- .claude/GAMMAFLOW_CONTEXT.md                                  (standing ground truth)
+- .claude/PROJECT_CONTEXT.md                                  (standing ground truth)
 - .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md            (the single source of integration truth)
 - .claude/contracts/{FEATURE}/FRONTEND_EXECUTION_CONTRACT.md   (your UI work + component states)
 
 Build only the client side. Consume exactly the fields the INTERFACE_CONTRACT defines — that
 contract is binding; do not assume fields it doesn't promise. Implement every component state and
-the exact degraded-state behavior from the FRONTEND_EXECUTION_CONTRACT (static GEX chart + stats
-MUST persist on live-stream loss; only live fields show offline/stale; never blank on a failed
-refresh once a bundle has loaded; auto-reconnect). Do not touch server internals or math.
+the exact degraded-state behavior from the FRONTEND_EXECUTION_CONTRACT (static content MUST persist
+on live-stream loss; only live fields show offline/stale; never blank on a failed refresh once content
+has loaded; auto-reconnect). Do not touch server internals or math.
 
-Automated tests are PART OF THE DELIVERABLE for every feature (standing rule — the FE repo is wired
-for Vitest + jsdom + Testing Library, plus @testing-library/user-event + jest-dom, via @nx/vite).
-Colocate `*.spec.tsx`/`*.spec.ts` with the code. Three levels, the flow-integration one is the
-CENTERPIECE:
-- unit — pure logic (hooks' reducers/derivations, mark-ladder math, persona assembleHandoff,
-  ring-buffer/formatters), deterministic, no DOM;
+Automated tests are PART OF THE DELIVERABLE for every feature (standing rule). Use the project's
+configured component-test stack and run it via `project.json` → `frontend.test_cmd`; colocate the test
+files with the code. Three levels, the flow-integration one is the CENTERPIECE:
+- unit — pure logic (hook reducers/derivations, computed values, formatters), deterministic, no DOM;
 - component — render each component state from the contract (default/loading/stale/offline/empty/
-  error) + the key interactions, asserting observable output (Testing Library + user-event);
+  error) + the key interactions, asserting observable output;
 - integration (CENTERPIECE) — drive the actual USER FLOW end-to-end through every edge case/variation:
-  mount the feature subtree, mock ONLY the network boundary (the @org/api client, or fetch/EventSource
-  — NEVER a live backend), then walk the journey with user-event (e.g. open a ghost trade -> tier
-  banner -> SSE drops -> live tiles dim while the static chart persists -> reconnect), plus
-  cold-start-fail vs post-success-refresh-fail, 404/no-quote, per-field nulls. These are the manual
-  mock checks every shipped lane did by hand, made re-runnable.
+  mount the feature subtree, mock ONLY the network boundary (the typed API client, or fetch/the
+  streaming transport — NEVER a live backend), then walk the journey (e.g. a record moves through its
+  lifecycle -> a live event arrives -> the stream drops -> live fields go offline/stale while the static
+  content persists -> reconnect), plus cold-start-fail vs post-success-refresh-fail, not-found/empty,
+  per-field nulls. These are the manual mock checks done by hand, made re-runnable.
 Assert the contract's observable behaviors + the promoted invariants (live-vs-static isolation,
-best-effort-isolated-or-null), not a coverage %. E2E: Playwright (@nx/playwright) is the chosen tool
-for real-browser flow tests — adopted nearer go-live, optional before then. Run `npx nx test dashboard`
-(and `nx test api` if you touched libs/api) and make it GREEN before reporting done — QA re-runs it at
+best-effort degradation), not a coverage %. E2E: a real-browser flow tool is adopted nearer go-live for
+the critical path, optional before then. Run the configured test command (plus any shared-lib test
+command if you touched a shared client lib) and make it GREEN before reporting done — QA re-runs it at
 GATE Q.
 
-Run the project the standard way and verify the live-loss / stale / cold-start states behave as
-specified against the acceptance criteria. A controllable mock backend behind the Vite proxy (used by
-every shipped FE lane) lets you drive each degraded path manually too. Report what you changed and how
-you verified it — name the states you exercised AND include the `nx test` result. If a needed field is
+Run the project the standard way (`project.json` → `frontend.serve_cmd`) and verify the live-loss /
+stale / cold-start states behave as specified against the acceptance criteria. A controllable mock at
+the network boundary lets you drive each degraded path manually too. Report what you changed and how
+you verified it — name the states you exercised AND include the test result. If a needed field is
 missing from the interface, flag it for a contract amendment — do not invent it.
 ```
 
@@ -359,7 +358,7 @@ nothing**, and bounces any gap via GATE Z. Ideally run on a **different base mod
 ```text
 Read these files for full context, then act as a strict QA / Verification engineer (a FRESH session,
 deliberately NOT one of the builders — no one marks their own homework):
-- .claude/GAMMAFLOW_CONTEXT.md                                       (standing ground truth)
+- .claude/PROJECT_CONTEXT.md                                       (standing ground truth)
 - .claude/contracts/{FEATURE}/PRODUCT_CONTRACT.md                    (the ACCEPTANCE CRITERIA — your checklist)
 - .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md                 (integration truth — what BE emits / FE consumes)
 - .claude/contracts/{FEATURE}/BACKEND_EXECUTION_CONTRACT.md          (what the backend built + its own verify list)
@@ -371,21 +370,22 @@ against the real built/running feature. You VERIFY; you FIX NOTHING — no code 
 no "making the AC pass." Treat each builder's self-verification as UNVERIFIED until you observe it.
 
 Method:
-- Run the project the standard way (backend npx nx serve api; frontend npx nx serve
-  dashboard) and OBSERVE. The ACs are written to be observable without reading code — verify by
-  observation first; read code only to explain a failure.
+- Run the project the standard way (backend `project.json` → `backend.serve_cmd`; frontend
+  `project.json` → `frontend.serve_cmd`) and OBSERVE. The ACs are written to be observable without
+  reading code — verify by observation first; read code only to explain a failure.
 - For EACH acceptance criterion, verbatim and in order, assign exactly one verdict:
   PASS (observed to hold — cite evidence) · FAIL (observed not to hold — expected vs actual + repro) ·
   UNVERIFIABLE (couldn't exercise it — say precisely why).
 - Verify INTERFACE_CONTRACT integration with the runtime conformance check (system-1): with the
-  backend running, run `apps/api/.venv/Scripts/python.exe .claude/tools/interface_conformance.py --contract
-  .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000`. A conformance FAIL
+  backend running, run `<project.json backend.python> .claude/tools/interface_conformance.py --contract
+  .claude/contracts/{FEATURE}/INTERFACE_CONTRACT.md --url <backend-base-url>`. A conformance FAIL
   (the live BE omits/mistypes a field the interface promises) is a GATE Q FAIL → bounce to Backend.
 - Also check the binding invariants (BRIEF "Invariant watch" + the promoted canon). A green AC list
   over a broken invariant is still a FAIL.
 - Re-run the frontend test suite + check AC↔test traceability (standing rule — tests are part of the FE
-  deliverable): from the workspace root run `npx nx test dashboard` (and `nx test @org/api` if libs/api was
-  touched); a failing suite is a GATE Q FAIL → bounce to Frontend. Then verify traceability (NOT a
+  deliverable): run the configured frontend test command (`project.json` → `frontend.test_cmd`, plus any
+  shared-lib test command if a shared client lib was touched); a failing suite is a GATE Q FAIL → bounce
+  to Frontend. Then verify traceability (NOT a
   spot-check): every PRODUCT_CONTRACT AC + every required case in the FRONTEND_EXECUTION_CONTRACT's
   "Tests to write" matrix maps to ≥1 named, passing test. An AC with no corresponding test is a FAIL even
   if the green suite passes — name the uncovered AC in the bounce.
@@ -412,5 +412,5 @@ GATE Z, then GATE Q re-runs on the fix). Then stop.
   compressor** — the pipeline ends at integration.
 - If a role finds its inbound contract wrong or incomplete, the fix is a **contract amendment** (bounce
   back to the owning role), not a silent in-lane workaround.
-- Keep `GAMMAFLOW_CONTEXT.md` as the constant every session reads; the per-feature contracts are the
+- Keep `PROJECT_CONTEXT.md` as the constant every session reads; the per-feature contracts are the
   variable. Archive a feature's folder when it ships.

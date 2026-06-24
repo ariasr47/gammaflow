@@ -12,17 +12,17 @@ emitted JSON against that spec. The interface stays the single source of truth; 
 executable.
 
 Usage:
-    # live: boot the backend yourself (.venv/Scripts/python.exe main.py), then —
-    python .claude/tools/interface_conformance.py --contract .claude/contracts/{F}/INTERFACE_CONTRACT.md --url http://127.0.0.1:8000
+    # live: boot the backend yourself (see project.json `backend.serve_cmd`), then —
+    python .claude/tools/interface_conformance.py --contract .claude/contracts/{F}/INTERFACE_CONTRACT.md --url <backend-base-url>
     # or a standalone spec file:
-    python .claude/tools/interface_conformance.py --spec .claude/tools/conformance/api_metrics.json --url http://127.0.0.1:8000
+    python .claude/tools/interface_conformance.py --spec .claude/tools/conformance/<feature>.json --url <backend-base-url>
     # offline: validate a captured response against one endpoint (CI / no server):
-    python .claude/tools/interface_conformance.py --spec SPEC.json --sample resp.json --endpoint /api/_metrics
+    python .claude/tools/interface_conformance.py --spec SPEC.json --sample resp.json --endpoint /api/example
 
 Spec schema (JSON):
     {"endpoints": [{
-       "method": "GET", "path": "/api/ticker/{ticker}",
-       "path_params": {"ticker": "SPY"}, "query": {"min_dte": 7},
+       "method": "GET", "path": "/api/example/{id}",
+       "path_params": {"id": "abc"}, "query": {"limit": 7},
        "required": { "<dot.path>": "<typespec>", ... }
     }]}
 Type specs: number | string | boolean | object | array | null ; unions "object|null"; trailing "?" =
@@ -30,7 +30,7 @@ optional (absent ⇒ pass, present ⇒ must match). A path segment "name[]" mean
 array — apply the rest of the path to EACH element" (empty array ⇒ vacuously passes).
 
 Exit: 1 if any endpoint FAILs (missing field / type mismatch / non-200 / unreachable), else 0.
-Stdlib only (urllib/json/re/argparse). Run with the project venv.
+Stdlib only (urllib/json/re/argparse). Run with the project interpreter (project.json `backend.python`).
 """
 from __future__ import annotations
 

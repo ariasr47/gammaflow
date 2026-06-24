@@ -1,7 +1,7 @@
 # Context Compressors (standing reference)
 
 Reusable prompts to distill a session into a portable, self-contained artifact. Every
-artifact assumes the reader has ONLY `.claude/GAMMAFLOW_CONTEXT.md` (the constant ground
+artifact assumes the reader has ONLY `.claude/PROJECT_CONTEXT.md` (the constant ground
 truth) plus the inbound contract — never chat history.
 
 Placeholders: `{FEATURE}` = kebab folder name under `.claude/contracts/`; `{TARGET_ROLE}`;
@@ -14,7 +14,7 @@ Use to capture *any* session's work into one handoff/continuation file.
 
 ```text
 Compress everything decided in THIS session into a single self-contained Markdown artifact.
-The reader will have ONLY .claude/GAMMAFLOW_CONTEXT.md plus this artifact — no chat history.
+The reader will have ONLY .claude/PROJECT_CONTEXT.md plus this artifact — no chat history.
 Capture: the goal, the decisions made (not the deliberation), any constraints that must not
 be violated, the resulting spec/plan, what's done vs open, and concrete next steps. EXCLUDE
 reasoning, alternatives explored, and dead-ends. Be decision-dense, prefer bullets.
@@ -32,12 +32,11 @@ Run at the Exit of Architect and PM. Targets the next role's needs.
 
 ```text
 Compress THIS session into a contract for the next role: {TARGET_ROLE}.
-Reader has ONLY .claude/GAMMAFLOW_CONTEXT.md + this contract.
+Reader has ONLY .claude/PROJECT_CONTEXT.md + this contract.
 Include exactly the sections {TARGET_ROLE} needs to act (use that contract's template in
 .claude/contracts/{FEATURE}/). Restate any binding constraint they must not violate — explicitly
-including the promoted-canon keys this feature touches (the BRIEF's `Invariant watch`: e.g.
-best-effort-isolated-or-null, additive-keeps-score-byte-identical, live-vs-static-isolation,
-operator-vs-trader-path-separation) so the next role inherits them without re-reading the ledger.
+including the promoted-canon keys this feature touches (the BRIEF's `Invariant watch` keys) so the
+next role inherits them without re-reading the ledger.
 Stay in your lane: the Architect emits no UI/endpoints; the PM emits no code/math. EXCLUDE your
 rationale — ship decisions, not deliberation.
 {CONTRACT_NAME} = your role's existing primary contract (ARCHITECTURE_CONTRACT.md for the Architect,
@@ -67,8 +66,8 @@ Compress THIS session into THREE files for decoupled execution:
    ENUMERATES the required cases — derived from the PRODUCT_CONTRACT ACs × component states ×
    edge/invariant (each AC → at least one case). This is the FE's requirement set (the FE
    implements + may add unit tests, but never drops a listed case); QA traces every AC to ≥1
-   passing test at GATE Q. (Vitest + Testing Library; tests are part of the FE deliverable.)
-Each must be self-contained against GAMMAFLOW_CONTEXT.md + the interface contract. EXCLUDE
+   passing test at GATE Q. (Tests are part of the FE deliverable; use the project's configured stack.)
+Each must be self-contained against PROJECT_CONTEXT.md + the interface contract. EXCLUDE
 rationale. Print the three paths. (contract_lint.py runs next at GATE U·X: it ERRORs if an
 execution contract isn't bound to the interface and WARNs if a locked interface lacks the
 Conformance spec block — so emit the block now.)
@@ -81,14 +80,14 @@ When a single working session gets long/expensive, snapshot it to resume cleanly
 I'm about to continue this work in a fresh session. Write a resume note to
 .claude/contracts/{FEATURE}/RESUME.md capturing: current objective, what's already done
 (files changed + decisions locked), what's in-progress and exactly where it stopped, the
-next concrete step, and any gotchas discovered. Self-contained against GAMMAFLOW_CONTEXT.md.
+next concrete step, and any gotchas discovered. Self-contained against PROJECT_CONTEXT.md.
 No narration of how we got here — just the state needed to pick up cold.
 ```
 
 ---
 ### Conventions
-- **Claude Code sessions (repo access):** open each role with *"Read .claude/GAMMAFLOW_CONTEXT.md
+- **Claude Code sessions (repo access):** open each role with *"Read .claude/PROJECT_CONTEXT.md
   and .claude/contracts/{FEATURE}/{X}.md, then act as …"* — reference files, don't paste.
 - **Plain web chat:** paste the file contents at the top instead.
 - One feature = one folder under `.claude/contracts/`. Archive/delete when shipped.
-- `GAMMAFLOW_CONTEXT.md` is the CONSTANT (read by every session); contracts are the VARIABLE.
+- `PROJECT_CONTEXT.md` is the CONSTANT (read by every session); contracts are the VARIABLE.

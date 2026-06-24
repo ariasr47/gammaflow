@@ -121,7 +121,7 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   (the parts that imply external infra / going-live ops).
 - **Multi-ticker scanner** — the observability baseline data supports it. *Value M · Effort M-L.*
   **Invariant watch:** revisits the deliberate "single-ticker, on-demand" decision (the watchlist scan
-  was dropped for being too slow) — re-justify before promoting. (`OPEN_THREADS` §6, `GAMMAFLOW_CONTEXT` §5)
+  was dropped for being too slow) — re-justify before promoting. (`OPEN_THREADS` §6, `PROJECT_CONTEXT` §5)
 - **Persona data single-sourcing (FE↔BE reconciliation)** — the backend ships the canonical
   decomposed template + 7 presets at `GET /api/personas` (transport filed as a late interface
   amendment, after the FE froze), but the FE **embeds** a faithful copy and assembles client-side, so
@@ -173,13 +173,13 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   locked/draft exist; execution contracts bind to INTERFACE_CONTRACT (NO_*_CHANGE stubs exempt); BRIEF
   has all required fields; NEW-endpoint-in-architect/PM-lane flagged (existing endpoints exempt via
   ground-truth); server-internals-in-FE / UI-in-BE lane-purity warns; promoted-canon single-source
-  (every ledger Promoted key has prose in GAMMAFLOW_CONTEXT §5). *Value M · Effort M.* Pairs with the
+  (every ledger Promoted key has prose in PROJECT_CONTEXT §5). *Value M · Effort M.* Pairs with the
   §B ledger-crossing hook (same script surface). **Deferred extensions:** AC↔component-state mapping
   check (now tracked + broadened as **system-10**, AC↔test traceability); optional `settings.json`
   PreToolUse/Stop hook to auto-run it (offer made); the legacy 4 archived features predate `_MANIFEST.md`
   (flag only on `--all`, not on live gating).
 - **system-4 · Lane enforcement via role subagents** — `✓ LANDED (2026-06-23, tools-allowlist half)`:
-  `.claude/agents/{gammaflow-architect,gammaflow-pm,gammaflow-ux,gammaflow-backend,gammaflow-frontend}.md`
+  `.claude/agents/{delivery-architect,delivery-pm,delivery-ux,delivery-backend,delivery-frontend}.md`
   + the earlier `qa-verify.md`. Contract authors (architect/pm/ux) + QA have **no `Edit`/`Bash`** (cannot
   modify or run code); executioners get the build toolset (Read/Grep/Glob/Edit/Write/Bash). Wired into
   ROLE_LAUNCH intro + ORCHESTRATOR §1/§6. *Value M · Effort M.* Keeps each role's fresh-context
@@ -198,7 +198,7 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   ESLint `@nx/enforce-module-boundaries` rule on the project tags. *Value M · Effort S.*
   **Activation:** new `settings.json` ⇒ open `/hooks` once or restart.
 - **system-5 · Ground-truth + ledger sharding (retrieval)** — `✓ LANDED (2026-06-23, logical-slice) →
-  .claude/tools/context_for.py`. Each `## N.` section in `GAMMAFLOW_CONTEXT.md` carries an inline
+  .claude/tools/context_for.py`. Each `## N.` section in `PROJECT_CONTEXT.md` carries an inline
   `<!-- shard: tags=...; always -->` annotation; the tool assembles the minimal pack from the BRIEF's
   `Context tags:` (+ Invariant-watch keys) + the always-load invariant floor (§3 math, §5
   decisions/promoted invariants). `--print` emits the pack; `--stat` shows savings (39–72% on current
@@ -219,7 +219,7 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 - **system-7 · Promoted-canon demotion path** — `✓ LANDED (2026-06-23)`: the inverse of graduation. A
   promoted invariant contradicted by reality (an accepted **GATE Z** amendment, or a **GATE Q**
   QA/conformance FAIL proving it false/over-general) is **demoted** — prose removed/narrowed in
-  GAMMAFLOW_CONTEXT §5 + OPEN_THREADS §9, key moved to the DECISION_LEDGER "Demoted" table with the
+  PROJECT_CONTEXT §5 + OPEN_THREADS §9, key moved to the DECISION_LEDGER "Demoted" table with the
   contradicting evidence (earning rows retained as provenance). `contract_lint.py`'s canon check follows
   automatically (a demoted key leaves Promoted-canon). Wired: DECISION_LEDGER "Demoted" section + GATE Z
   "Demotion check" step + §6 invariant. **Bar mirrors promotion:** a one-off feature carve-out is an
@@ -241,7 +241,7 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   removes the human review the system currently leans on for correctness; the **lite path above is the
   adopted interim** until then.
 - **system-10 · Contract-linter AC↔test traceability check** — `PROPOSED (2026-06-23), unscheduled`.
-  Mechanize the standing **FE-tests rule's** AC↔test traceability (GAMMAFLOW_CONTEXT §7; committed
+  Mechanize the standing **FE-tests rule's** AC↔test traceability (PROJECT_CONTEXT §7; committed
   `d69e240`) that QA enforces by judgment today: extend `contract_lint.py` (system-3) so every
   `PRODUCT_CONTRACT` AC (and every required case in the FRONTEND_EXECUTION_CONTRACT "Tests to write"
   matrix) must map to **≥1 colocated `*.spec.tsx` test** — an uncovered AC fails the check even if the
@@ -257,10 +257,10 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 - **system-11 · Cross-repo role-context on dispatch** — `✓ RESOLVED by the monorepo merge (2026-06-24)
   — dissolved, not implemented`. The whole problem was an artifact of the two-repo split: dispatching a
   FRONTEND executioner required `spawn_task --cwd` (the Agent tool couldn't cross the path_guard
-  cross-repo fence), which **bypassed the role framework** (no `gammaflow-frontend` subagent, no
+  cross-repo fence), which **bypassed the role framework** (no `delivery-frontend` subagent, no
   `context_for.py` pack, no role launch prompt, chip named by action not role). Folding the backend
   into the Nx workspace put **both lanes under one repo root**: the frontend lane now spawns as a
-  `gammaflow-frontend` **Agent subagent** with automatic report-back — same role/context discipline as
+  `delivery-frontend` **Agent subagent** with automatic report-back — same role/context discipline as
   every other lane, no `spawn_task`, no polling. The "spawn_task drops the role context" hole is gone
   because spawn_task-for-frontend is gone (ORCHESTRATOR §2). *Outcome:* the parked question is moot.
   **Origin:** raised 2026-06-23 after two *maintenance* tasks were dispatched ad-hoc; the merge
@@ -277,7 +277,7 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   reference). **Done:** ai-recommendations interface points at its standalone spec; the backend added
   POST-body support to `interface_conformance.py` (additive, kept; `api_metrics.json` still passes).
   **Remaining (do before the next GATE U·X):** reconcile the authoring docs — `COMPRESSOR_PROMPTS #3`,
-  `gammaflow-ux.md`, `ORCHESTRATOR §6 / GATE U·X / GATE Q`, `BACKLOG system-1` — to the standalone
+  `delivery-ux.md`, `ORCHESTRATOR §6 / GATE U·X / GATE Q`, `BACKLOG system-1` — to the standalone
   convention; tighten `contract_lint` M7 to verify the interface references an EXISTING standalone spec
   (it currently only string-matches "Conformance spec"); align the system-1 heading regex with system-3's
   looser detection so they agree. *Value M · Effort S–M.* **Build-system class:** trading-decision cull
