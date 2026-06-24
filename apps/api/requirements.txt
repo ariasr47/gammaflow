@@ -12,5 +12,6 @@ pydantic
 
 # Utilities
 python-dotenv
+tzdata  # IANA tz database for zoneinfo on Windows (no system tz db)
 
 massive
