@@ -207,7 +207,7 @@ async function flush() { await act(async () => { await Promise.resolve(); await 
 
 function renderApp() {
   const user = userEvent.setup();
-  render(<MemoryRouter initialEntries={['/TSLA']}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/ticker/TSLA']}><App /></MemoryRouter>);
   return user;
 }
 
@@ -634,7 +634,7 @@ describe('AI recommendations — timer-driven states (T6/E2, T7, T9)', () => {
     installBackend({
       rec: producedRec({ gate: { state: 'cooling_down', cooldown_remaining_seconds: 3, reasons: [] } }),
     });
-    render(<MemoryRouter initialEntries={['/TSLA']}><App /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/ticker/TSLA']}><App /></MemoryRouter>);
     await tick();
 
     await act(async () => { fireEvent.click(recoButton()); });
@@ -648,7 +648,7 @@ describe('AI recommendations — timer-driven states (T6/E2, T7, T9)', () => {
 
   it('T6/E2 marks the rec stale on a newer bundle without refreshing it; SSE drop leaves it untouched', async () => {
     const be = installBackend({});
-    render(<MemoryRouter initialEntries={['/TSLA']}><App /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/ticker/TSLA']}><App /></MemoryRouter>);
     await tick();
 
     await act(async () => { fireEvent.click(recoButton()); });
