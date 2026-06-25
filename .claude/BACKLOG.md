@@ -30,6 +30,48 @@
 
 ---
 
+## Last GATE I — 2026-06-24 (OWNER PIVOT: positions-centric, brokerage-connected, multi-page) — PROGRAM
+**Strategic repositioning.** GammaFlow shifts from a single-ticker GEX dashboard into a **multi-page
+product**: connect your brokerage positions → get **AI recommendations** built on the GEX profile +
+heuristics we compute per ticker. Surfaces: a **landing/splash** page (brand/hooks), a **Ticker viewer**
+(today's GEX dashboard, relocated), a **Scanner** (multi-ticker), and a **Positions** page (the shipped
+sim portfolio, expanded, + AI-recs-on-positions + open-sim-trade), eventually fed by **real broker
+positions**.
+
+**Owner decisions (this GATE I):**
+1. **Order boundary — narrowed, not full.** Connect a broker to **read real positions** (+ AI recs on
+   them); **trades stay simulated — no real order execution.** This **narrows the promoted
+   `no-real-order-path` canon** to "no real order *execution*" (reading real positions is now permitted).
+   *Pending formal demotion at the broker feature's GATE S* (precedent: `ai-external-no-llm`); Track A does
+   NOT exercise it (stays fully simulated/sim-only).
+2. **Broker integration — direct per-broker, Webull first** (not an aggregator). Feasibility-gated:
+   Webull third-party positions access is uncertain/region-gated → the broker feature is **blocked-on**
+   verifying Webull API access; design a **`PositionsProvider` port** (mirroring the market-data provider
+   port) so the broker is a contained adapter.
+3. **Sequence — Track A first.**
+
+**Security / going-live (system-6 activation):** connecting a real account is the **"going live" trigger**
+the roadmap waited for → re-promote the deferred **Security/red-team role (system-6)** + first-class
+credential handling when **Track B** starts. Track A (no real account) does not trigger it.
+
+**Decomposition (groom + run ONE at a time through the pipeline):**
+- **Track A — buildable now, NO broker, mostly FE:**
+  - `app-shell-landing` ← **CHOSEN FIRST**: multi-page routing shell + nav/layout + **landing/splash**
+    page; relocate the existing GEX dashboard → `/ticker` and the positions portfolio → `/positions`
+    unchanged; `/scanner` nav stub. FE-only restructure + one new page; reuses every shipped feature.
+  - `scanner`: multi-ticker scan page. **Invariant watch:** revisits the locked "single-ticker,
+    on-demand" decision (the watchlist scan was dropped for being too slow) — must re-justify + design for
+    perf (batch/throttle/cache). Promotes the parked §D multi-ticker-scanner item.
+  - `positions-page-expansion`: expand the sim portfolio into the full Positions page + **AI recs on
+    positions** (reuse `ai-recommendations` + the deferred position-aware `reassessment_prompt` seam) +
+    open-sim-trade.
+- **Track B — gated on decisions 2 + security:**
+  - `broker-connect`: Webull-direct, **read-only** real positions via the `PositionsProvider` port; lands
+    in the shipped positions "Live" tab seam; triggers the `no-real-order-path` narrowing + system-6.
+
+Brief for the chosen first feature at `.claude/contracts/app-shell-landing/BRIEF.md`; routing to the
+Architect (GATE A·X).
+
 ## Last GATE I — 2026-06-24 (owner request: positions portfolio)
 **Chosen → `positions-portfolio`** — owner-directed: evolve the shipped ghost-trade tracker from a single
 open sim position into a **multi-position portfolio** — a central all-positions view + per-ticker filtered
