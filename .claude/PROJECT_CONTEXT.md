@@ -178,8 +178,13 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - **60s cache + freshness/`stale` flag** — pollable without hammering; honest data age.
 - **AI gate** (`ai_eval.ready/changed/state_fingerprint`) — escalate to the AI only when
   actionable AND changed; keeps it off a firehose (user is prone to over-trading).
-- **Live spot = NBBO mid, not last trade** — smoother, always-current, better for anchoring;
-  Webull shows last trade, hence small benign differences.
+- **Live spot anchor = NBBO mid** — smoother, always-current, better for anchoring; the mid stays the
+  sole anchor for the headline price, the levels (walls/flip/peak/max-pain), and the live flip reprice.
+  **(Narrowed 2026-06-25, ticker-load-experience GATE S — system-7):** a **display-only live last-trade
+  readout** is now ALSO surfaced on the SSE payload beside the mid (so the page reconciles with a
+  broker's last-trade; Webull shows last-trade, hence small benign differences). The last-trade is a
+  READOUT only — it feeds nothing on the anchor/levels/flip/net-flow path. Was: "do not add last-trade."
+  Letting last-trade drive the anchor is a GATE-Z reversal.
 - **Honest live-vs-stale + session classifier** — never present a frozen price as "live";
   distinguishes overnight (uncovered) / closed / feed-lagging.
 - **Dark-pool = context only, capped, toggleable** — off-exchange volume includes internalized
@@ -259,6 +264,25 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   and a static `/scanner` stub. Live SSE page-scoped to the Ticker page (open/close/reopen, no
   double-subscribe); positions store persists across nav. Brand is **UI-only** (no code/package/store-key
   rename). `NO_BACKEND_CHANGE`. Scoring path untouched. *(2026-06-24.)*
+- **Ticker-page load experience (both lanes, additive)** — the ticker viewer (`/ticker/:symbol`) loads fast
+  and feels instant. **Backend:** new `src/core/chain_store.py`, a process-local, ticker-keyed, timestamped
+  shared **chain-INPUT** store — `LiveSession._refresh_chain` (already re-fetching the full chain every
+  120s) stashes the FULL unfiltered `market_data`; the REST cold-miss path short-circuits ONLY the chain
+  fetch to it (freshness-gated ≤ `CHAIN_PREWARM_MAX_AGE_SECONDS`, best-effort fallback, read-only, no
+  behavior change when no live session is active). The 3 independent vendor fetches (chain/daily/intraday)
+  now run **concurrently** (per-stage best-effort isolation preserved); `_serve` gained **request-coalescing**
+  (concurrent misses on one filter key share a single `compute_ticker`). The chain stays **full-chain**
+  (max-pain/PCR/Vol-OI/term need it). `compute_ticker` is unchanged as the sole transform: same `market_data`
+  in → **byte-identical bundle out** (score/tier/`state_fingerprint` proven identical cold==warm). Measured
+  cold load **7.8s → 1.2s** on an active session. The SSE payload now emits a live **`last_trade`** (the
+  trade-tape print, display-only — the mid stays the anchor; see §5 narrowing). A pre-warmed chain is
+  recorded honestly as a `shared_hit` (0ms) in observability. **Frontend:** the monolithic full-page spinner
+  is replaced by **skeleton-first load** — per-source skeletons (REST bundle / SSE / async AI-rec) fill
+  independently; cold-load skeleton is visually distinct from offline-degrade and from "unavailable this
+  cycle." A secondary **"Last trade"** readout sits beside the anchor (4 honest states; degrades with the
+  live fields on an SSE drop); the previously-mislabeled chip `· last $X` (actually the mid) is relabeled
+  `· mid $X`. QA PASS (Sonnet, de-correlated — 26/26 ACs, conformance 2/2, `nx test dashboard` 196/196).
+  *(2026-06-25.)*
 - **Backend observability** (operator-facing; trader path unchanged): the six bundle stages
   (`vendor_fetch` io_vendor, `engine_build`/`off_exchange` cpu_engine, `signals` cpu_signals,
   `persist` io_disk, `serialize_wrap` serialize) are timed into a per-request trace; `meta.trace_id`
@@ -293,7 +317,9 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 ## 7. Conventions
 <!-- shard: tags=conventions,env,run,config,vendor -->
 - **Env (`.env`):** `MASSIVE_API_KEY`, `DATA_FEED` (realtime|delayed), `CACHE_TTL_SECONDS` (60),
-  `STALE_AFTER_SECONDS` (1200; drop to ~120 on real-time), `GATE_SCORE` (50),
+  `STALE_AFTER_SECONDS` (**120** default since ticker-load-experience — the real-time tier; was 1200),
+  `CHAIN_PREWARM_MAX_AGE_SECONDS` (chain-pre-warm freshness budget, clamped ≤ `min(CHAIN_REFRESH_SECONDS,
+  STALE_AFTER_SECONDS)`), `GATE_SCORE` (50),
   `FLOW_WINDOW_SECONDS` (300), `LIVE_THROTTLE_SECONDS` (1.5), `CHAIN_REFRESH_SECONDS` (120),
   `INCLUDE_DARK_POOL` (true), `DARKPOOL_LOOKBACK_SECONDS` (3600), `BLOCK_MIN_SHARES` (5000;
   fixed institutional-size threshold for an off-exchange block print), `VOL_OI_UNUSUAL_THRESHOLD`

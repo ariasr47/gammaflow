@@ -149,10 +149,12 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
-- **`ticker-load-experience`** — `← NEXT (chosen 2026-06-25)`, in pipeline at GATE A·X. Ticker-page load
-  UX (skeletons + independent component render) + latency (parallelize vendor fetches) + live last-trade +
-  real-time-tier config. FE-led, both lanes; architect-first. Brief at
-  `.claude/contracts/ticker-load-experience/BRIEF.md`.
+- **`ticker-load-experience`** — `✓ SHIPPED + ARCHIVED (2026-06-25)` → `_archive/ticker-load-experience/`.
+  Both lanes (commit `10971f3`): chain pre-warm (cold 7.8s→1.2s on an active session) + 3-fetch concurrency
+  + request-coalescing + skeleton-first load + live `last_trade` readout + real-time freshness config.
+  Additive — score/tier/`state_fingerprint` byte-identical. QA PASS (Sonnet, de-correlated — 26/26 ACs,
+  conformance 2/2, 196/196 tests). **GATE S narrowed** the `live-spot=NBBO-mid` resolved decision (system-7:
+  mid stays the anchor; display-only last-trade readout added). Seams → OPEN_THREADS §7e.
 - **OWNER PIVOT program (positions-centric, multi-page):** Track A = `app-shell-landing` ✓ SHIPPED →
   `scanner` (still queued, was-next; deferred behind the owner's 2026-06-25 ticker-load redirect) →
   `positions-page-expansion`; Track B (gated) = `broker-connect`. See the "Last GATE I — OWNER PIVOT" note.
@@ -205,6 +207,16 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   decision-impact cull (trading-decision test) is **N/A** here — judge it on loop-fidelity, not edge;
   the promotion *judgement* + prose still stay with the Orchestrator (the hook only counts). Follow-on
   to the just-shipped Decision Ledger (`.claude/DECISION_LEDGER.md`; ORCHESTRATOR §3a).
+
+- **Engine higher-order-greek determinism** *(correctness hygiene — not a trading feature)* — `SURFACED
+  2026-06-25 (ticker-load-experience GATE Q)`. `engine.process_gex_profile` shows ~9th-significant-digit
+  float reduction-order jitter in `net_vanna`/`net_charm`/`net_volga` across identical inputs (a pre-existing
+  Python accumulation-order artifact, independent of the pre-warm/concurrency work). *Impact:* none observed
+  on the trading path — `opportunity_score`, all score inputs (`net_gex`/`gamma_flip`/walls/`max_pain`/
+  `put_call_ratio`), and `state_fingerprint` are byte-stable; only the three display-only higher-order greeks
+  jitter sub-visibly. *Fix:* a deterministic reduction (e.g. sorted/Kahan/`fsum` accumulation) in the GEX
+  pass. *Value L · Effort S.* **Decision-impact cull N/A** (correctness hygiene). Park until it ever surfaces
+  visibly; not blocking.
 
 ### C. Strategic / blocked (high value, gated on a decision or heavy lift)
 - **Data-vendor decision + overnight coverage** — Massive vs Databento (Blue Ocean overnight, full

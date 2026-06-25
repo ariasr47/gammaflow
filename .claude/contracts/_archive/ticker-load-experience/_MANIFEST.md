@@ -1,6 +1,6 @@
 # ticker-load-experience — pipeline manifest
 Entry:        architect-first
-Stage:        QA PASS (GATE Q) — 26/26 ACs, conformance 2/2, 196/196 tests; ready to SHIP (GATE S)
+Stage:        SHIPPED + ARCHIVED (GATE S @ 2026-06-25) — code commit 10971f3; canon folded; narrowed live-spot=NBBO-mid
 Repos:        both
 Brief:        BRIEF.md present
 Contracts:
@@ -13,4 +13,4 @@ Contracts:
 Conformance spec: .claude/tools/conformance/ticker-load-experience.json (standalone, system-12)
 Open amendments: none
 QA (GATE Q):  QA_REPORT PASS (Sonnet, de-correlated — 26/26 ACs, conformance 2/2, 196/196 tests)
-Last gateway:  GATE Q @ 2026-06-25 (PASS; awaiting GATE S ship)
+Last gateway:  GATE S @ 2026-06-25 (SHIPPED + ARCHIVED)

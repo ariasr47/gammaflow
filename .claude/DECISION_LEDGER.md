@@ -88,6 +88,21 @@
 | `live-vs-static-isolation` | app-shell-landing | S | Ticker live-degrade survives the route move (⏸ offline, static persists); live SSE is **page-scoped** — opens on `/ticker`, closes on nav-away, reopens on return, never double-subscribes | yes |
 | `operator-vs-trader-path-separation` | app-shell-landing | S | `/_ops/metrics` stays OFF the new nav shell and unlinked from the trader UI (verified) | yes |
 | `no-real-order-path` | app-shell-landing | S | all SIMULATED; positions "Live" tab stays the zero-import LOCKED placeholder; the landing's brokerage block is an honest non-navigating "coming soon" (no order/broker path) | yes |
+| `additive-keeps-score-byte-identical` | ticker-load-experience | S | pre-warm/concurrency/coalescing change only WHEN/HOW inputs are obtained — same `market_data` in → byte-identical bundle out; `opportunity_score`/`tier`/`state_fingerprint` identical cold==warm (QA re-proven: score 44, fp `b5c70f93c2d5`) | yes |
+| `best-effort-isolated-or-null` | ticker-load-experience | S | chain pre-warm + 3-fetch concurrency are best-effort: any miss/stale/malformed/fetch-exception falls back to a normal vendor fetch with no new error surface; `last_trade` nullable between prints/overnight | yes |
+| `live-vs-static-isolation` | ticker-load-experience | S | SSE `last_trade` is live-derived (dims with mid/spread/flow on a stream drop); cold-load skeleton is a DISTINCT state from offline-degrade and from "unavailable this cycle" | yes |
+| `live-spot=NBBO-mid` | ticker-load-experience | S | **NARROWING (system-7)** — `last_trade` ADDED as a display-only SSE readout; the NBBO mid stays the anchor for headline/levels/flip (`_levels_for_filter` keeps `self.mid`). Narrows THREADS §9 "do not add last-trade." | yes |
+
+> Note (GATE S, ticker-load-experience, 2026-06-25): perf + UX refinement of the ticker page (chain
+> pre-warm 7.8s→1.2s, fetch concurrency, request-coalescing, skeleton-first load, live last-trade). The
+> three already-canon keys (`additive-keeps-score-byte-identical`, `best-effort-isolated-or-null`,
+> `live-vs-static-isolation`) each gained an instance → **no new graduation**. The notable decision is a
+> **system-7 NARROWING** of the THREADS §9 resolved decision "Live spot = NBBO mid — do not add
+> last-trade": by explicit owner decision (2026-06-25) the rule is narrowed to "the **mid stays the
+> anchor** for headline/levels/flip; a **display-only last-trade readout MAY be added** beside it." Not a
+> promoted-canon key (it lived in THREADS §9 "Resolved", not the Promoted table), so it is narrowed in
+> place in THREADS §9 + PROJECT_CONTEXT §5 rather than moved to the Demoted table; the anchor decision
+> itself stands. Letting last-trade drive the anchor/levels/flip remains a GATE-Z reversal.
 
 > Note (GATE S, app-shell-landing, 2026-06-24): pure FE restructure + rebrand (Convexa, **UI-only** — no
 > code/package/store-key rename). The five binding keys above each gained an instance but are all already

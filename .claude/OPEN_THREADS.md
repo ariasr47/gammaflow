@@ -265,6 +265,30 @@ program:** `scanner` (Track A, next — revisits the single-ticker decision, nee
 `positions-page-expansion` (AI recs on positions + open-sim-trade), and the gated `broker-connect`
 (Webull-direct read-only positions → the `no-real-order-path` narrowing + the Security/system-6 role).
 
+## 7e. Ticker-page load experience (SHIPPED + ARCHIVED — both lanes done)
+Contracts archived at `.claude/contracts/_archive/ticker-load-experience/`. Owner request 2026-06-25
+(redirect off `scanner`): make `/ticker/:symbol` load fast + feel instant + show a trusted price. Measured
+first (live Massive feed): warm cache hit ~7ms but cold miss p50 3.5s (worst 9.6s), of which `vendor_fetch`
+~87% and the SINGLE options-chain call ~75% (~54 serial paginated round-trips for SPY's 13k contracts).
+**Backend** (`apps/api`, commit `10971f3`): new `src/core/chain_store.py` shared **chain-INPUT** store —
+`LiveSession._refresh_chain` produces the FULL unfiltered `market_data`; the REST cold-miss path
+short-circuits the chain fetch to it (freshness-gated, best-effort fallback, read-only, no behavior change
+without an active session) yielding cold **7.8s to 1.2s** on an active session; the 3 vendor fetches run
+concurrently (per-stage isolation preserved); request-coalescing on `_serve`; SSE emits live `last_trade`
+(display-only); `STALE_AFTER_SECONDS` default 1200 to 120 (+ `CHAIN_PREWARM_MAX_AGE_SECONDS`); pre-warm
+recorded honestly as a `shared_hit`. **Frontend** (`apps/dashboard` + `libs/api`): skeleton-first load
+(per-source skeletons, cold-load distinct from offline and from "unavailable this cycle"); secondary "Last
+trade" readout (4 honest states, degrades with live fields); relabeled the mislabeled `last $X` chip to
+`mid $X`; `LiveUpdate.last_trade` type. **QA (GATE Q)** on Sonnet (de-correlated): 26/26 ACs PASS,
+conformance 2/2, `nx test dashboard` 196/196, AC-Invariant-1 byte-identical (score 44, fp `b5c70f93c2d5`)
+independently re-proven. **GATE S narrowed** the §9 "live spot = NBBO mid / do not add last-trade" resolved
+decision to "mid stays the anchor; a display-only last-trade readout may be added" (system-7). Additive —
+score/tier/gate/`state_fingerprint` byte-identical. **Deferred seams (named, not built):** chain-pagination
+parallelization (vendor-capability-blocked, adapter-internal); `engine.process_gex_profile` vectorization
+(~10% CPU); any bundle-splitting (permanently gated behind the request-coalescing now added). **Latent
+finding logged (BACKLOG §B):** pre-existing ~9th-sig-digit float-ordering jitter in `net_vanna`/`net_charm`/
+`net_volga` (does NOT affect `opportunity_score`/score inputs/`state_fingerprint`; engine untouched here).
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
@@ -278,8 +302,12 @@ program:** `scanner` (Track A, next — revisits the single-ticker decision, nee
   true multi-session block history needs a heavier batched pull. Future.
 
 ## 9. Resolved decisions (do NOT revisit)
-- **Live spot = NBBO mid, not last trade** — smoother, better for anchoring; Webull shows last
-  trade, hence small benign differences. Keep mid; do not add last-trade.
+- **Live spot ANCHOR = NBBO mid** — smoother, better for anchoring; the mid stays the sole anchor for
+  the headline, levels, and live flip. **Narrowed 2026-06-25 (ticker-load-experience GATE S, system-7):**
+  a **display-only live last-trade readout** is now ALSO surfaced on the SSE payload beside the mid
+  (broker reconciliation; Webull shows last-trade, hence small benign differences). Last-trade is a READOUT
+  — it drives nothing on the anchor/levels/flip path. Was: "Keep mid; do not add last-trade." Letting
+  last-trade drive the anchor is a GATE-Z reversal. (Prose single-sourced in PROJECT_CONTEXT §5.)
 - **Gamma sourcing** — vendor gamma for walls/profile, analytic BS for the flip; the divergence
   is immaterial. Don't "fix" it via interpolation or borrow-rate calibration.
 - **Dark pool** — context only, capped confluence, toggleable; never a directional "smart money"
