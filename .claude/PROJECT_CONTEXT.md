@@ -6,9 +6,18 @@
 
 ## 1. Purpose & scope
 <!-- shard: tags=overview,purpose,scope -->
-GammaFlow is a **single-ticker options-positioning dashboard + analysis engine**. It turns an
-equity's option chain into dealer **gamma-exposure (GEX)** structure — call/put walls, the
-gamma flip, the magnet — then layers volatility context, real-time order flow, and a
+> **Repositioning in progress (2026-06-24): rebrand → "Convexa", a positions-centric, multi-page app.**
+> The product is shifting from a single-ticker dashboard to: **connect your positions → get AI
+> recommendations built on the GEX profile + heuristics we compute per ticker.** User-facing brand is
+> **Convexa** (UI wordmark only — code/packages/repo still "gammaflow"). The app is now multi-page —
+> **Landing** (`/`, the Convexa splash) · **Ticker viewer** (`/ticker/:symbol`, the GEX dashboard below)
+> · **Positions** (`/positions`, the sim portfolio) · **Scanner** (`/scanner`, a coming-soon stub). Real
+> **brokerage connection** (read-only positions, Webull-first) is a gated later track — see BACKLOG "Last
+> GATE I — OWNER PIVOT" + the narrowed `no-real-order-path` (read positions OK; **no real order
+> execution**). The analysis engine below is unchanged — it is now the **Ticker viewer** page.
+
+The core engine: turns an equity's option chain into dealer **gamma-exposure (GEX)** structure —
+call/put walls, the gamma flip, the magnet — then layers volatility context, real-time order flow, and a
 rule-based read of the current setup. It answers: *given dealer positioning, where is price
 attracted/repelled, is the regime mean-reverting or trending, and is there an edge now?*
 Built for **longer-dated (≈7–45 DTE) swing trading with optional intraday timing**. The
@@ -48,7 +57,17 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
 - `src/models/market_data.py` — `MarketState` Pydantic response model.
 
 **Frontend** (`apps/dashboard/` in the Nx monorepo, React 19 + Vite + MUI/Emotion):
-- `apps/dashboard/src/app/app.tsx` — dashboard (toolbar, stat tiles, setups, **Off-exchange
+- **Multi-page shell (Convexa, 2026-06-24):** `app/app.tsx` is now the **route table** (single
+  `BrowserRouter` + single dark MUI theme at `main.tsx`): `/` → `app/landing/` (the full-bleed Convexa
+  splash, outside the shell) · a persistent `app/shell/AppShell.tsx` (`<Outlet/>` nav — Convexa wordmark
+  + Ticker/Positions/Scanner, mounts once) wrapping `/ticker/:symbol` (→ `app/ticker/TickerDashboard.tsx`,
+  the relocated GEX dashboard; bare `/ticker`→TSLA) + `/positions` (→ `app/positions/PositionsPage.tsx`,
+  the relocated portfolio) + `/scanner` (→ `app/scanner/`, a static coming-soon stub) · `/_ops/metrics`
+  stays OFF the shell + unlinked. **Live SSE is page-scoped to the Ticker page** (opens on mount, closes
+  on nav-away, reopens on return, never double-subscribes); the positions store is a localStorage
+  singleton so it persists across nav. Brand is UI-only (durable keys / packages / identifiers unchanged).
+  The relocated `TickerDashboard` body is byte-identical to the old single-page dashboard described next.
+- `apps/dashboard/src/app/ticker/TickerDashboard.tsx` (was `app.tsx`) — dashboard (toolbar, stat tiles, setups, **Off-exchange
   blocks** section), polls bundle (60s) + subscribes SSE. Also four **always-on neutral
   positioning tiles** — `Net DEX`, `Vol/OI`, `IV skew` (slope → fear/greed/balanced), `Term
   structure` (contango/backwardation/flat) — plus a **Term-structure mini-card** (ATM-IV-by-tenor,
@@ -231,6 +250,15 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   `NO_BACKEND_CHANGE` — reuses `GET /api/contract` + SSE `mid`, `ghost-trade/mark.ts` (P/L) + the
   latency-trend ring buffer. Client-local durable store (loss-free v1→v2 migration); positions are **never
   an input** to `signals`/score/tier/`state_fingerprint`; `SIMULATED` everywhere. *(2026-06-24.)*
+- **Convexa multi-page shell + landing (FE-only)** — the rebrand + IA restructure (feature 1 of the
+  owner pivot). Single `BrowserRouter`/dark-MUI theme: `/` Convexa landing (dark-fintech splash —
+  hero hook "See the AI read on your real positioning", convexity-curve motif, value cards for the
+  today-working surfaces, honest non-navigating "coming soon" brokerage + Scanner), a persistent
+  `AppShell` nav (Ticker/Positions/Scanner; `/_ops/metrics` off-shell + unlinked), the relocated
+  `/ticker/:symbol` GEX viewer + `/positions` portfolio (relocate-don't-change — internals byte-identical),
+  and a static `/scanner` stub. Live SSE page-scoped to the Ticker page (open/close/reopen, no
+  double-subscribe); positions store persists across nav. Brand is **UI-only** (no code/package/store-key
+  rename). `NO_BACKEND_CHANGE`. Scoring path untouched. *(2026-06-24.)*
 - **Backend observability** (operator-facing; trader path unchanged): the six bundle stages
   (`vendor_fetch` io_vendor, `engine_build`/`off_exchange` cpu_engine, `signals` cpu_signals,
   `persist` io_disk, `serialize_wrap` serialize) are timed into a per-request trace; `meta.trace_id`

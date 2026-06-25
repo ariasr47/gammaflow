@@ -119,6 +119,14 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
+- **OWNER PIVOT program (positions-centric, multi-page):** Track A = `app-shell-landing` ✓ SHIPPED →
+  **`scanner` (NEXT)** → `positions-page-expansion`; Track B (gated) = `broker-connect`. See the "Last
+  GATE I — OWNER PIVOT" note above.
+- **app-shell-landing** — `✓ SHIPPED + ARCHIVED (2026-06-24)` → `_archive/app-shell-landing/`. FE-only
+  rebrand → **Convexa** (UI-only) + multi-page IA: `/` landing, `AppShell` nav, relocated `/ticker/:symbol`
+  + `/positions`, static `/scanner` stub. Page-scoped SSE; store persists across nav; `NO_BACKEND_CHANGE`.
+  Frontend `e8f8c06`; QA PASS (Sonnet, de-correlated — 42/42 ACs, 171 tests, no regression). GATE Z
+  (wording) resolved as a carve-out. Feature 1 of the pivot. Seams → OPEN_THREADS §7d.
 - **positions-portfolio** — `✓ SHIPPED + ARCHIVED (2026-06-24)` → `_archive/positions-portfolio/`. FE-only
   (`NO_BACKEND_CHANGE`) multi-position evolution of the ghost-trade tracker: central all-positions +
   per-ticker views, per-position P/L + Δ + trend sparkline, grouping + subtotals, customization + durable

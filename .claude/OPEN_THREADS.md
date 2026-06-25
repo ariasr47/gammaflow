@@ -246,6 +246,25 @@ Backend untouched. **Deferred seams (specified, not built):** the real **Live** 
 (blocked on the vendor/broker decision — §1; the locked tab marks the seam); same-contract merge/average
 (chose stack); closed-position pruning/archive policy; multi-leg strategy grouping beyond long-call/put.
 
+## 7d. Convexa multi-page shell + landing (SHIPPED + ARCHIVED — FE-only)
+Contracts archived at `.claude/contracts/_archive/app-shell-landing/`. Feature 1 of the **owner pivot**
+(positions-centric, brokerage-connected, multi-page — see BACKLOG "Last GATE I — OWNER PIVOT"). The
+**rebrand to "Convexa"** (UI wordmark only) + the IA restructure: single `BrowserRouter`/dark-MUI theme —
+`/` Convexa landing (dark-fintech splash, hero hook, convexity-curve motif, value cards, honest
+non-navigating "coming soon" brokerage + Scanner), a persistent `AppShell` nav (Ticker/Positions/Scanner;
+`/_ops/metrics` off-shell + unlinked), the **relocated** `/ticker/:symbol` GEX viewer + `/positions`
+portfolio (relocate-don't-change — internals byte-identical), a static `/scanner` stub. Live SSE
+**page-scoped** to the Ticker page (open on mount / close on nav-away / reopen on return / never
+double-subscribe); positions store persists across nav. `NO_BACKEND_CHANGE`; scoring path untouched.
+**QA (GATE Q)** on Sonnet (de-correlated): 42/42 ACs PASS, 171 tests green, no regression of the
+pre-existing suites, invariants clean, brand-UI-only (durable keys `gammaflow.positions.v2` /
+`gammaflow.ghost-trade.v1` unchanged). **GATE Z** (RESOLVED): standalone `/positions` degraded-mark
+wording reuses the existing `PositionRow` wording rather than editing the forbidden internal — observable
+behavior satisfies AC-PosLive-2/3/4 (a one-off carve-out, not a demotion). **Deferred / next in the
+program:** `scanner` (Track A, next — revisits the single-ticker decision, needs perf design),
+`positions-page-expansion` (AI recs on positions + open-sim-trade), and the gated `broker-connect`
+(Webull-direct read-only positions → the `no-real-order-path` narrowing + the Security/system-6 role).
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
