@@ -57,6 +57,9 @@ apps/api/.venv/
 apps/api/.env
 apps/api/.env.*
 apps/api/data/
+# Backend per-ticker persist dumps land in ./data when uvicorn is run from the repo root
+# (DATA_DIR is cwd-relative); ignore that too. Root-anchored so it can't catch a real source dir.
+/data/
 apps/api/conf/token.txt
 __pycache__/
 *.py[cod]
