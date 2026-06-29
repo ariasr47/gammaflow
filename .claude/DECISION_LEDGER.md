@@ -55,6 +55,11 @@
   never-delete, idempotent, never-throw), composing with any prior version chain. Generalizes the positions
   v1→v2 pattern. Not promoted (1 instance); logged for recurrence (the broker/persistent-DB tracks will
   likely hit it). *binding:yes.*
+- **`no-secrets-in-image`** (1 instance — containerize-apps, 2026-06-29) — a build artifact (container
+  image) carries NO secret: `.dockerignore` excludes `.env*`/`.venv`/credential files, no `COPY .env`, no
+  secret literal in any Dockerfile/compose; config + secrets are injected at RUNTIME via env (12-factor),
+  and the image runs non-root. Will recur on `deploy` + CI/CD (where image-pushing makes a leak real). Not
+  promoted (1 instance). *binding:yes.*
 - **`secret-encrypted-at-rest`** (1 instance — byo-ai-key, 2026-06-29) — a stored third-party secret is
   ENCRYPTED (not hashed — must be recoverable), via a server-side encryption key; never logged / returned /
   sent to the browser; write-only + masked hint + rotate/delete; decrypt-fail ⇒ treated as no usable

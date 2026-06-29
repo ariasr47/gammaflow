@@ -451,6 +451,16 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   main.py`); frontend `npx nx serve dashboard` (Vite :4200, proxies /api). Node via nvm-windows.
   Backend venv: `cd apps/api && py -m venv .venv && .venv/Scripts/python.exe -m pip install -r
   requirements.txt`.
+- **Containerized (`containerize-apps`, 2026-06-29):** `apps/api/Dockerfile` (python:3.12-slim, non-root,
+  uvicorn :8000) + `apps/dashboard/Dockerfile` (multi-stage Nx/Vite build at **repo-root context** →
+  unprivileged nginx :8080 serving `dist` + SSE-safe `/api`→`api:8000` proxy) + root `docker-compose.yml`.
+  Local full stack: `docker compose up --build` → http://localhost:8080. **Secrets injected at RUNTIME via
+  env (`env_file: ./apps/api/.env`), NEVER baked into an image** (`.dockerignore`s + explicit COPYs enforce
+  it); images run non-root. `apps/api/.env.example` is the value-less template. **Containers are stateless /
+  restart-resettable** — the in-memory SQLite resets accounts/sessions/AI-keys (set stable
+  `AUTH_SESSION_SIGNING_KEY`/`AI_KEY_ENCRYPTION_KEY` to survive restarts); the persistent store is the
+  pending `persistent-db` feature. (Build/run requires Docker Desktop — not installed in the dev box where
+  the files were authored.)
 - **Frontend tests (standing rule — part of every FE feature):** `npx nx test dashboard`
   (and `nx test api` for `libs/api`) — Vitest + jsdom + Testing Library (+ `@testing-library/user-event`
   + `jest-dom`) + v8 coverage, wired via `@nx/vite`; colocated `*.spec.tsx`/`*.spec.ts`. The FE

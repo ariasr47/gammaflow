@@ -1,0 +1,57 @@
+# Root .dockerignore — governs the FRONTEND build context (= repo root, see
+# apps/dashboard/Dockerfile). NOT inherited from .gitignore — authored here.
+# The exclusions are the structural guarantee of [no-secrets-in-image] for the
+# repo-root build context, and keep the context small/fast.
+#
+# IMPORTANT — DO NOT exclude what the FE build needs:
+#   libs/ (the @org/api source), apps/dashboard/, package.json, package-lock.json,
+#   nx.json, tsconfig.base.json, eslint.config.mjs. These stay IN the context.
+
+# Secrets / credentials anywhere in the tree — NEVER into an image layer (HARD).
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
+apps/api/conf/token.txt
+apps/api/conf/
+
+# Dependencies / virtualenvs (installed fresh in the build; huge + machine-specific).
+**/node_modules
+apps/api/.venv
+
+# Build output / caches.
+**/dist
+**/out-tsc
+.nx
+**/.vite
+**/*.tsbuildinfo
+
+# Ephemeral backend runtime output.
+apps/api/data
+/data
+
+# Python caches (the backend source rides in for nothing here, but be safe).
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Test / coverage output.
+**/test-output
+**/coverage
+
+# VCS / editor / agent / docker meta.
+.git
+.gitignore
+**/.vscode
+**/.idea
+.claude
+.cursor
+.gemini
+.codex
+.opencode
+.agents
+**/Dockerfile
+.dockerignore
+docker-compose*.yml

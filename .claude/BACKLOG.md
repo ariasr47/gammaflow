@@ -30,6 +30,24 @@
 
 ---
 
+## Last GATE I — 2026-06-29 (owner request: infrastructure — containerize, then deploy)
+**Chosen → `containerize-apps`** (step 1 of the infra/deploy program) — owner-directed. Author Docker
+artifacts: a `Dockerfile` for the FastAPI backend (non-root, env-injected config) + a multi-stage
+`Dockerfile` for the dashboard (Nx/Vite build → static-serve) + a root `docker-compose.yml` (one-command
+local full-stack) + `.dockerignore`s. Promotes the standing §B "Containerize each app" candidate. Decision-
+impact cull **N/A** (deploy-readiness/infra). Feasibility **pass to AUTHOR** — **Docker is NOT installed
+here**, so artifacts are written correct-by-construction + reviewed; runtime build-verify (`docker build`/
+`compose up`) is **deferred to a Docker Desktop install** (owner). Effort **M** · entry = **architect-first,
+GATE-M-style infra fast-path** (skip PM/UX, no interface change). **Invariant watch:** additive/no app
+change; **image-hygiene floor** (no secrets baked — `.dockerignore` excludes `.env`/`.venv`/`token.txt`/
+`node_modules`/`data/`; env at runtime; non-root). **Known follow-on:** in-memory state resets per container
+→ the `persistent-db` swap is the NEXT feature; deploy + host-pick follow that. Brief at
+`.claude/contracts/containerize-apps/BRIEF.md`; routing to the Architect (GATE A·X).
+**Program sequence:** `containerize-apps` → `persistent-db` (in-memory → managed Postgres behind the
+existing store ports; set a stable `AI_KEY_ENCRYPTION_KEY`) → `deploy` (host pick: backend on Railway/Fly,
+frontend on Cloudflare/Vercel, Postgres on Neon; CI/CD) → **activate Security/red-team (system-6)** at
+go-live.
+
 ## Last GATE I — 2026-06-28 (owner request: hybrid bring-your-own AI key)
 **Chosen → `byo-ai-key`** — owner-directed. **Hybrid** AI-key model: each signed-in user stores their own
 Anthropic key (encrypted at rest) and the in-app AI rec calls with THEIR key; the shared `ANTHROPIC_API_KEY`
@@ -210,6 +228,18 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
+- **`containerize-apps`** — `✓ SHIPPED + ARCHIVED (2026-06-29)` → `_archive/containerize-apps/`. Step 1 of
+  the infra/deploy program (GATE-M-style infra fast-path; PM/UX skipped). Authored 7 Docker artifacts:
+  `apps/api/Dockerfile` (python:3.12-slim, non-root uid 10001, explicit COPYs, socket healthcheck, uvicorn
+  0.0.0.0 no-reload), `apps/dashboard/Dockerfile` (multi-stage: `nx build @org/dashboard` at repo-root
+  context → unprivileged nginx serving `dist` + SSE-safe `/api` proxy), `nginx.conf`, root + `apps/api`
+  `.dockerignore`, root `docker-compose.yml` (one-command local stack, runtime env_file, stateless documented),
+  `apps/api/.env.example` (value-less; gitignore negation `!apps/api/.env.example` added to track it).
+  **No app code / requirements changed.** **Image-hygiene floor verified** (no secrets baked — conductor
+  static review PASS). **Docker NOT installed here** → runtime build-verify (`docker compose up --build`)
+  **deferred to a Docker Desktop install** (owner). New ledger watch-list key `no-secrets-in-image`. Seams →
+  OPEN_THREADS §7i. **Next:** `persistent-db` (in-memory → managed Postgres; stable `AI_KEY_ENCRYPTION_KEY`)
+  → `deploy` → system-6.
 - **`byo-ai-key`** — `✓ SHIPPED + ARCHIVED (2026-06-29)` → `_archive/byo-ai-key/`. Hybrid per-user AI key:
   each user stores their own Anthropic key (encrypted, Fernet, write-only/masked) and the AI rec calls with
   THEIR key (own-key-first); the shared key gives admins only a free allowance (`AI_REC_ADMIN_EMAILS`,

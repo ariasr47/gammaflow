@@ -381,6 +381,34 @@ client at go-live; `interface_conformance.py` is cookieless so the auth-gated ke
 runtime/FE tests not the sweep (a small build-system follow-up: teach the tool cookie/bootstrap auth);
 `AI_KEY_ENCRYPTION_KEY` must be set to a stable value once a persistent store lands (else stored keys reset).
 
+## 7i. Containerize the apps (SHIPPED + ARCHIVED — infra fast-path, author-only)
+Contracts archived at `.claude/contracts/_archive/containerize-apps/`. Owner-directed 2026-06-29, step 1 of
+the infra/deploy program. **GATE-M-style infra fast-path** (architect → one infra build pass → conductor
+static review; PM/UX skipped — no product surface, `NO_INTERFACE_CHANGE`). **7 new files, no app-code change:**
+`apps/api/Dockerfile` (python:3.12-slim, WORKDIR /app, explicit COPYs of `main.py`/`src`/`prompts`/
+`market_state_glossary.md` — no `COPY . .`, non-root uid 10001, writable `/app/data`, Python-socket
+HEALTHCHECK on :8000, `uvicorn main:app --host 0.0.0.0` no-reload), `apps/dashboard/Dockerfile` (multi-stage:
+`node:20-alpine` → `npm ci` → `npx nx build @org/dashboard` at **repo-root context** because `@org/api` is
+source-consumed → `nginxinc/nginx-unprivileged` serving `apps/dashboard/dist` with SPA fallback + SSE-safe
+`/api`→`api:8000` proxy), `apps/dashboard/nginx.conf`, root + `apps/api` `.dockerignore` (the structural
+`[no-secrets-in-image]` guard — exclude `.env*`/`.venv`/`conf/token.txt`/`node_modules`/`.git`/`dist`/`.nx`/
+`data/`/caches; root keeps `libs/`+lockfile+nx config IN context), root `docker-compose.yml` (one-command
+local stack; backend secrets via runtime `env_file: ./apps/api/.env`, NEVER baked; `web depends_on api:
+service_healthy`), and a value-less `apps/api/.env.example` (tracked via a `!apps/api/.env.example` gitignore
+negation).
+**Verification:** **Docker is NOT installed in this environment** → the artifacts were authored
+correct-by-construction + the architect's §8 review checklist run by the executioner + a **conductor static
+review** (secret-leak scan clean; both `.dockerignore`s + explicit-COPY backend confirm no secret can enter a
+layer; non-root + healthcheck + correctness PASS; `git status` shows only new files). The **runtime
+build-verify is DEFERRED to the owner installing Docker Desktop** — `docker compose up --build` then open
+http://localhost:8080 (spot checks: `docker compose exec api whoami`→appuser, `docker history convexa-api`→
+no `.env`/`.venv` layer, restart→state resets). New ledger watch-list key **`no-secrets-in-image`**.
+**Known follow-on (documented, NOT solved):** both containers are **stateless / restart-resettable** — the
+in-memory SQLite resets all accounts/sessions/AI-keys and isn't shared across replicas → **`persistent-db`
+is the required NEXT feature** (in-memory → managed Postgres behind the existing store ports + a stable
+`AI_KEY_ENCRYPTION_KEY`), then **`deploy`** (host pick) → **activate Security/red-team (system-6)** at
+go-live (the adversarial review of the deploy/secret-handling artifacts lands there).
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
