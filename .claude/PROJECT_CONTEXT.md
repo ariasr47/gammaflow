@@ -274,6 +274,13 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   FE-only**: a bypassed/absent client check must still be rejected at the server. The FE check exists for
   UX, not enforcement. *(user-accounts — the GATE-Q AC-E7 catch where a sim-trade write gate was FE-only;
   byo-ai-key — server-authoritative credential endpoints + AI-rec key resolution. 2 binding.)*
+- **`[secret-encrypted-at-rest]`** (promoted 2026-06-29, 2 binding) — a stored **recoverable** secret (a
+  user/third-party API key, a broker token, etc.) is **encrypted at rest** (symmetric, server-side key —
+  NOT hashed, since it must be usable), **persisted as ciphertext only** (the crypto boundary sits *before*
+  the store, so no store/DB ever sees plaintext), and **never logged, returned in a response, or sent to
+  the browser** — write-only from the client (masked hint only) + rotate/delete; a decrypt failure is
+  treated as no-usable-secret, never a leak. *(byo-ai-key — the encrypted per-user Anthropic key;
+  persistent-db — the ciphertext-only boundary held when the key moved to Postgres. 2 binding.)*
 
 ## 6. Current feature state (works end-to-end)
 <!-- shard: tags=features,state,observability,darkpool,ghost-trade,dex,personas,metrics -->
@@ -428,7 +435,12 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   `AI_REC_COOLDOWN_SECONDS` (60), `AI_REC_DAILY_CAP` (50), `AI_REC_TIMEOUT_SECONDS` (60),
   `AI_REC_IN_APP_ENABLED` (true), `AI_REC_STUB` (off; stub LLM provider for keyless/no-cost verification).
   **Auth (user accounts):** `ACCOUNT_STORE` (store backend selector, default `memory` = in-memory SQLite
-  that resets on restart; the persistent adapter is a registered seam, not built), `AUTH_SESSION_SIGNING_KEY`
+  that resets on restart; **`postgres` = the persistent adapter shipped in `persistent-db`** — reads
+  `DATABASE_URL` (+ `DATABASE_POOL_MAX`, default 10) at runtime, never baked; `src/auth/postgres_store.py`,
+  psycopg3 sync, ciphertext-only, idempotent schema bootstrap; a Postgres outage fails auth closed (503/
+  anonymous) while the anonymous bundle/SSE path stays up. **In persistent mode `AUTH_SESSION_SIGNING_KEY` +
+  `AI_KEY_ENCRYPTION_KEY` MUST be set to STABLE values** or durable cookies/encrypted keys break on restart),
+  `AUTH_SESSION_SIGNING_KEY`
   (server-side HMAC key for the session cookie; absent ⇒ an **ephemeral per-process key** so cookies also
   reset on restart — set it once a persistent store lands), session-lifetime knobs (idle + absolute expiry),
   and the **Google OAuth** creds `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`

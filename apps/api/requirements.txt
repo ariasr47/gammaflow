@@ -32,3 +32,13 @@ authlib
 # argon2). Keyed by the gitignored env AI_KEY_ENCRYPTION_KEY (absent ⇒ ephemeral per-process key,
 # no crash). Used ONLY inside src/auth/crypto.py — never logs/returns the key (byo-ai-key §4/§7).
 cryptography
+
+# --- persistent-db (Postgres auth store; server-side only) ---
+# psycopg 3, the SYNC Postgres driver (the auth ports are sync -- NO async). [binary] ships a
+# prebuilt wheel so no local C build toolchain is needed on Windows / a slim image. Used ONLY
+# inside src/auth/postgres_store.py (the auth leaf) when ACCOUNT_STORE=postgres; in-memory stays
+# the default. The DB only ever sees ciphertext + the masked last4 (persistent-db ARCHITECTURE 3.4/8).
+psycopg[binary]
+# The connection pool (psycopg_pool.ConnectionPool) -- one process-wide pool replaces the in-memory
+# adapter module lock (ARCHITECTURE 1.3). No ORM, no migration framework (idempotent bootstrap DDL).
+psycopg-pool

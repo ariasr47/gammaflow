@@ -409,6 +409,38 @@ is the required NEXT feature** (in-memory → managed Postgres behind the existi
 `AI_KEY_ENCRYPTION_KEY`), then **`deploy`** (host pick) → **activate Security/red-team (system-6)** at
 go-live (the adversarial review of the deploy/secret-handling artifacts lands there).
 
+## 7j. Persistent datastore — in-memory → Postgres (SHIPPED + ARCHIVED — backend infra fast-path)
+Contracts archived at `.claude/contracts/_archive/persistent-db/`. Owner-directed 2026-06-29, step 2 of the
+infra/deploy program. **GATE-M-style infra fast-path** (architect → backend build → conductor static review;
+PM/UX skipped, `NO_INTERFACE_CHANGE`/`NO_UI_CHANGE`). Adds a **persistent Postgres adapter behind the
+existing 4 auth ports** so accounts/sessions/settings/encrypted-AI-keys survive restarts + span replicas.
+**Backend** (`apps/api`, new files + edits): new `src/auth/postgres_store.py` (psycopg3 **sync** raw-SQL,
+mirrors `sqlite_store.py` statement-for-statement; single `psycopg_pool.ConnectionPool`; idempotent
+`CREATE TABLE/INDEX IF NOT EXISTS` bootstrap; 4 tables w/ Postgres dialect — `%s`, `ON CONFLICT`,
+`DOUBLE PRECISION`, native `BOOLEAN`, `email_lower`/`google_sub` UNIQUE, `idx_sessions_user_id`; **ciphertext
++ last4 columns only**); `__init__.py` env factory gains `ACCOUNT_STORE=postgres` (+ `DATABASE_URL`,
+`DATABASE_POOL_MAX`), **in-memory stays the default**; `service.py` hardened so `get_settings`/`write_settings`
+map a store fault into the auth-class 503 (and `router.py` GET `/settings` now catches `AuthError` so it
+surfaces correctly — the one file beyond the original list, transparently flagged, no interface change);
+`requirements.txt` += `psycopg[binary]` + `psycopg-pool`; `.env.example` += `DATABASE_URL` + a prominent
+**STABLE-KEY** block (`AI_KEY_ENCRYPTION_KEY`/`AUTH_SESSION_SIGNING_KEY` must be stable in persistent mode or
+durable encrypted keys/cookies break on restart). `sqlite_store.py`/`ports.py`/`crypto.py`/`main.py`/scoring
+all untouched.
+**DB-outage fail mode:** the adapter raises (never false-success) → existing machinery yields 503
+`auth_unavailable` (signup/login/gated) or anonymous (who-am-I); the **anonymous bundle/SSE/trader path
+never touches the DB and stays fully up** — auth fails closed.
+**Verification:** **no Postgres in the dev box** → live-DB verify DEFERRED; verified by the **in-memory-
+default conformance (PASS, no regression)** + statement-level SQL parity review + ciphertext-only/no-crypto-
+import/leaf-boundary AST checks + a secret scan (clean — only the value-less `DATABASE_URL` doc placeholder).
+**GATE S:** `secret-encrypted-at-rest` GRADUATED into canon (2 binding: byo-ai-key + this — ciphertext-only
+held across the new store); `no-secrets-in-image` at 2 instances but **held to `deploy`** (governs published
+artifacts). **Owner runtime-verify (when a `DATABASE_URL` exists — local Docker Postgres or managed):** set
+`ACCOUNT_STORE=postgres` + stable keys → sign up / save settings / save an AI key → **restart → still there**;
++ a 2-replica share test + a Postgres-outage drill. **Deferred seam:** the per-admin AI metering counters are
+process-local (not behind the stores) → not shared across replicas — a future centralization item, out of
+scope here. **Next:** `deploy` (Railway backend + Cloudflare Pages frontend; cross-origin `/api` wiring) →
+Security/red-team (system-6) at go-live.
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
@@ -453,3 +485,8 @@ go-live (the adversarial review of the deploy/secret-handling artifacts lands th
   cost-bearing action is enforced **server-side** (boundary of record), never FE-only; a bypassed/absent
   client check must still be rejected by the server. (user-accounts AC-E7 catch; byo-ai-key credential +
   AI-rec gating.) See PROJECT_CONTEXT §5.
+- **`[secret-encrypted-at-rest]`** (promoted 2026-06-29, 2 binding) — a stored recoverable secret is
+  encrypted at rest (symmetric, server-side key, not hashed), persisted ciphertext-only (crypto before the
+  store), never logged/returned/browser; write-only + rotate/delete; decrypt-fail ⇒ no-usable-secret, no
+  leak. (byo-ai-key encrypted AI key; persistent-db held the ciphertext boundary into Postgres.) See
+  PROJECT_CONTEXT §5.

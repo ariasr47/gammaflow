@@ -30,6 +30,34 @@
 
 ---
 
+## Last GATE I — 2026-06-29 (infra program, step 2: persistent datastore)
+**Chosen → `persistent-db`** (step 2 of the infra/deploy program). Swap the in-memory SQLite auth stores
+for **persistent Postgres** behind the existing ports (`UserStore`/`SessionStore`/`UserSettingsStore`/
+`UserCredentialStore`) so accounts/sessions/settings/encrypted-AI-keys **survive restarts + span replicas**
+— the must-do-before-deploy step (the §4 "externalize your state" lesson). New adapter selected by the
+existing env factory (`ACCOUNT_STORE=postgres` + `DATABASE_URL`); in-memory stays the local/test default.
+Decision-impact cull **N/A** (deploy-readiness). Feasibility **pass to BUILD** — the ports + env-factory
+already exist (provider pattern), so it's a contained adapter + schema/migrations; **runtime-verify needs a
+Postgres instance** (dev box has none) → deferred like Docker. Effort **L** · entry = **architect-first**
+(adapter shape raw-SQL-vs-ORM + async/sync, schema + migrations, pooling, the **DB-outage fail mode** — auth
+fails closed, trader/bundle path stays up, the best-effort carve-out, ciphertext-only AI-key boundary).
+**Invariant watch:** `additive-keeps-score-byte-identical` (storage-only, trading path untouched),
+`best-effort-isolated-or-null` (DB outage degrades auth, not the anonymous bundle/SSE), `secret-encrypted-at-
+rest` (ciphertext-only in the DB), `no-secrets-in-image` (`DATABASE_URL` via runtime env). No interface/UI/
+scoring change. **Recommended target: Postgres** (deploy-ready; SQLite-file is a single-instance dead-end).
+Brief at `.claude/contracts/persistent-db/BRIEF.md`; routing to the Architect (GATE A·X). **Then:** `deploy`
+→ Security/red-team (system-6) at go-live.
+
+**HOST DECISION (owner, 2026-06-29) — scopes the `deploy` feature:** backend → **Railway** (container +
+managed Postgres → `DATABASE_URL`; long-running/SSE; runtime env for all secrets); frontend → **Cloudflare
+Pages** (static Vite build; generous/commercial-OK, no egress fees). This is a **SPLIT-host** deploy, so the
+`deploy` feature must wire the **cross-origin `/api`**: the Cloudflare-served SPA calls the Railway backend
+on a different origin → either **CORS** on FastAPI (allow the Pages origin) OR a **Cloudflare Pages proxy/
+rewrite** of `/api/*` → the Railway URL (preferred — keeps same-origin + no CORS), plus the frontend build
+needs the backend base URL (build-time env / rewrite). Note: the shipped `apps/dashboard/Dockerfile` +
+nginx-proxy is now the **local-`docker compose` + optional single-host** path; for the Cloudflare path,
+Pages builds the static output directly (the container isn't used). All deferred to the `deploy` feature.
+
 ## Last GATE I — 2026-06-29 (owner request: infrastructure — containerize, then deploy)
 **Chosen → `containerize-apps`** (step 1 of the infra/deploy program) — owner-directed. Author Docker
 artifacts: a `Dockerfile` for the FastAPI backend (non-root, env-injected config) + a multi-stage
@@ -228,6 +256,17 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
+- **`persistent-db`** — `✓ SHIPPED + ARCHIVED (2026-06-29)` → `_archive/persistent-db/`. Step 2 of the
+  infra program (backend infra fast-path). Added a **persistent Postgres adapter** (`src/auth/postgres_store.py`,
+  psycopg3 sync raw-SQL behind the existing 4 auth ports; pool; idempotent bootstrap; ciphertext-only) selected
+  by `ACCOUNT_STORE=postgres`+`DATABASE_URL` (**in-memory stays default**); `service.py`/`router.py` settings
+  fail-closed hardening; deps `psycopg[binary]`+`psycopg-pool`; `.env.example` stable-key block. So
+  accounts/sessions/settings/encrypted-AI-keys **survive restarts + span replicas** (the externalize-state
+  step). DB-outage = auth fails closed (503/anon), trader path stays up. **No interface/UI/scoring change**
+  (in-memory conformance PASS, no regression). **Live-Postgres verify DEFERRED** (no Postgres in dev box) —
+  verified by parity review + the in-memory regression proof. **GATE S graduated `secret-encrypted-at-rest`**
+  (2 binding); `no-secrets-in-image` held to `deploy`. Deferred seam: per-admin metering counters are
+  process-local (not shared across replicas). Seams → OPEN_THREADS §7j. **Next:** `deploy`.
 - **`containerize-apps`** — `✓ SHIPPED + ARCHIVED (2026-06-29)` → `_archive/containerize-apps/`. Step 1 of
   the infra/deploy program (GATE-M-style infra fast-path; PM/UX skipped). Authored 7 Docker artifacts:
   `apps/api/Dockerfile` (python:3.12-slim, non-root uid 10001, explicit COPYs, socket healthcheck, uvicorn

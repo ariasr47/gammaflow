@@ -179,7 +179,12 @@ async def get_settings(request: Request):
     resolved = svc.resolve_session(_cookie(request))
     if not resolved.authenticated:
         return _error_response(errors.settings_auth_required())
-    return svc.get_settings(resolved.user)
+    try:
+        return svc.get_settings(resolved.user)
+    except errors.AuthError as e:
+        # 503 auth_unavailable when the store faults mid-request (persistent-db §5); keeps settings
+        # in the auth-class envelope instead of a bare 500. No interface/shape change.
+        return _error_response(e)
 
 
 @router.put("/settings")

@@ -229,12 +229,36 @@ class AuthService:
     # ------------------------------------------------------------------ settings
 
     def get_settings(self, user: UserRecord) -> dict:
-        settings = self.stores.settings.upsert_defaults(user.id)
+        """
+        Read (or default-create) the user's settings bag. On SUCCESS behavior is identical to the
+        in-memory path. A non-`AuthError` STORE fault (e.g. a DB outage in the persistent adapter
+        mid-request, after the session resolved) is mapped to `auth_unavailable` (503) so settings
+        stay inside the auth-class envelope instead of becoming a bare FastAPI 500 — behavior-
+        faithful internal hardening, no interface/shape change (persistent-db ARCHITECTURE §5).
+        """
+        try:
+            settings = self.stores.settings.upsert_defaults(user.id)
+        except errors.AuthError:
+            raise
+        except Exception:
+            logger.warning("auth: settings read faulted; reporting auth unavailable", exc_info=False)
+            raise errors.auth_unavailable()
         return settings.to_wire()
 
     def write_settings(self, user: UserRecord, patch: dict) -> dict:
-        """Apply a subset patch (server-wins, D7) and echo the full saved bag. 422 on bad theme."""
-        settings = self.stores.settings.update(user.id, patch)
+        """
+        Apply a subset patch (server-wins, D7) and echo the full saved bag. 422 on bad theme. On
+        SUCCESS behavior is identical to the in-memory path; a non-`AuthError` STORE fault is mapped
+        to `auth_unavailable` (503) (the 422 validation `AuthError` still propagates unchanged) —
+        keeping settings in the auth-class envelope, no interface change (persistent-db §5).
+        """
+        try:
+            settings = self.stores.settings.update(user.id, patch)
+        except errors.AuthError:
+            raise
+        except Exception:
+            logger.warning("auth: settings write faulted; reporting auth unavailable", exc_info=False)
+            raise errors.auth_unavailable()
         return settings.to_wire()
 
     # ------------------------------------------------------------------ AI credential (BYO key)
