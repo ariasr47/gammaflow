@@ -227,6 +227,19 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   (`OPEN_THREADS` §7)
 
 ### B. Ready candidates (feasible, small, unscheduled)
+- **Containerize each app (Dockerfile per deployable) + deployment readiness** — `RAISED 2026-06-25
+  (owner; hosting/deploy planning)`. One `Dockerfile` per deployable — the **FastAPI backend** (`apps/api`,
+  uvicorn) and the **React/Vite frontend** (`apps/dashboard` → static build, served via a CDN/static host
+  or an nginx container) — plus an optional `docker-compose.yml` for a one-command local full-stack run. In
+  the **Nx monorepo** each app sets its own build context/root. *Impact:* makes the **host a swappable
+  decision** (the same container runs on Railway / Render / Fly.io / Cloud Run / a Hetzner VPS) — the key
+  anti-lock-in move; **prerequisite for any real deployment.** *Value M (deployment readiness) · Effort M.*
+  **Build-system/infra class — trading-decision cull N/A** (judge on deploy portability, not trading edge).
+  **Context:** **GitHub** chosen as the remote git host (2026-06-25; *remote not yet created/pushed* — the
+  repo is still local-only). Relates to the **go-live trigger** (re-promotes the Security/red-team role
+  system-6) + the hosting options weighed this session (Cloud Run / Railway / Fly / Hetzner+Coolify;
+  frontend on Cloudflare Pages / Vercel / Firebase Hosting). Follow-on: a GitHub Actions CI/deploy workflow
+  (run `nx test` + conformance on push, then deploy).
 - **Live gamma-flip anchoring** — outside RTH, anchor the flip search to `gex_spot` (close) not the
   live mid, so a gapped pre-market anchor can't select a different crossing; also drop the per-tick
   `Gamma flip $…` INFO log to debug. *Impact:* a steadier, more consistent displayed flip across
