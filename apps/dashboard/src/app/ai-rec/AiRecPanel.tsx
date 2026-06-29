@@ -9,6 +9,7 @@
  * wording, the export floor reachable from every state. SIMULATED everywhere.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card, CardContent, Stack, Typography, Button, Chip, Tooltip, Alert, Box, Divider,
   FormControl, InputLabel, Select, MenuItem, CircularProgress,
@@ -20,10 +21,21 @@ import type { AiRec, RecRequestOpts } from './useAiRecommendation';
 import {
   COPY, personaChip, asOfChip, cooldownLabel, cooldownCaption, capTitle, CAP_CAPTION, staleStrip,
   staleBornStrip, friendlyResetTime, retryInCooldown, retryWhenReset,
+  BYO_KEY, adminExhaustedTitle, freeUsesChip, OWN_KEY_CHIP, FREE_USES_TOTAL_FALLBACK,
 } from './copy';
 import { useGate } from '../auth/useGate';
 import { SignInPrompt } from '../auth/SignInPrompt';
 import { AUTH_COPY } from '../auth/copy';
+
+/** Map an `unavailable` rec's `unavailable_reason` to one of the three key-resolution CTA states
+ *  (a/c/e). Returns null when it's NOT a byo-ai-key reason (so the shipped `unavailable` block shows).
+ *  The FE keys ONLY off these three intents (UX_BLUEPRINT §3); any other reason falls through. */
+function byoCtaState(rec: RecResponse | null): 'no_key' | 'over_limit' | 'shared_key_unconfigured' | null {
+  if (!rec || rec.status !== 'unavailable') return null;
+  const r = rec.unavailable_reason;
+  if (r === 'no_key' || r === 'over_limit' || r === 'shared_key_unconfigured') return r;
+  return null;
+}
 
 /** Canonical persona source with the FE embed as the offline / assembly-failure fallback (E7).
  *  Tries `GET /api/personas` once; on any fault, keeps the embedded presets. Non-blocking. */
@@ -60,11 +72,15 @@ export function AiRecPanel({
   readPersonaId, onChangeReadPersona,
 }: Props) {
   const { rec, loading, stale, inAppEnabled, cap, effectiveGateState, cooldownRemaining, gate } = ai;
+  const navigate = useNavigate();
 
   // Auth gate is OUTERMOST over ai-rec's own gating (D6f, AC-E4/E5). Logged-out ⇒ the "ask AI" control
   // shows a sign-in prompt and the LLM is NOT invoked; ai-rec's cooldown/cap/no_key are NOT shown. The
   // manual export floor stays anonymous-usable (AC-E6) — that control lives in the header, ungated.
   const authGate = useGate();
+
+  // The "Add your key in Settings" CTA navigates to the Settings route + deep-links the AI-key section.
+  const goToSettings = () => navigate('/settings#ai-key');
 
   const activeName = personas.find((p) => p.id === activePersonaId)?.name ?? 'Default (no persona)';
   const readName = personas.find((p) => p.id === readPersonaId)?.name ?? activeName;
@@ -78,9 +94,15 @@ export function AiRecPanel({
       () => ai.request({ ...o, personaId: readPersonaIdForRequest, personaName: readName }),
     );
 
-  // Exactly one body state.
+  // The byo-ai-key key-resolution state (layer 3, UX_BLUEPRINT §2/§3). Read OFF the status fields,
+  // never re-derived: an `unavailable` rec whose reason is one of no_key (a) / over_limit (c) /
+  // shared_key_unconfigured (e) renders a distinct CTA block instead of the generic unavailable Alert.
+  const byoCta = byoCtaState(rec);
+
+  // Exactly one body state. A byo CTA (a/c/e) preempts the generic `unavailable` block.
   const phase =
     loading ? 'loading'
+    : byoCta ? 'byo_cta'
     : rec?.status === 'unavailable' ? 'unavailable'
     : rec && rec.status === 'produced' && rec.strategy?.decision === 'no_trade' ? 'no_trade'
     : rec && rec.status === 'produced' ? 'produced'
@@ -118,6 +140,12 @@ export function AiRecPanel({
         {/* Body */}
         {phase === 'loading' && <LoadingBlock ticker={ticker} readName={readName} />}
 
+        {/* byo-ai-key CTA states (a/c/e) — distinct testids + copy; all route to Settings. The
+            "View what's sent" export floor in the header stays present in every state (AC-23). */}
+        {phase === 'byo_cta' && byoCta && (
+          <ByoKeyCta reason={byoCta} rec={rec as RecResponse} onAddKey={goToSettings} />
+        )}
+
         {phase === 'unavailable' && (
           <UnavailableBlock cap={cap} cooldownRemaining={cooldownRemaining} onRetry={ai.retry} />
         )}
@@ -135,8 +163,8 @@ export function AiRecPanel({
         )}
 
         {/* The action region (primary action in idle; the NEXT-query control alongside a rendered
-            rec). Hidden while loading and while showing the unavailable block (it owns Retry). */}
-        {phase !== 'loading' && phase !== 'unavailable' && (
+            rec). Hidden while loading, the byo CTA, and the unavailable block (each owns its action). */}
+        {phase !== 'loading' && phase !== 'unavailable' && phase !== 'byo_cta' && (
           <>
             {!hasRec && <SnapshotHint bundle={bundle} />}
             {/* Auth OUTERMOST: logged-out (or a server 403 on a stale cookie) ⇒ sign-in prompt ONLY —
@@ -297,8 +325,44 @@ function UnavailableBlock({ cap, cooldownRemaining, onRetry }: {
   );
 }
 
-// ---- Provenance header (AC3/AC4) -------------------------------------------------------------
+// ---- byo-ai-key CTA states (a/c/e) — UX_BLUEPRINT §3 ------------------------------------------
+// Three observably-distinct CTA bodies (distinct testid + title/body copy; same button label). None
+// is an error red; none frames a free trial. (c) implies daily renewal. Each routes to Settings.
+function ByoKeyCta({
+  reason, rec, onAddKey,
+}: {
+  reason: 'no_key' | 'over_limit' | 'shared_key_unconfigured';
+  rec: RecResponse;
+  onAddKey: () => void;
+}) {
+  const total = rec.free_uses_total ?? FREE_USES_TOTAL_FALLBACK;
+  const cfg =
+    reason === 'no_key'
+      ? { testid: 'ai-rec-state-no-key', title: BYO_KEY.noKey.title, body: BYO_KEY.noKey.body, cta: BYO_KEY.noKey.cta }
+      : reason === 'over_limit'
+      ? { testid: 'ai-rec-state-admin-exhausted', title: adminExhaustedTitle(total), body: BYO_KEY.adminExhausted.body, cta: BYO_KEY.adminExhausted.cta }
+      : { testid: 'ai-rec-state-shared-unconfigured', title: BYO_KEY.sharedUnconfigured.title, body: BYO_KEY.sharedUnconfigured.body, cta: BYO_KEY.sharedUnconfigured.cta };
+  return (
+    <Box sx={{ mt: 1, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }} data-testid={cfg.testid}>
+      <Typography variant="subtitle1">{cfg.title}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{cfg.body}</Typography>
+      <Button
+        variant="contained" size="small" sx={{ mt: 1.5 }}
+        data-testid="ai-rec-add-key-cta" onClick={onAddKey}
+      >
+        {cfg.cta}
+      </Button>
+    </Box>
+  );
+}
+
+// ---- Provenance header (AC3/AC4) + byo-ai-key key-source chips (b/d) --------------------------
 function Provenance({ rec }: { rec: RecResponse }) {
+  // The provenance chip reads ONLY `key_source` (never a score field — AC-14). shared_admin (b) ⇒ the
+  // subordinate free-uses chip; own_key (d) ⇒ the "Using your key" chip. NO chip for none.
+  const showFreeUses = rec.key_source === 'shared_admin' && rec.remaining_free_uses != null;
+  const showOwnKey = rec.key_source === 'own_key';
+  const freeUsesTotal = rec.free_uses_total ?? FREE_USES_TOTAL_FALLBACK;
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, mb: 1 }}>
       <Tooltip arrow title={COPY.tooltip.persona.replace('{name}', rec.persona.name)}>
@@ -310,6 +374,17 @@ function Provenance({ rec }: { rec: RecResponse }) {
       <Tooltip arrow title={COPY.tooltip.advisory}>
         <Chip size="small" variant="outlined" label={COPY.provenance.sim} />
       </Tooltip>
+      {showFreeUses && (
+        <Tooltip arrow describeChild title={BYO_KEY.freeUses.tooltip}>
+          <Chip size="small" variant="outlined" data-testid="ai-rec-free-uses"
+            label={freeUsesChip(rec.remaining_free_uses as number, freeUsesTotal)} />
+        </Tooltip>
+      )}
+      {showOwnKey && (
+        <Tooltip arrow describeChild title={BYO_KEY.ownKey.tooltip}>
+          <Chip size="small" variant="outlined" data-testid="ai-rec-own-key" label={OWN_KEY_CHIP} />
+        </Tooltip>
+      )}
     </Stack>
   );
 }

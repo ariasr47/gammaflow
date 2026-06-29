@@ -63,6 +63,11 @@ class SettingsBody(BaseModel):
     theme: str | None = None
 
 
+class AiKeyBody(BaseModel):
+    # The ONLY request that carries a raw key (write-only, browser→server only — byo-ai-key §1.1).
+    key: str
+
+
 def _error_response(err: errors.AuthError) -> JSONResponse:
     return JSONResponse(status_code=err.status, content=err.envelope())
 
@@ -190,3 +195,47 @@ async def put_settings(body: SettingsBody, request: Request):
     except errors.AuthError as e:
         return _error_response(e)   # 422 on a bad theme
     return saved
+
+
+# --------------------------------------------------------------- byo-ai-key §1 credential endpoints
+# All three sit behind the SAME signed-in gate (anonymous ⇒ 403 auth_required); the session is
+# resolved server-side from the cookie — the body NEVER carries identity. Write-only from the
+# client: the response carries ONLY {set, last4, storage_available} — NEVER the key/ciphertext
+# (AC-10). Storage-unavailable ⇒ 200 set:false (never 5xx — AC-18).
+
+@router.get("/ai-key")
+async def get_ai_key(request: Request):
+    """Masked-hint read (byo-ai-key §1.3): `{set, last4, storage_available}`. NEVER the key."""
+    svc = get_service()
+    resolved = svc.resolve_session(_cookie(request))
+    if not resolved.authenticated:
+        return _error_response(errors.auth_required())
+    return svc.ai_key_hint(resolved.user)
+
+
+@router.put("/ai-key")
+async def put_ai_key(body: AiKeyBody, request: Request):
+    """
+    Set / replace (byo-ai-key §1.1): encrypt+store the raw key (overwrite — no history). Returns
+    `{set:true, last4, storage_available:true}` — NEVER echoes the key/ciphertext. 422 on an
+    empty/obviously-malformed key. Storage-unavailable ⇒ 200 set:false (never 5xx).
+    """
+    svc = get_service()
+    resolved = svc.resolve_session(_cookie(request))
+    if not resolved.authenticated:
+        return _error_response(errors.auth_required())
+    raw = (body.key or "").strip()
+    if not raw or len(raw) < 8:
+        # Minimal server-side soft-validation (the FE also soft-validates) — no key text echoed.
+        return _error_response(errors.validation("Enter a valid API key."))
+    return svc.set_ai_key(resolved.user, raw)
+
+
+@router.delete("/ai-key")
+async def delete_ai_key(request: Request):
+    """Delete (byo-ai-key §1.2): idempotent. Returns `{set:false, storage_available}`."""
+    svc = get_service()
+    resolved = svc.resolve_session(_cookie(request))
+    if not resolved.authenticated:
+        return _error_response(errors.auth_required())
+    return svc.delete_ai_key(resolved.user)

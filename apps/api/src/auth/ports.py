@@ -92,6 +92,25 @@ class SettingsRecord:
         }
 
 
+@dataclass
+class CredentialRecord:
+    """
+    The per-user BYO-AI-key credential record (byo-ai-key BACKEND_EXECUTION_CONTRACT §4).
+
+    The RECORD is the contract. It stores the ENCRYPTED ciphertext of the key (never plaintext)
+    plus a NON-SECRET masked hint (`last4`) captured as cleartext metadata at SAVE time — so the
+    masked-hint read NEVER decrypts. `user_id` is the opaque server id, never the email.
+
+    HARD floor: `ciphertext` is treated as a secret (never logged, never returned to a browser).
+    `last4` is the ONLY credential datum a response may carry.
+    """
+    user_id: str
+    ciphertext: str                  # Fernet token of the raw key — NEVER plaintext, NEVER returned
+    last4: str                       # cleartext masked hint (last 4 chars) — set at save time
+    created_at: float
+    updated_at: float
+
+
 # ----------------------------------------------------------------------------- ports
 
 class UserStore(ABC):
@@ -163,11 +182,33 @@ class UserSettingsStore(ABC):
         """Apply a subset patch (server-wins, D7) and return the full saved bag."""
 
 
+class UserCredentialStore(ABC):
+    """
+    The FOURTH storage port (byo-ai-key BACKEND_EXECUTION_CONTRACT §4): the per-user encrypted AI
+    key. Mirrors the other three ports. The adapter stores the ciphertext + masked hint; it NEVER
+    sees the encryption secret (the crypto leaf owns that). `get_decrypted` is the ONLY decrypting
+    op and is server-side ONLY — used SOLELY by §1 resolution, NEVER feeding a response.
+    """
+
+    @abstractmethod
+    def set_key(self, user_id: str, ciphertext: str, last4: str) -> None:
+        """Encrypt-at-rest store / OVERWRITE (rotate == overwrite, no history)."""
+
+    @abstractmethod
+    def get_record(self, user_id: str) -> Optional[CredentialRecord]:
+        """Raw record (ciphertext + hint). Server-side only; the caller never serializes ciphertext."""
+
+    @abstractmethod
+    def delete_key(self, user_id: str) -> None:
+        """Delete the stored key (→ role no-key fallback). Idempotent."""
+
+
 # ----------------------------------------------------------------------------- store bundle
 
 @dataclass
 class AuthStores:
-    """The three ports a backend adapter supplies, returned by the env-selected factory."""
+    """The four ports a backend adapter supplies, returned by the env-selected factory."""
     users: UserStore
     sessions: SessionStore
     settings: UserSettingsStore
+    credentials: UserCredentialStore

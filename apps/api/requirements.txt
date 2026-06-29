@@ -25,3 +25,10 @@ argon2-cffi
 # BACKEND_EXECUTION_CONTRACT §6). Authlib's requests client handles the code→token exchange;
 # the browser never sees the client secret or Google tokens.
 authlib
+
+# --- byo-ai-key (per-user encrypted AI key; server-side only) ---
+# Symmetric, decryptable encryption-at-rest for the per-user Anthropic key (Fernet). The key must
+# RECOVER to plaintext server-side to call Anthropic, so this is encryption (NOT hashing like
+# argon2). Keyed by the gitignored env AI_KEY_ENCRYPTION_KEY (absent ⇒ ephemeral per-process key,
+# no crash). Used ONLY inside src/auth/crypto.py — never logs/returns the key (byo-ai-key §4/§7).
+cryptography

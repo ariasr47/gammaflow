@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from . import cookies, errors, google_oauth, passwords
+from . import cookies, crypto, errors, google_oauth, passwords
 from .ports import AuthStores, SessionRecord, UserRecord
 
 logger = logging.getLogger("Convexa")
@@ -236,6 +236,71 @@ class AuthService:
         """Apply a subset patch (server-wins, D7) and echo the full saved bag. 422 on bad theme."""
         settings = self.stores.settings.update(user.id, patch)
         return settings.to_wire()
+
+    # ------------------------------------------------------------------ AI credential (BYO key)
+
+    def ai_key_hint(self, user: UserRecord) -> dict:
+        """
+        The INTERFACE §1.3 masked-hint read: `{set, last4, storage_available}`. NEVER decrypts,
+        NEVER returns the key/ciphertext. A store fault ⇒ storage-unavailable (200 set:false),
+        never a 5xx (AC-18).
+        """
+        try:
+            rec = self.stores.credentials.get_record(user.id)
+        except Exception:
+            logger.warning("auth: ai-key hint read faulted; reporting storage unavailable",
+                           exc_info=False)
+            return {"set": False, "last4": None, "storage_available": False}
+        if rec is None:
+            return {"set": False, "last4": None, "storage_available": True}
+        return {"set": True, "last4": rec.last4, "storage_available": True}
+
+    def set_ai_key(self, user: UserRecord, raw_key: str) -> dict:
+        """
+        Encrypt + store / overwrite (rotate == overwrite, no history). Returns the masked-hint
+        shape `{set:true, last4, storage_available:true}` — NEVER the key/ciphertext (AC-10). A
+        store/crypto fault ⇒ 200 `{set:false, storage_available:false}` (never a 5xx — AC-18).
+        The raw key is never logged.
+        """
+        last4 = raw_key[-4:] if len(raw_key) >= 4 else raw_key
+        try:
+            ciphertext = crypto.encrypt(raw_key)
+            self.stores.credentials.set_key(user.id, ciphertext, last4)
+        except Exception:
+            logger.warning("auth: ai-key store faulted; reporting storage unavailable",
+                           exc_info=False)
+            return {"set": False, "storage_available": False}
+        return {"set": True, "last4": last4, "storage_available": True}
+
+    def delete_ai_key(self, user: UserRecord) -> dict:
+        """
+        Delete the stored key (idempotent — removing when none is set is still 200 set:false).
+        Returns `{set:false, storage_available}`. A store fault ⇒ storage-unavailable, never 5xx.
+        """
+        try:
+            self.stores.credentials.delete_key(user.id)
+        except Exception:
+            logger.warning("auth: ai-key delete faulted; reporting storage unavailable",
+                           exc_info=False)
+            return {"set": False, "storage_available": False}
+        return {"set": False, "storage_available": True}
+
+    def get_decrypted_ai_key(self, user_id: str) -> str | None:
+        """
+        SERVER-SIDE ONLY (byo-ai-key §1 resolution): decrypt the stored key for ONE call. Returns
+        the raw key, or None when no key is stored OR the ciphertext cannot be decrypted (secret
+        changed / restart / corrupt — AC-16). The result NEVER feeds a response, is NEVER logged,
+        and is held only transiently by the resolution path. Never raises.
+        """
+        try:
+            rec = self.stores.credentials.get_record(user_id)
+        except Exception:
+            logger.warning("auth: ai-key decrypted read faulted; treating as no key",
+                           exc_info=False)
+            return None
+        if rec is None:
+            return None
+        return crypto.decrypt(rec.ciphertext)  # None on decrypt failure (handled as no usable key)
 
     # ------------------------------------------------------------------ google flow
 

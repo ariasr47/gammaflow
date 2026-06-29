@@ -23,8 +23,8 @@ import uuid
 from typing import Optional
 
 from . import errors
-from .ports import (AuthStores, SessionRecord, SettingsRecord, UserRecord,
-                    UserStore, SessionStore, UserSettingsStore)
+from .ports import (AuthStores, CredentialRecord, SessionRecord, SettingsRecord, UserRecord,
+                    UserStore, SessionStore, UserSettingsStore, UserCredentialStore)
 
 _VALID_THEMES = {"dark", "light", "system"}
 
@@ -72,6 +72,13 @@ class _SharedDB:
                     active_persona_id TEXT,
                     default_ticker    TEXT,
                     theme             TEXT NOT NULL DEFAULT 'dark'
+                );
+                CREATE TABLE IF NOT EXISTS ai_credentials (
+                    user_id    TEXT PRIMARY KEY,
+                    ciphertext TEXT NOT NULL,
+                    last4      TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
                 );
                 """
             )
@@ -240,10 +247,53 @@ class SqliteUserSettingsStore(UserSettingsStore):
         )
 
 
+class SqliteUserCredentialStore(UserCredentialStore):
+    """
+    In-memory adapter for the per-user encrypted AI key (byo-ai-key §4). Stores the Fernet
+    ciphertext + the cleartext masked hint (`last4`) — NEVER the plaintext key. RESETS on restart
+    (accepted prototype — AC-20). The plaintext is never written to a column; the only decryptable
+    material is the ciphertext, decrypted server-side ONLY at resolution.
+    """
+
+    def set_key(self, user_id: str, ciphertext: str, last4: str) -> None:
+        now = time.time()
+        with _db._lock:
+            with _db._conn:
+                # Overwrite (rotate == overwrite, no history). Preserve created_at on update.
+                row = _db._conn.execute(
+                    "SELECT created_at FROM ai_credentials WHERE user_id = ?",
+                    (user_id,)).fetchone()
+                created_at = row["created_at"] if row else now
+                _db._conn.execute(
+                    "INSERT INTO ai_credentials (user_id, ciphertext, last4, created_at, "
+                    "updated_at) VALUES (?,?,?,?,?) "
+                    "ON CONFLICT(user_id) DO UPDATE SET ciphertext=excluded.ciphertext, "
+                    "last4=excluded.last4, updated_at=excluded.updated_at",
+                    (user_id, ciphertext, last4, created_at, now))
+
+    def get_record(self, user_id: str) -> Optional[CredentialRecord]:
+        with _db._lock:
+            row = _db._conn.execute(
+                "SELECT * FROM ai_credentials WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return None
+        return CredentialRecord(
+            user_id=row["user_id"], ciphertext=row["ciphertext"], last4=row["last4"],
+            created_at=row["created_at"], updated_at=row["updated_at"],
+        )
+
+    def delete_key(self, user_id: str) -> None:
+        with _db._lock:
+            with _db._conn:
+                _db._conn.execute(
+                    "DELETE FROM ai_credentials WHERE user_id = ?", (user_id,))
+
+
 def make_stores() -> AuthStores:
-    """Construct the three-port bundle over the shared in-memory DB."""
+    """Construct the four-port bundle over the shared in-memory DB."""
     return AuthStores(
         users=SqliteUserStore(),
         sessions=SqliteSessionStore(),
         settings=SqliteUserSettingsStore(),
+        credentials=SqliteUserCredentialStore(),
     )

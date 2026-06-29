@@ -28,6 +28,7 @@
 | `live-vs-static-isolation` | every datum declares live-derived vs static; live UI degrades on SSE drop (dim+offline, never blank) while static reads keep rendering | CONTEXT §5 · THREADS §9 | 2026-06-22 | dark-pool, dex-voloi-skew-term, trade-tracker-sim, trader-personas (4) |
 | `operator-vs-trader-path-separation` | an operator/diagnostic surface stays off every trader/bundle route + unlinked from the trader UI; read-only + side-effect-free (no vendor fetch / recompute / cache mutation / trader-route call); trader path + SSE untouched | CONTEXT §5 · THREADS §9 | 2026-06-23 | backend-observability, latency-visualizer (2 binding) |
 | `no-real-order-path` | "action" never reaches a real broker/order path: a simulated feature stays `SIMULATED` (paper) + mandatory-confirm; a not-yet-built real surface (e.g. a "Live" tab) ships as a **non-functional placeholder** with no broker, no order/execution path, no real-position data source | CONTEXT §5 · THREADS §9 | 2026-06-24 | ai-recommendations, positions-portfolio (2 binding) |
+| `server-side-gate-enforcement` | an access gate on a state/cost-bearing action is enforced **server-side** (the server is the boundary of record), never FE-only; the FE check is for UX, not enforcement — a bypassed client check must still be rejected by the server | CONTEXT §5 · THREADS §9 | 2026-06-29 | user-accounts (AC-E7 catch), byo-ai-key (2 binding) |
 
 > Pre-existing canon (recorded by the ledger, already a rule before it existed — not re-promoted):
 > `dark-pool-context-only` (THREADS §9) · `gamma-sourcing-split` (CONTEXT §3 / THREADS §9).
@@ -54,12 +55,13 @@
   never-delete, idempotent, never-throw), composing with any prior version chain. Generalizes the positions
   v1→v2 pattern. Not promoted (1 instance); logged for recurrence (the broker/persistent-DB tracks will
   likely hit it). *binding:yes.*
-- **`server-side-gate-enforcement`** (1 instance — user-accounts, 2026-06-25) — an access gate on a
-  state/cost-bearing ACTION must be enforced **server-side**, not FE-only (a bypassed client check must
-  still be rejected at the server boundary). Surfaced by the GATE Q catch on AC-E7 (the Positions
-  sim-trade write gate was FE-only until the FE was bounced to call `POST /api/positions/sim-trade/gate`).
-  Likely to recur on Track B `broker-connect` (real-account gates). Not promoted (1 instance); logged so
-  recurrence is mechanical. *binding:yes.*
+- **`secret-encrypted-at-rest`** (1 instance — byo-ai-key, 2026-06-29) — a stored third-party secret is
+  ENCRYPTED (not hashed — must be recoverable), via a server-side encryption key; never logged / returned /
+  sent to the browser; write-only + masked hint + rotate/delete; decrypt-fail ⇒ treated as no usable
+  secret, never a leak. Will recur on Track B `broker-connect` (broker tokens/credentials). Not promoted
+  (1 instance). *binding:yes.*
+- _(`server-side-gate-enforcement` GRADUATED 2026-06-29 — reached 2 binding instances (user-accounts AC-E7
+  catch, byo-ai-key); now in Promoted canon above.)_
 - _(`no-real-order-path` graduated 2026-06-24; reaffirmed again by user-accounts → 3 binding instances,
   already in Promoted canon.)_
 
@@ -109,6 +111,24 @@
 | `additive-keeps-score-byte-identical` | rebrand-convexa | S | full GammaFlow→Convexa rename is cosmetic to the engine — logger/title/identifier/key renames only; `opportunity_score`/`tier`/`state_fingerprint` byte-identical (score 2, fp `8fa0e1e62a11`), conformance 8/8, no interface/wire change | yes |
 | `best-effort-isolated-or-null` | rebrand-convexa | S | the migrate-on-read helper never throws — a corrupt/absent legacy blob degrades to empty in-memory with the source blob preserved (rollback-safe); a failed promote-write is swallowed and the value still surfaces | yes |
 | `loss-free-durable-migration` | rebrand-convexa | S | renaming a durable localStorage key carries existing data forward LOSS-FREE: read-new-else-old, promote-forward-once (idempotent), never delete the old key, never throw; composes with the existing positions v1→v2 chain so every legacy user lands whole | yes |
+| `additive-keeps-score-byte-identical` | byo-ai-key | S | per-user key resolution / credential store / crypto / metering / admin allowlist stay OUT of scoring; score 24 / tier actionable / fp `79373ef9194e` byte-identical across all 6 key states (anon/regular-no-key/admin-allowance/exhausted/shared-unconfigured/own-key); 0/5 scoring modules import the credential store or crypto leaf | yes |
+| `best-effort-isolated-or-null` | byo-ai-key | S | key lookup / decrypt-fail / LLM error / over-limit / missing-encryption-secret all degrade the rec surface ALONE to a `status` (no_key/over_limit/shared_key_unconfigured/unavailable), always-200 never 5xx; bundle/SSE/chart/tracker + the keyless export floor intact | yes |
+| `server-side-gate-enforcement` | byo-ai-key | S | the credential endpoints (`/api/auth/ai-key`) + the AI-rec call are gated SERVER-SIDE (403 anonymous; key resolution + the admin-allowance decision are server-authoritative); the FE only renders the server's resolved state — not an FE-only gate | yes |
+| `secret-encrypted-at-rest` | byo-ai-key | S | a stored third-party secret (the user's Anthropic key) is ENCRYPTED (Fernet, server-side `AI_KEY_ENCRYPTION_KEY`), NOT hashed (must be recoverable to call); never logged / returned / sent to the browser; write-only + masked last4 + rotate/delete; decrypt-fail ⇒ treated as no usable key (no leak) | yes |
+
+> Note (GATE S, byo-ai-key, 2026-06-29): the hybrid bring-your-own AI-key feature — per-user encrypted
+> Anthropic keys (own-key-first), admin-only free allowance (default 3/day) on the shared key, the 5-state
+> resolution incl. `shared_key_unconfigured`. **GRADUATION:** `server-side-gate-enforcement` reached its
+> **2nd binding instance** (user-accounts AC-E7 catch → byo-ai-key's server-authoritative credential/rec
+> gating) → promoted into CONTEXT §5 + THREADS §9 (Promoted canon above); removed from the watch list. A
+> satisfying loop closure: a key the QA role *surfaced from a failure* (AC-E7) recurred and graduated. The
+> two already-canon keys (`additive-keeps-score-byte-identical`, `best-effort-isolated-or-null`) each gained
+> an instance — no new graduation from them. New watch-list key `secret-encrypted-at-rest` (1 instance;
+> will recur on broker-connect). QA (GATE Q) on Sonnet, de-correlated: initial FAIL on AC-19 (uncovered by a
+> named test though the behavior worked) → bounced → FE added the test → **RE-RUN PASS 26/26**, security
+> floor + score byte-identity + conformance all clean. `system-6` (Security/red-team) stays DEFERRED
+> (encrypt+hygiene floor enforced) — but credential custody (encrypted user keys) makes byo-ai-key its
+> eventual first client at the go-live trigger.
 
 > Note (GATE S, rebrand-convexa, 2026-06-28): the GammaFlow→Convexa rebrand was **completed** — extended
 > from UI-only to the whole codebase (134 refs / 51 files): identifiers, the `gammaflow.ts`→`convexa.ts`

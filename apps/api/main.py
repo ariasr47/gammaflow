@@ -496,6 +496,38 @@ def _gate_or_response(request: Request):
     return None
 
 
+# byo-ai-key §5: the MINIMAL admin allowlist (NOT RBAC). Comma-separated emails, matched
+# case-insensitively against the resolved session email. Read NOWHERE except the shared-allowance
+# decision. Re-read per call so dropping an admin loses the allowance on the next request (AC-19).
+def _admin_emails() -> set[str]:
+    raw = os.getenv("AI_REC_ADMIN_EMAILS", "")
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def _is_admin(email: str | None) -> bool:
+    return bool(email) and email.strip().lower() in _admin_emails()
+
+
+def _resolve_ai_key(resolved) -> "ai_rec.ResolvedKey":
+    """
+    byo-ai-key §1: build the per-request resolved-key VALUE OBJECT at the main.py orchestration
+    boundary from the authenticated session. Decryption happens HERE (in the auth leaf) and the
+    admin allowlist is read HERE; the rec leaf then applies the owner-fixed resolution ORDER
+    (own → shared-admin-if-configured-and-allowance → none/distinguished-reason). Own-key-first
+    even for admins. A decrypt failure ⇒ own_key is None ⇒ falls through to the role no-key path
+    (unavailable, not 5xx, no leak — AC-16). The raw key is held transiently in the VO; never logged.
+    """
+    user = resolved.user
+    own_key = None
+    try:
+        own_key = auth.get_service().get_decrypted_ai_key(user.id)
+    except Exception:
+        logger.warning("ai-rec: own-key decryption faulted; treating as no key", exc_info=False)
+        own_key = None
+    return ai_rec.resolve_key(
+        user_id=user.id, own_key=own_key, is_admin=_is_admin(user.email))
+
+
 def _parse_expirations(csv: str | None) -> tuple | None:
     """Normalize a comma-separated expirations param to a sorted tuple (cache-stable), or None."""
     if not csv:
@@ -957,6 +989,10 @@ async def post_recommendation(
     gate = _gate_or_response(request)
     if gate is not None:
         return gate
+    # Past the outermost auth gate ⇒ a valid session. Resolve it again (cheap, in-memory) to build
+    # the per-request resolved-key VO (byo-ai-key §1): own → shared-admin-if-configured → none.
+    resolved, _ok = _resolve_auth(request)
+    resolved_key = _resolve_ai_key(resolved)
     t = ticker.upper()
     bundle = await _served_bundle_for_rec(t, body.dte_min, body.dte_max, body.dark_pool)
     # The LLM call is blocking + multi-second; run it OFF the event loop so it can never stall the
@@ -964,7 +1000,8 @@ async def post_recommendation(
     return await asyncio.to_thread(
         ai_rec.generate_recommendation, t, bundle,
         persona_id=body.persona_id, dte_min=body.dte_min, dte_max=body.dte_max,
-        override=body.override, snapshot_fingerprint=body.snapshot_fingerprint)
+        override=body.override, snapshot_fingerprint=body.snapshot_fingerprint,
+        resolved=resolved_key)
 
 
 @app.post("/api/positions/sim-trade/gate")
@@ -1009,20 +1046,29 @@ async def get_recommendation_export(
 
 @app.get("/api/recommendation/status/{ticker}")
 async def get_recommendation_status(
+    request: Request,
     ticker: str = Path(..., description="Underlying symbol, e.g. SPY"),
     min_dte: int | None = _MinDTE,
     max_dte: int | None = _MaxDTE,
     dark_pool: bool = _DarkPool,
 ):
     """
-    Gating + cap + availability (INTERFACE §1.3) WITHOUT requesting a rec. Cheap, side-effect-free,
-    always HTTP 200. Derives gate.state from the EXISTING ai_eval machinery (read-only) + the
-    cooldown window; reports the daily cap and in-app availability. The FE drives the action's
-    enabled/disabled presentation from this.
+    Gating + cap + availability (INTERFACE §1.3/§2.2) WITHOUT requesting a rec. Cheap,
+    side-effect-FREE (does NOT pre-commit a free use), always HTTP 200. Derives
+    gate.state from the EXISTING ai_eval machinery (read-only) + the PER-IDENTITY cooldown window;
+    reports the daily cap, in-app availability, and — for an authenticated admin on a shared-key
+    path — the additive `remaining_free_uses`/`free_uses_total` so the panel can pre-render the
+    admin's count (byo-ai-key §2.2). Stays anonymous-readable (the auth gate is only on the POST).
     """
     t = ticker.upper()
     bundle = await _served_bundle_for_rec(t, min_dte, max_dte, dark_pool)  # 404 if no chain
-    return ai_rec.status_payload(bundle.get("ai_eval"))
+    # Best-effort identity resolution for the additive free-use fields. Anonymous / fault ⇒ no VO
+    # ⇒ null free-use fields (a regular/anonymous read never carries a counter). NEVER mutates.
+    resolved, ok = _resolve_auth(request)
+    resolved_key = None
+    if ok and resolved is not None and resolved.authenticated:
+        resolved_key = _resolve_ai_key(resolved)
+    return ai_rec.status_payload(bundle.get("ai_eval"), resolved_key)
 
 
 @app.get("/api/_metrics")

@@ -75,12 +75,51 @@ export const AUTH_COPY = {
     themeSystem: 'System',
     saved: 'Saved',
     saveError: "Couldn't save that setting. Please try again.",
+    // byo-ai-key (UX_BLUEPRINT §5; verbatim). Write-only key entry; the masked last-4 hint is all
+    // that's ever read back. NO reveal/show/copy control anywhere (PRODUCT_CONTRACT §6).
+    aiKey: {
+      heading: 'AI key',
+      helper:
+        'Your own Anthropic key lets AI recommendations run on your key, at your cost. It\'s stored ' +
+        'encrypted and used only for your own recommendations — it\'s never shown again and never ' +
+        'leaves the server.',
+      inputLabel: 'Anthropic API key',
+      inputPlaceholder: 'sk-ant-…',
+      inputHelper: "Starts with sk-ant-. Stored encrypted; you won't be able to view it again.",
+      addBtn: 'Add key',
+      addingBtn: 'Adding…',
+      setSubLine: 'Stored encrypted. Used only for your recommendations. Never shown again.',
+      replaceBtn: 'Replace',
+      replaceSubmitBtn: 'Replace key',
+      replacingBtn: 'Replacing…',
+      removeBtn: 'Remove',
+      removeConfirmTitle: 'Remove your stored Anthropic key?',
+      removeConfirmBody:
+        'AI recommendations will stop running on your key. You can add a key again any time.',
+      removeConfirmBtn: 'Remove key',
+      removeCancelBtn: 'Keep key',
+      cancelBtn: 'Cancel',
+      savedAdd: 'AI key saved.',
+      savedRemove: 'AI key removed.',
+      saveError: "Couldn't save your key. Please try again.",
+      validationEmpty: 'Enter your Anthropic key.',
+      validationFormat:
+        "That doesn't look like an Anthropic key (it should start with sk-ant-).",
+      storageUnavailable:
+        "Key storage isn't set up on this deployment yet, so a key can't be saved right now. The " +
+        'manual export hand-off still works without a key.',
+      anonymous: 'Sign in to add your own Anthropic key for AI recommendations.',
+    },
   },
   gate: {
     // The "couldn't reach sign-in" copy on a gated action when the auth subsystem is degraded (503).
     unavailable: "Couldn't reach sign-in right now. Please try again in a moment.",
   },
 } as const;
+
+/** `Key set ···· {last4}` masked display for a stored AI key (UX_BLUEPRINT §5). The last-4 hint is
+ *  the ONLY credential datum the FE ever receives — the full key is never shown again (AC-7/10). */
+export const maskedKeyLabel = (last4: string | null) => `Key set ···· ${last4 ?? '????'}`;
 
 /** App defaults applied when a server pref value is null (UX_BLUEPRINT §2.9). */
 export const SETTINGS_DEFAULTS = {

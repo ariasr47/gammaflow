@@ -269,6 +269,11 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   path, no real-position data source (enforce structurally, e.g. a zero-import lock). Reopening this is a
   deliberate owner decision + a vendor/broker dependency, via GATE Z. *(ai-recommendations,
   positions-portfolio — 2 binding.)*
+- **`[server-side-gate-enforcement]`** (promoted 2026-06-29, 2 binding) — an access gate on a
+  state/cost-bearing action is enforced **server-side** (the server is the boundary of record), **never
+  FE-only**: a bypassed/absent client check must still be rejected at the server. The FE check exists for
+  UX, not enforcement. *(user-accounts — the GATE-Q AC-E7 catch where a sim-trade write gate was FE-only;
+  byo-ai-key — server-authoritative credential endpoints + AI-rec key resolution. 2 binding.)*
 
 ## 6. Current feature state (works end-to-end)
 <!-- shard: tags=features,state,observability,darkpool,ghost-trade,dex,personas,metrics -->
@@ -359,6 +364,20 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   scoring input; `no-real-order-path` untouched (Positions stays `SIMULATED`). QA PASS (Sonnet,
   de-correlated; AC-E7 server-gate FAIL bounced+fixed, GATE Q re-run 30/30, conformance 2/2, `dashboard`
   246/246 + `@org/api` 7/7). *(2026-06-25.)*
+- **Hybrid bring-your-own AI key (`byo-ai-key`, FE+BE)** — per-user Anthropic keys for the in-app AI rec.
+  A signed-in user stores their own key (Settings "AI key" section, write-only — masked `····last4`, Replace/
+  Remove, **no reveal**) and the rec calls Anthropic with **their** key (their cost, no shared cap). The
+  shared `ANTHROPIC_API_KEY` gives a free allowance **only to ADMIN users** (`AI_REC_ADMIN_EMAILS` allowlist;
+  default 3/day per admin, `AI_REC_ADMIN_FREE_DAILY`); **regular users get 0** (must BYO). **Own-key-first
+  even for admins.** Five resolution states (regular-no-key / admin-with-allowance+counter / admin-exhausted
+  / own-key / **admin-but-shared-key-unconfigured**), all best-effort always-200 + `status`. Keys are
+  **encrypted at rest** (Fernet, server-side `AI_KEY_ENCRYPTION_KEY`, ephemeral fallback; new
+  `UserCredentialStore` port + `src/auth/crypto.py` leaf), **never logged/returned/sent to the browser**;
+  decrypt-fail ⇒ treated as no usable key. Per-request resolution at the `main.py` boundary; the AI rec
+  stays a one-way leaf — score/tier/`state_fingerprint` byte-identical across all 5 states (24 / actionable /
+  `79373ef9194e`). New dep `cryptography`. QA PASS (Sonnet, de-correlated — AC-19 named-test gap caught &
+  fixed → re-run 26/26; security floor + byte-identity clean; dashboard 313/313 + `@org/api` 13/13).
+  Realizes the deferred ai-rec BYO-key seam. *(2026-06-29.)*
 - **Backend observability** (operator-facing; trader path unchanged): the six bundle stages
   (`vendor_fetch` io_vendor, `engine_build`/`off_exchange` cpu_engine, `signals` cpu_signals,
   `persist` io_disk, `serialize_wrap` serialize) are timed into a per-request trace; `meta.trace_id`
@@ -418,6 +437,14 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   backend deps: **`argon2-cffi`** (password hashing) + **`authlib`** (OAuth) in `apps/api/requirements.txt`
   (re-run the venv `pip install -r requirements.txt`). A raw password / hash / signing key / Google secret
   never appears in a response or a log line.
+  **AI key (byo-ai-key):** `AI_KEY_ENCRYPTION_KEY` (server-side Fernet key encrypting stored per-user
+  Anthropic keys; gitignored; absent ⇒ an **ephemeral per-process key** so stored keys reset on restart —
+  set a stable one once a persistent store lands or saved keys become unreadable after restart),
+  `AI_REC_ADMIN_EMAILS` (comma-separated allowlist of admin emails that get the shared-key free allowance;
+  matched case-insensitively against the session email; everyone else gets 0 free + must BYO),
+  `AI_REC_ADMIN_FREE_DAILY` (per-admin daily free allowance on the shared key, default 3 — distinct from the
+  global `AI_REC_DAILY_CAP`). New backend dep **`cryptography`**. A raw user API key / its ciphertext never
+  appears in a response, log line, or the browser.
 - **Add a vendor:** implement `MarketDataProvider` in `apps/api/src/providers/<name>.py`, register in
   `_PROVIDERS`, set `DATA_PROVIDER`. Nothing else changes.
 - **Run:** backend `npx nx serve api` (uvicorn :8000, i.e. `apps/api/.venv/Scripts/python.exe

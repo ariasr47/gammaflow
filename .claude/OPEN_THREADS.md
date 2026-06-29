@@ -353,6 +353,34 @@ never-delete/rollback-safe, corrupt→no-throw-no-wipe, absent→clean-new-user)
 watch-list key `loss-free-durable-migration`. **Deferred/known:** the stale `gammaflow-web` references in
 `apps/api/README.md` (pre-merge "separate repo" wording) — minor doc cleanup, not blocking.
 
+## 7h. Hybrid bring-your-own AI key (SHIPPED + ARCHIVED — both lanes done)
+Contracts archived at `.claude/contracts/_archive/byo-ai-key/`. Owner-directed 2026-06-29: a **hybrid**
+per-user AI-key model realizing the deferred ai-rec BYO-key seam (§7b). Each signed-in user stores their own
+Anthropic key (encrypted); the AI rec calls with THEIR key (own-key-first, even for admins). The shared
+`ANTHROPIC_API_KEY` gives a free allowance ONLY to admin users (`AI_REC_ADMIN_EMAILS`; `AI_REC_ADMIN_FREE_DAILY`
+default 3/day); regular users get 0 → must BYO. **Five resolution states** incl. the owner-added
+`shared_key_unconfigured` (admin, allowance left, but no shared key set up — the common state until the shared
+key is configured).
+**Backend** (`apps/api`): per-request key resolution at the `main.py` boundary (own → admin-shared-if-configured
+→ none with distinguished reason); new `UserCredentialStore` (4th port, in-memory) + `src/auth/crypto.py` Fernet
+leaf keyed by gitignored `AI_KEY_ENCRYPTION_KEY` (ephemeral fallback); `/api/auth/ai-key` GET/PUT/DELETE
+(write-only, masked hint only); per-identity metering (per-admin daily allowance, own-key unmetered); admin
+allowlist; new dep `cryptography`. The AI rec stays a one-way leaf — score/tier/`state_fingerprint`
+byte-identical (24 / actionable / `79373ef9194e`) across all 6 conditions; conformance 2/2 + no regression;
+security-floor log scan clean.
+**Frontend** (`apps/dashboard` + `libs/api`): the 5-state AiRecPanel + the write-only "AI key" Settings section
+(masked, Replace/Remove, no reveal) + the `@org/api` credential fns/types. `nx test dashboard` 313/313,
+`@org/api` 13/13; egress proven (the raw key rides only the PUT body, never any response/DOM/console).
+**QA (GATE Q)** on Sonnet (de-correlated): initial FAIL on **AC-19** (admin-removed-from-allowlist had no named
+test though the behavior worked — AC↔test traceability) → GATE Z bounce → FE added the test → **RE-RUN PASS
+26/26**.
+**GATE S:** `server-side-gate-enforcement` GRADUATED (2 binding: user-accounts AC-E7 + this) → Promoted canon
+(CONTEXT §5 + §9). New watch-list key `secret-encrypted-at-rest`. **Deferred/known:** `system-6` Security/
+red-team still deferred (encrypt+hygiene floor now) — credential custody makes byo-ai-key its eventual first
+client at go-live; `interface_conformance.py` is cookieless so the auth-gated key endpoints are verified by
+runtime/FE tests not the sweep (a small build-system follow-up: teach the tool cookie/bootstrap auth);
+`AI_KEY_ENCRYPTION_KEY` must be set to a stable value once a persistent store lands (else stored keys reset).
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped
@@ -393,3 +421,7 @@ watch-list key `loss-free-durable-migration`. **Deferred/known:** the stale `gam
   order path: a simulated feature stays `SIMULATED` (paper) + confirm; a not-yet-built real surface
   (e.g. a "Live" tab) ships as a non-functional placeholder (no broker / order path / real-position
   source). Reopen only via a deliberate owner + vendor decision (GATE Z). See PROJECT_CONTEXT §5.
+- **`[server-side-gate-enforcement]`** (promoted 2026-06-29, 2 binding) — an access gate on a state/
+  cost-bearing action is enforced **server-side** (boundary of record), never FE-only; a bypassed/absent
+  client check must still be rejected by the server. (user-accounts AC-E7 catch; byo-ai-key credential +
+  AI-rec gating.) See PROJECT_CONTEXT §5.

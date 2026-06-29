@@ -30,6 +30,25 @@
 
 ---
 
+## Last GATE I — 2026-06-28 (owner request: hybrid bring-your-own AI key)
+**Chosen → `byo-ai-key`** — owner-directed. **Hybrid** AI-key model: each signed-in user stores their own
+Anthropic key (encrypted at rest) and the in-app AI rec calls with THEIR key; the shared `ANTHROPIC_API_KEY`
+gives a free allowance **only to ADMIN users (3/day) — regular users get 0** (must BYO). Introduces a
+**minimal admin concept** (no roles today) + **per-user metering** (today's cap is process-global) + **4
+distinct gated states** (no-key-no-allowance / admin-with-uses-left / admin-exhausted / has-own-key).
+Decision-impact cull **N/A** (enabler/cost-control — serve AI to many users without the owner bearing
+per-user LLM cost). Feasibility **pass** (builds on the isolated `ai_recommendation.py` `LLMProvider` seam +
+the shipped accounts system + a new encrypted `UserCredentialStore`; realizes the deferred BYO-key seam,
+THREADS §7b). Effort **L** · entry = **architect-first** (per-request key-resolution seam, encryption-at-rest
+seam + write-only/masked-reveal, admin mechanism, per-identity metering, the 4-state machine). **Invariant
+watch:** `additive-keeps-score-byte-identical` (AI rec stays an isolated leaf), `best-effort-isolated-or-null`
+(key/decrypt/LLM/over-limit failure → rec-surface-only `status`, never breaks bundle), `no-real-order-path`,
+**security floor** (user keys ENCRYPTED not hashed — recoverable; server-side encryption key; never
+logged/returned/in-browser; masked-reveal + rotate + delete), new `minimal-admin-not-RBAC`. **system-6
+(Security/red-team) DEFERRED** by owner (encrypt+hygiene now); re-fires at the persistent/multi-user/public
+trigger — BYO-key is its eventual first client. Brief at `.claude/contracts/byo-ai-key/BRIEF.md`; routing to
+the Architect (GATE A·X).
+
 ## Last GATE I — 2026-06-28 (owner request: complete the Convexa rebrand)
 **Chosen → `rebrand-convexa`** — owner-directed. Extend the rebrand from **UI-only to the whole codebase**:
 rename ~71 `gammaflow` refs (apps/api comments/log-prefixes/title, apps/dashboard, libs/api incl. the
@@ -191,6 +210,16 @@ Cull verdicts (so the next discovery doesn't re-litigate):
 ## Pool
 
 ### A. Queued / in-mind (decided to build next)
+- **`byo-ai-key`** — `✓ SHIPPED + ARCHIVED (2026-06-29)` → `_archive/byo-ai-key/`. Hybrid per-user AI key:
+  each user stores their own Anthropic key (encrypted, Fernet, write-only/masked) and the AI rec calls with
+  THEIR key (own-key-first); the shared key gives admins only a free allowance (`AI_REC_ADMIN_EMAILS`,
+  default 3/day); regular users 0 → must BYO. 5 resolution states incl. `shared_key_unconfigured`. New
+  `UserCredentialStore` + `src/auth/crypto.py`; per-request resolution at the `main.py` boundary; AI rec
+  stays an isolated leaf (score byte-identical). QA PASS (Sonnet, de-correlated; AC-19 named-test gap caught
+  & fixed → re-run 26/26; security floor clean; dashboard 313/313 + `@org/api` 13/13). **GATE S graduated
+  `server-side-gate-enforcement`** (2 binding) into canon; new watch-list key `secret-encrypted-at-rest`.
+  Realizes the deferred ai-rec BYO-key seam. `system-6` still deferred (credential custody → its eventual
+  first client). Seams → OPEN_THREADS §7h.
 - **`rebrand-convexa`** — `✓ SHIPPED + ARCHIVED (2026-06-28)` → `_archive/rebrand-convexa/`. Completed the
   GammaFlow→Convexa rebrand from UI-only to the whole codebase (134 refs / 51 files): identifiers, the
   `gammaflow.ts`→`convexa.ts` client, backend logger/title, docs/README/CLAUDE.md, `project.json`, the

@@ -1,5 +1,6 @@
 """
-The auth subpackage — the project's first stateful backend surface + first credential store.
+The auth subpackage — the project's first stateful backend surface + credential stores (user
+accounts + the per-user encrypted BYO-AI-key, byo-ai-key).
 
 It is a ONE-WAY LEAF (ARCHITECTURE §6 / BACKEND_EXECUTION_CONTRACT §1): `main.py` is the ONLY
 module that imports it (to wire the auth endpoints + session resolution + the two gated-surface

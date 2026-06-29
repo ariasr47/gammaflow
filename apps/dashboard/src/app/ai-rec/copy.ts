@@ -75,6 +75,55 @@ export const COPY = {
   },
 } as const;
 
+// ---- byo-ai-key (UX_BLUEPRINT §5; verbatim) --------------------------------------------------
+// The five key-resolution states layered on top of the shipped gate/cooldown/cap. Honest, not a free
+// trial: states (a)/(e) frame BYO as a setup step; (c) frames the allowance as renewing daily.
+export const BYO_KEY = {
+  noKey: {
+    title: 'Add your Anthropic key to get AI recommendations',
+    body:
+      'AI recommendations run on your own Anthropic API key — your key, your cost. Add it once in ' +
+      'Settings and this unlocks. The manual export below always works without a key.',
+    cta: 'Add your key in Settings',
+  },
+  adminExhausted: {
+    body:
+      'Your free allowance on the shared key is used up for today. Add your own Anthropic key in ' +
+      'Settings to keep getting recommendations — your free uses come back tomorrow.',
+    cta: 'Add your key in Settings',
+  },
+  sharedUnconfigured: {
+    title: "The shared AI key isn't set up",
+    body:
+      "There's no shared key configured for free admin recommendations right now. Add your own " +
+      'Anthropic key in Settings to use recommendations — your key, your cost. The manual export ' +
+      'below still works without a key.',
+    cta: 'Add your key in Settings',
+  },
+  freeUses: {
+    tooltip:
+      "Free recommendations on the shared key, for admins. Used today's allowance? Add your own " +
+      'Anthropic key in Settings to keep going. The count resets daily.',
+  },
+  ownKey: {
+    chip: 'Using your key',
+    tooltip:
+      'This recommendation ran on your own Anthropic key — your cost, no shared limit. It doesn\'t ' +
+      'use the free admin allowance. Manage your key in Settings.',
+  },
+} as const;
+
+/** `You've used today's {total} free recommendations` — state (c) exhausted title. */
+export const adminExhaustedTitle = (total: number) =>
+  `You've used today's ${total} free recommendations`;
+/** `{remaining} of {total} free uses left today` — state (b) subordinate chip. */
+export const freeUsesChip = (remaining: number, total: number) =>
+  `${remaining} of ${total} free uses left today`;
+/** `Using your key` — state (d) subordinate chip. */
+export const OWN_KEY_CHIP = BYO_KEY.ownKey.chip;
+/** The default allowance display constant when `free_uses_total` is absent (UX §6). */
+export const FREE_USES_TOTAL_FALLBACK = 3;
+
 /** `Persona · {name}` provenance chip. */
 export const personaChip = (name: string) => `Persona · ${name}`;
 /** `As of {snapshot}` provenance chip. The pinned snapshot identity is shown verbatim (honest). */

@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   requestRecommendation, fetchRecStatus, fetchRecExport, fetchPersonas, ApiError, RecRequest,
+  getAiKeyStatus, setAiKey, removeAiKey, AuthError,
 } from './convexa';
 
 function stubFetch(impl: (url: string, init?: RequestInit) => Response | Promise<Response>) {
@@ -79,5 +80,65 @@ describe('fetchRecStatus / fetchRecExport / fetchPersonas', () => {
 
     stubFetch(() => ok({ nope: true }));
     await expect(fetchPersonas()).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+// ---- byo-ai-key credential endpoints (the write-only key seam; masked-hint read only) ---------
+describe('byo-ai-key credential client', () => {
+  it('getAiKeyStatus GETs /api/auth/ai-key with the cookie and returns ONLY the masked hint', async () => {
+    const fetchFn = stubFetch(() => ok({ set: true, last4: '1234', storage_available: true }));
+    const s = await getAiKeyStatus();
+    expect(String(fetchFn.mock.calls[0][0])).toBe('/api/auth/ai-key');
+    expect(fetchFn.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin' });
+    expect(s).toEqual({ set: true, last4: '1234', storage_available: true });
+    // EGRESS FLOOR: the read NEVER carries a raw key of any spelling (AC-10).
+    for (const k of ['key', 'api_key', 'anthropic_api_key', 'ciphertext', 'secret']) {
+      expect(s).not.toHaveProperty(k);
+    }
+  });
+
+  it('setAiKey PUTs the raw key in the body — and the response NEVER echoes it (AC-10)', async () => {
+    const fetchFn = stubFetch(() => ok({ set: true, last4: '9999', storage_available: true }));
+    const res = await setAiKey('sk-ant-supersecret9999');
+
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(String(url)).toBe('/api/auth/ai-key');
+    expect(init?.method).toBe('PUT');
+    expect(init).toMatchObject({ credentials: 'same-origin' });
+    // The raw key rides the REQUEST body (browser→server only) under exactly `key`.
+    const body = JSON.parse(String(init?.body));
+    expect(body).toEqual({ key: 'sk-ant-supersecret9999' });
+    // The RESPONSE carries only the masked hint — the raw key never comes back.
+    expect(res).toEqual({ set: true, last4: '9999', storage_available: true });
+    expect(JSON.stringify(res)).not.toContain('supersecret');
+    for (const k of ['key', 'api_key', 'anthropic_api_key', 'ciphertext']) {
+      expect(res).not.toHaveProperty(k);
+    }
+  });
+
+  it('setAiKey surfaces the storage-unavailable case as a 200, NOT a thrown error (AC-18)', async () => {
+    stubFetch(() => ok({ set: false, storage_available: false }));
+    const res = await setAiKey('sk-ant-x');
+    expect(res.storage_available).toBe(false);
+    expect(res.set).toBe(false);
+  });
+
+  it('removeAiKey DELETEs /api/auth/ai-key and returns the cleared masked status', async () => {
+    const fetchFn = stubFetch(() => ok({ set: false, last4: null, storage_available: true }));
+    const res = await removeAiKey();
+    expect(fetchFn.mock.calls[0][1]).toMatchObject({ method: 'DELETE', credentials: 'same-origin' });
+    expect(res).toEqual({ set: false, last4: null, storage_available: true });
+  });
+
+  it('maps a 403 on any credential call to AuthError(auth_required) (anonymous)', async () => {
+    stubFetch(() => new Response(JSON.stringify({ error: 'auth_required', message: 'sign in' }), { status: 403 }));
+    await expect(getAiKeyStatus()).rejects.toBeInstanceOf(AuthError);
+    await expect(setAiKey('sk-ant-x')).rejects.toMatchObject({ code: 'auth_required' });
+    await expect(removeAiKey()).rejects.toMatchObject({ code: 'auth_required' });
+  });
+
+  it('maps a 422 on setAiKey to AuthError(validation)', async () => {
+    stubFetch(() => new Response(JSON.stringify({ error: 'validation', message: 'bad key' }), { status: 422 }));
+    await expect(setAiKey('')).rejects.toMatchObject({ code: 'validation', status: 422 });
   });
 });

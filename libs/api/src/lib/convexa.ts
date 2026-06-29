@@ -599,6 +599,13 @@ export interface Handoff {
 
 export type RecStatusKind = 'produced' | 'unavailable' | 'gated_off';
 export type RecDecision = 'trade' | 'no_trade';
+
+// ---- byo-ai-key (INTERFACE_CONTRACT byo-ai-key) ----------------------------------------------
+// Which key produced a rec (drives the provenance chip ONLY; NEVER a scoring input — AC-14).
+export type KeySource = 'own_key' | 'shared_admin' | 'none';
+// The `unavailable_reason` values the FE maps to the three CTA states (a/c/e). These are the
+// recognized intents; the wire string set may be wider, but the FE only keys off these three.
+export type ByoUnavailableReason = 'no_key' | 'over_limit' | 'shared_key_unconfigured';
 export type RecBias = 'long' | 'short' | 'neutral' | 'volatility';
 export type RecConfidence = 'low' | 'medium' | 'high';
 export type RecGateState = 'available' | 'no_fresh_edge' | 'cooling_down';
@@ -646,6 +653,11 @@ export interface RecResponse {
   unavailable_reason: string | null; // present iff status === 'unavailable'; NEVER leaks key text
   gate: RecGate;                   // gating snapshot AT THE TIME OF THIS RESPONSE
   cap: RecCap;
+  // byo-ai-key (additive; INTERFACE_CONTRACT byo-ai-key §2.1). NEVER a `key` field — these are the
+  // ONLY new datums the FE reads, and none is a scoring input (AC-14).
+  key_source?: KeySource;               // own_key → state d chip; shared_admin → state b chip; none → no chip
+  remaining_free_uses?: number | null;  // ADMIN shared-key path only (post-decrement); absent for regular/own-key
+  free_uses_total?: number | null;      // the per-admin allowance (default 3); present when remaining_free_uses is
 }
 
 /** The structured export that feeds BOTH the in-app call and the manual hand-off (INTERFACE §1.2).
@@ -665,6 +677,46 @@ export interface RecStatus {
   availability: { in_app_enabled: boolean }; // false ⇒ no key configured / feature off → inert in-app
   gate: RecGate;
   cap: RecCap;
+  // byo-ai-key (additive; INTERFACE_CONTRACT byo-ai-key §2.2) — so the panel can pre-render an admin's
+  // count before requesting. The read does NOT pre-commit a free use. Absent for regular users.
+  remaining_free_uses?: number | null;
+  free_uses_total?: number | null;
+}
+
+/** byo-ai-key: the masked-hint read returned by all three credential endpoints (INTERFACE §1). It
+ *  carries at most a last-4 hint — NEVER the raw key, ciphertext, or any recoverable field (AC-10). */
+export interface AiKeyStatus {
+  set: boolean;                 // a key is stored
+  last4: string | null;         // last-4 masked hint; non-null ONLY when set === true
+  storage_available: boolean;   // false ⇒ Settings storage-unavailable variant (AC-18)
+}
+
+/** GET /api/auth/ai-key — masked-hint read driving the Settings Empty/Set state. Returns ONLY
+ *  set/last4/storage_available; NEVER the key. 403 ⇒ AuthError('auth_required') (anonymous). */
+export async function getAiKeyStatus(): Promise<AiKeyStatus> {
+  const res = await fetch('/api/auth/ai-key', { credentials: 'same-origin' });
+  if (!res.ok) throw await toAuthError(res);
+  return (await res.json()) as AiKeyStatus;
+}
+
+/** PUT /api/auth/ai-key — store/overwrite the user's Anthropic key (rotate == overwrite, no history).
+ *  This is the ONLY call that sends a raw key, and it travels browser→server only. Returns the masked
+ *  status — NEVER echoes the key (AC-10). The storage-unavailable case is a 200 `{set:false,
+ *  storage_available:false}`, NOT a 5xx (AC-18). 403 ⇒ AuthError; 422 ⇒ AuthError('validation'). */
+export async function setAiKey(key: string): Promise<AiKeyStatus> {
+  const res = await fetch('/api/auth/ai-key', {
+    method: 'PUT', headers: JSON_HEADERS, credentials: 'same-origin', body: JSON.stringify({ key }),
+  });
+  if (!res.ok) throw await toAuthError(res);
+  return (await res.json()) as AiKeyStatus;
+}
+
+/** DELETE /api/auth/ai-key — delete the stored key (→ role no-key behavior on the rec surface).
+ *  Idempotent (200 `set:false` even when none was set). 403 ⇒ AuthError('auth_required'). */
+export async function removeAiKey(): Promise<AiKeyStatus> {
+  const res = await fetch('/api/auth/ai-key', { method: 'DELETE', credentials: 'same-origin' });
+  if (!res.ok) throw await toAuthError(res);
+  return (await res.json()) as AiKeyStatus;
 }
 
 /** Request a rec (in-app LLM call). ALWAYS 200 for produced/no_trade/unavailable/gated_off — the

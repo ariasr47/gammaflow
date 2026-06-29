@@ -19,6 +19,7 @@ import { useAuth } from './AuthContext';
 import { useSettings } from './useSettings';
 import { usePersona } from '../personas/usePersona';
 import { AUTH_COPY, SETTINGS_DEFAULTS } from './copy';
+import { AiKeySection } from './AiKeySection';
 
 export function SettingsPage() {
   const auth = useAuth();
@@ -131,6 +132,9 @@ export function SettingsPage() {
             sx={{ alignSelf: 'flex-start' }}
           />
         )}
+
+        {/* byo-ai-key — the write-only AI-key section, appended below Theme (UX_BLUEPRINT §4). */}
+        <AiKeySection />
       </Stack>
 
       <Snackbar

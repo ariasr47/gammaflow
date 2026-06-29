@@ -9,6 +9,7 @@
  */
 import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useState } from 'react';
 import type { TickerBundle } from '@org/api';
@@ -39,12 +40,16 @@ function PanelHarness({ bundle }: { bundle: TickerBundle }) {
 }
 
 function Mount({ bundle }: { bundle: TickerBundle }) {
+  // The AiRecPanel now uses `useNavigate` for the byo-ai-key "Add your key in Settings" CTA, so it
+  // must mount under a Router (it always does in the app; the harness mirrors that).
   return (
-    <AuthProvider>
-      <AuthDialogProvider>
-        <PanelHarness bundle={bundle} />
-      </AuthDialogProvider>
-    </AuthProvider>
+    <MemoryRouter initialEntries={['/ticker/TSLA']}>
+      <AuthProvider>
+        <AuthDialogProvider>
+          <PanelHarness bundle={bundle} />
+        </AuthDialogProvider>
+      </AuthProvider>
+    </MemoryRouter>
   );
 }
 

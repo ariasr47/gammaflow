@@ -36,6 +36,7 @@ import threading
 import time
 import zoneinfo
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from . import personas as personas_lib
@@ -58,6 +59,9 @@ ANTHROPIC_MODEL = os.getenv("AI_REC_MODEL", "claude-opus-4-8")
 # Bounded request timeout for the LLM call (seconds) — the proxy owns its own timeout so its
 # multi-second latency can never stall the ~60s cached bundle or the SSE stream.
 LLM_TIMEOUT_SECONDS = float(os.getenv("AI_REC_TIMEOUT_SECONDS", "60"))
+# byo-ai-key §6: the per-admin daily SHARED-key allowance (distinct from the global AI_REC_DAILY_CAP).
+# Default 3/day per admin user-id; consumed only on a PRODUCED shared-key rec.
+ADMIN_FREE_DAILY = int(os.getenv("AI_REC_ADMIN_FREE_DAILY", "3"))
 
 # Allowed enum vocabularies (used to coerce/validate model output to the strategy schema).
 _BIAS = {"long", "short", "neutral", "volatility"}
@@ -74,6 +78,87 @@ def _resolve_api_key() -> str | None:
 def in_app_enabled() -> bool:
     """In-app LLM path is available iff a key is configured AND the feature flag is on."""
     return IN_APP_ENABLED_FLAG and _resolve_api_key() is not None
+
+
+def shared_key_configured() -> bool:
+    """byo-ai-key: is a SHARED server-side Anthropic key configured (the admin-allowance pool)?"""
+    return IN_APP_ENABLED_FLAG and _resolve_api_key() is not None
+
+
+# ============================================================================= resolved-key VO
+@dataclass
+class ResolvedKey:
+    """
+    byo-ai-key §1: the per-request resolved-key VALUE OBJECT computed at the main.py boundary and
+    handed to the leaf. It carries WHICH key material to use + provenance + the metering identity —
+    NEVER serialized, NEVER logged. The transient `key_material` is the raw key for THIS one call
+    only; it is never put on a logged/serialized field (AC-11/12).
+
+    key_source:
+      - "own_key"      — the user's own decryptable key (their cost; NOT metered against shared;
+                         per-identity cooldown only).
+      - "shared_admin" — the shared server key, gated by the per-admin daily allowance (metered).
+      - "none"         — no usable key; `unavailable_reason` distinguishes a/c/e.
+
+    metering_identity is the key into the per-identity rate collection (the admin user-id for a
+    shared_admin path; the user id for own-key cooldown).
+    """
+    key_source: str                       # own_key | shared_admin | none
+    key_material: str | None = None        # transient raw key for ONE call; never logged/serialized
+    model: str = ANTHROPIC_MODEL
+    metering_identity: str | None = None    # user id used to key the per-identity rate state
+    unavailable_reason: str | None = None   # for key_source=none: no_key | over_limit | shared_key_unconfigured
+    remaining_free_uses: int | None = None  # admin shared-configured path only (pre-call snapshot)
+    free_uses_total: int | None = None      # the per-admin allowance, present whenever remaining is
+
+
+def resolve_key(*, user_id: str, own_key: str | None, is_admin: bool) -> ResolvedKey:
+    """
+    byo-ai-key §1: build the per-request resolved-key VALUE OBJECT from the inputs main.py resolves
+    at the orchestration boundary — the user's DECRYPTED own key (or None; decryption is done in the
+    auth leaf), and whether the user's email is in the admin allowlist. Decryption + the admin
+    allowlist read stay at the boundary; THIS function applies the owner-fixed resolution ORDER:
+
+      1. own decryptable key?  → own_key   (their cost; per-identity cooldown; NOT shared-metered)
+      2. else admin AND shared key configured AND per-admin allowance left? → shared_admin (metered)
+      3. else none, with the distinguished reason:
+           - admin AND shared configured AND allowance == 0 → over_limit             (state c)
+           - admin AND shared NOT configured                → shared_key_unconfigured (state e)
+           - else (regular, no own key)                     → no_key                  (state a)
+
+    Own-key-first applies EVEN for admins, EVEN when no shared key exists. The precondition ORDER on
+    the admin branch (shared-configured? gates allowance-left?) makes an admin with no shared key
+    resolve to (e), not (c). NEVER raises. The raw key is carried transiently in `key_material`.
+    """
+    # (1) Own key first — for everyone (regular + admin).
+    if own_key:
+        return ResolvedKey(
+            key_source="own_key", key_material=own_key, model=ANTHROPIC_MODEL,
+            metering_identity=user_id)
+
+    shared_ok = shared_key_configured()
+
+    # (2)/(3) Admin shared-allowance branch — only when admin AND a shared key is configured.
+    if is_admin:
+        if shared_ok:
+            remaining = _rate.admin_remaining(user_id)
+            if remaining > 0:
+                return ResolvedKey(
+                    key_source="shared_admin", key_material=_resolve_api_key(),
+                    model=ANTHROPIC_MODEL, metering_identity=user_id,
+                    remaining_free_uses=remaining, free_uses_total=ADMIN_FREE_DAILY)
+            # Shared configured but allowance exhausted → (c) over_limit. Surface remaining 0.
+            return ResolvedKey(
+                key_source="none", metering_identity=user_id, unavailable_reason="over_limit",
+                remaining_free_uses=0, free_uses_total=ADMIN_FREE_DAILY)
+        # Admin, no shared key configured → (e) shared_key_unconfigured. No counter.
+        return ResolvedKey(
+            key_source="none", metering_identity=user_id,
+            unavailable_reason="shared_key_unconfigured")
+
+    # Regular user, no own key → (a) no_key. No counter.
+    return ResolvedKey(
+        key_source="none", metering_identity=user_id, unavailable_reason="no_key")
 
 
 # ============================================================================= LLM provider seam
@@ -261,18 +346,20 @@ _STRATEGY_TOOL_SCHEMA = {
 _FORCE_STUB = os.getenv("AI_REC_STUB", "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def _get_provider() -> LLMProvider:
+def _get_provider(resolved: ResolvedKey) -> LLMProvider:
     """
-    Resolve the active LLM provider behind the seam. Real Claude when a key is configured, the
-    feature flag is on, the `anthropic` SDK is importable, and the stub is NOT forced; otherwise the
-    deterministic stub (so the path is exercisable without a key/cost — and so a configured key with
-    no SDK degrades cleanly to the stub instead of always failing `no_key`).
+    Build the active LLM provider for THIS request from the resolved-key VO (byo-ai-key §1): given
+    resolved key material + model, build the real Claude adapter when the `anthropic` SDK is
+    importable and the stub is NOT forced; otherwise the deterministic stub (so the path is
+    exercisable without a key/cost — and so a configured key with no SDK degrades cleanly to the
+    stub instead of always failing). Provider-agnostic-friendly: the key material is request-scoped,
+    not process-global.
     """
-    key = _resolve_api_key()
-    if key and IN_APP_ENABLED_FLAG and not _FORCE_STUB:
+    key = resolved.key_material
+    if key and not _FORCE_STUB:
         try:
             import anthropic  # noqa: F401 — availability probe only
-            return AnthropicLLMProvider(key)
+            return AnthropicLLMProvider(key, model=resolved.model)
         except Exception:
             logger.warning("ai_recommendation: anthropic SDK unavailable; using STUB provider "
                            "(set AI_REC_STUB= and `pip install anthropic` for the real call)")
@@ -406,96 +493,146 @@ def build_export(ticker: str, bundle: dict, persona_id: str | None) -> dict:
 
 
 # ============================================================================= cap + cooldown state
-class _RateState:
-    """
-    Process-local cap/cooldown counter (single-user today; consistent with the metrics aggregate's
-    ephemerality — RESETS ON RESTART). Thread-safe (the endpoints run the proxy off the event loop).
+def _today_key() -> str:
+    return datetime.now(_EXCHANGE_TZ).strftime("%Y-%m-%d")
 
-    Cooldown: AI_REC_COOLDOWN_SECONDS after the last successful query. Daily cap: AI_REC_DAILY_CAP
-    per UTC day; `resets_at` = the next local-ET midnight reset boundary (documented choice).
+
+def _resets_at_iso() -> str:
+    """Next daily reset boundary: local-ET midnight, expressed in UTC ISO."""
+    now_et = datetime.now(_EXCHANGE_TZ)
+    next_midnight = (now_et + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    return next_midnight.astimezone(timezone.utc).isoformat()
+
+
+class _IdentityRate:
+    """
+    Per-identity metering record (byo-ai-key §6): the per-identity cooldown (anti-over-trading,
+    applied per identity so one user's calls never cool down another's) + the per-admin SHARED
+    daily allowance counter. RESETS ON RESTART (process-local, ephemeral). Not individually locked
+    — the owning `_RateCollection` holds one lock for the whole collection.
+    """
+
+    def __init__(self):
+        self.last_query_ts: float | None = None     # per-identity cooldown anchor
+        self.global_count_day: str | None = None     # global-cap day for THIS identity's calls
+        self.global_count: int = 0                    # contributes to the shipped global cap
+        self.admin_count_day: str | None = None       # shared-allowance day
+        self.admin_count: int = 0                     # shared-allowance units consumed today
+
+
+class _RateCollection:
+    """
+    Process-local, KEYED collection of per-identity rate state (byo-ai-key §6) — `_RateState`
+    evolved from one global instance into one entry per identity key, same lock pattern. Thread-safe
+    (the endpoints run the proxy off the event loop). A metering fault never raises 5xx.
+
+    - Per-identity COOLDOWN: `COOLDOWN_SECONDS` after that identity's last successful query.
+    - Global DAILY CAP (`AI_REC_DAILY_CAP`): the shipped orthogonal cap, kept per-identity so it
+      stays a per-caller daily ceiling (a calm `over_cap` unavailable; never blocks another user).
+    - Per-ADMIN SHARED allowance (`AI_REC_ADMIN_FREE_DAILY`): consumed only on a PRODUCED
+      shared_admin rec; reset at local-ET midnight per counter.
     """
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._last_query_ts: float | None = None
-        self._count_day: str | None = None
-        self._count: int = 0
+        self._by_identity: dict[str, _IdentityRate] = {}
+
+    def _entry(self, identity: str) -> _IdentityRate:
+        e = self._by_identity.get(identity)
+        if e is None:
+            e = _IdentityRate()
+            self._by_identity[identity] = e
+        return e
 
     @staticmethod
-    def _today_key() -> str:
-        return datetime.now(_EXCHANGE_TZ).strftime("%Y-%m-%d")
+    def _roll_global(e: _IdentityRate):
+        today = _today_key()
+        if e.global_count_day != today:
+            e.global_count_day = today
+            e.global_count = 0
 
     @staticmethod
-    def resets_at_iso() -> str:
-        """Next daily reset boundary: local-ET midnight, expressed in UTC ISO."""
-        now_et = datetime.now(_EXCHANGE_TZ)
-        next_midnight = (now_et + timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0)
-        return next_midnight.astimezone(timezone.utc).isoformat()
+    def _roll_admin(e: _IdentityRate):
+        today = _today_key()
+        if e.admin_count_day != today:
+            e.admin_count_day = today
+            e.admin_count = 0
 
-    def _roll_day(self):
-        today = self._today_key()
-        if self._count_day != today:
-            self._count_day = today
-            self._count = 0
+    @staticmethod
+    def _cooldown_remaining(e: _IdentityRate) -> int:
+        if e.last_query_ts is None:
+            return 0
+        elapsed = time.time() - e.last_query_ts
+        return max(0, int(round(COOLDOWN_SECONDS - elapsed)))
 
-    def snapshot(self) -> dict:
-        """Read-only cap/cooldown view for §1.3 RecStatus (no mutation)."""
+    def snapshot(self, identity: str) -> dict:
+        """Read-only cap/cooldown view for §1.3 RecStatus (no mutation) for one identity."""
         with self._lock:
-            self._roll_day()
-            over = self._count >= DAILY_CAP
-            remaining = max(0, DAILY_CAP - self._count)
-            cooldown_remaining = self._cooldown_remaining()
+            e = self._entry(identity)
+            self._roll_global(e)
+            over = e.global_count >= DAILY_CAP
+            remaining = max(0, DAILY_CAP - e.global_count)
+            cooldown_remaining = self._cooldown_remaining(e)
         return {
             "cap": {"over_limit": over, "remaining_today": remaining,
-                    "resets_at": self.resets_at_iso()},
+                    "resets_at": _resets_at_iso()},
             "cooldown_remaining_seconds": cooldown_remaining,
         }
 
-    def _cooldown_remaining(self) -> int:
-        if self._last_query_ts is None:
-            return 0
-        elapsed = time.time() - self._last_query_ts
-        return max(0, int(round(COOLDOWN_SECONDS - elapsed)))
-
-    def check_blocked(self) -> str | None:
-        """
-        Return a block reason WITHOUT consuming a slot: "over_cap" | "cooling_down" | None.
-        Cooldown is reported but does NOT short-circuit the rec (the rec gate maps cooldown into
-        gate.state; over_cap maps into unavailable). Used by the rec path before a call.
-        """
+    def check_blocked(self, identity: str) -> str | None:
+        """Block reason WITHOUT consuming a slot: "over_cap" | "cooling_down" | None."""
         with self._lock:
-            self._roll_day()
-            if self._count >= DAILY_CAP:
+            e = self._entry(identity)
+            self._roll_global(e)
+            if e.global_count >= DAILY_CAP:
                 return "over_cap"
-            if self._cooldown_remaining() > 0:
+            if self._cooldown_remaining(e) > 0:
                 return "cooling_down"
             return None
 
-    def commit_query(self):
-        """Record a successful query: stamps the cooldown + increments the daily counter."""
+    def commit_query(self, identity: str):
+        """Record a successful query for this identity: stamp cooldown + bump the global counter."""
         with self._lock:
-            self._roll_day()
-            self._last_query_ts = time.time()
-            self._count += 1
+            e = self._entry(identity)
+            self._roll_global(e)
+            e.last_query_ts = time.time()
+            e.global_count += 1
+
+    # --- per-admin SHARED allowance (byo-ai-key §6) -------------------------------------------
+    def admin_remaining(self, admin_user_id: str) -> int:
+        """Remaining shared-key allowance for this admin today (read-only, no commit)."""
+        with self._lock:
+            e = self._entry(admin_user_id)
+            self._roll_admin(e)
+            return max(0, ADMIN_FREE_DAILY - e.admin_count)
+
+    def admin_commit(self, admin_user_id: str) -> int:
+        """Consume ONE shared-allowance unit (on a PRODUCED shared rec only). Returns the remaining."""
+        with self._lock:
+            e = self._entry(admin_user_id)
+            self._roll_admin(e)
+            e.admin_count += 1
+            return max(0, ADMIN_FREE_DAILY - e.admin_count)
 
 
-_rate = _RateState()
+_rate = _RateCollection()
 
 
 def reset_rate_state_for_tests():
-    """Test/verification hook: clear the process-local cap/cooldown counter."""
+    """Test/verification hook: clear the WHOLE per-identity rate collection (byo-ai-key §6)."""
     global _rate
-    _rate = _RateState()
+    _rate = _RateCollection()
 
 
 # ============================================================================= gate derivation
-def derive_gate(ai_eval: dict | None) -> dict:
+def derive_gate(ai_eval: dict | None, identity: str = "_global") -> dict:
     """
     Derive INTERFACE §1.3 `gate` from the EXISTING `ai_eval` machinery (READ only — never recompute
-    or alter it) + the cooldown window:
-      - `cooling_down` ⇔ within the cooldown window after the last query (takes presentation
-        precedence, but reported truthfully).
+    or alter it) + the PER-IDENTITY cooldown window (byo-ai-key §6: one user's calls never cool down
+    another's):
+      - `cooling_down` ⇔ within the cooldown window after THIS identity's last query (takes
+        presentation precedence, but reported truthfully).
       - `no_fresh_edge` ⇔ guardrails say not actionable/changed (`!ai_eval.ready` or
         `!ai_eval.changed`); human strings surfaced in `gate.reasons` (mirrors `ai_eval.reasons`).
       - `available` otherwise.
@@ -503,7 +640,7 @@ def derive_gate(ai_eval: dict | None) -> dict:
     ai_eval = ai_eval or {}
     ready = bool(ai_eval.get("ready"))
     changed = bool(ai_eval.get("changed"))
-    snap = _rate.snapshot()
+    snap = _rate.snapshot(identity)
     cooldown_remaining = snap["cooldown_remaining_seconds"]
 
     reasons: list[str] = []
@@ -532,14 +669,28 @@ def derive_gate(ai_eval: dict | None) -> dict:
     }
 
 
-def status_payload(ai_eval: dict | None) -> dict:
-    """Emit INTERFACE §1.3 `RecStatus` (no LLM call, side-effect-free)."""
-    snap = _rate.snapshot()
-    return {
+def status_payload(ai_eval: dict | None, resolved: ResolvedKey | None = None) -> dict:
+    """
+    Emit INTERFACE §1.3/§2.2 `RecStatus` (no LLM call, side-effect-free — does NOT pre-commit a
+    free use). With a `resolved` VO (authenticated request) the per-identity cooldown + the additive
+    `remaining_free_uses`/`free_uses_total` are populated (byo-ai-key §2):
+      - present (number) ONLY for an admin on a shared-key-CONFIGURED path,
+      - null/omitted for regular users, own-key, and shared-unconfigured paths.
+    """
+    identity = (resolved.metering_identity if resolved and resolved.metering_identity
+                else "_global")
+    snap = _rate.snapshot(identity)
+    payload = {
         "availability": {"in_app_enabled": in_app_enabled()},
-        "gate": derive_gate(ai_eval),
+        "gate": derive_gate(ai_eval, identity),
         "cap": snap["cap"],
+        "remaining_free_uses": None,
+        "free_uses_total": None,
     }
+    if resolved is not None and resolved.remaining_free_uses is not None:
+        payload["remaining_free_uses"] = resolved.remaining_free_uses
+        payload["free_uses_total"] = resolved.free_uses_total
+    return payload
 
 
 # ============================================================================= the rec proxy
@@ -553,18 +704,27 @@ def _persona_for_provenance(persona_id: str | None) -> dict:
 
 def generate_recommendation(ticker: str, bundle: dict, *, persona_id: str | None,
                             dte_min, dte_max, override: bool,
-                            snapshot_fingerprint: str) -> dict:
+                            snapshot_fingerprint: str,
+                            resolved: ResolvedKey) -> dict:
     """
-    The best-effort, isolated, gated LLM proxy → emits INTERFACE §1.1 `RecResponse` (ALWAYS a
+    The best-effort, isolated, gated LLM proxy → emits INTERFACE §1.1/§2.1 `RecResponse` (ALWAYS a
     well-formed dict the endpoint returns as HTTP 200). NEVER raises for an LLM/cap/key/gate fault.
 
+    `resolved` (byo-ai-key §1) is the per-request resolved-key VALUE OBJECT computed at the main.py
+    boundary — it carries WHICH key material to use, `key_source`, the model, the per-identity
+    metering identity, and (for key_source=none) the distinguished `unavailable_reason`. The leaf
+    NEVER decrypts and NEVER reads env for the key; it consumes the VO. The raw `key_material` is
+    used transiently to build the provider and is NEVER serialized/logged.
+
     Order of operations:
-      1. Pin provenance from the cached bundle (as_of / pinned_fingerprint / stale_born).
-      2. Gate short-circuit: gate==no_fresh_edge && !override => `gated_off` (strategy null).
-      3. Cap short-circuit: over_cap => `unavailable` / "over_cap".
-      4. Availability: no key/feature off => `unavailable` / "no_key".
-      5. Call the LLM behind the seam (own timeout). Fault => `unavailable` with a safe reason.
-      6. Success => `produced` + coerced strategy; commit the cap/cooldown counter.
+      1. Pin provenance + key_source/free-use fields from the cached bundle + the VO.
+      2. key_source==none short-circuit: emit `unavailable` with the distinguished reason
+         (no_key (a) / over_limit (c) / shared_key_unconfigured (e)) — NO LLM call, NO meter.
+      3. Gate short-circuit: gate==no_fresh_edge && !override => `gated_off`.
+      4. Per-identity cap short-circuit: over_cap => `unavailable` / "over_cap".
+      5. Call the LLM behind the seam (own timeout). Fault => `unavailable` (NO meter consumed).
+      6. Success => `produced` + coerced strategy; commit the per-identity cooldown/cap; on a
+         shared_admin success ONLY, consume one per-admin allowance unit (mirror commit_query).
     """
     meta = bundle.get("meta") or {}
     freshness = meta.get("freshness") or {}
@@ -573,10 +733,17 @@ def generate_recommendation(ticker: str, bundle: dict, *, persona_id: str | None
     pinned_fingerprint = ai_eval.get("state_fingerprint") or snapshot_fingerprint or ""
     stale_born = bool(freshness.get("stale"))
     persona = _persona_for_provenance(persona_id)
-    gate = derive_gate(ai_eval)
-    cap_snap = _rate.snapshot()["cap"]
+    identity = resolved.metering_identity or "_global"
+    gate = derive_gate(ai_eval, identity)
+    cap_snap = _rate.snapshot(identity)["cap"]
+    # The provenance/free-use fields the FE keys off (byo-ai-key §2). For key_source=none these are
+    # the pre-call snapshot values from the VO; on a produced shared rec remaining is updated below.
+    key_source = resolved.key_source
+    remaining_free_uses = resolved.remaining_free_uses
+    free_uses_total = resolved.free_uses_total
 
-    def envelope(status, *, strategy=None, unavailable_reason=None):
+    def envelope(status, *, strategy=None, unavailable_reason=None, ks=None,
+                 remaining=None, total=None):
         return {
             "status": status,
             "persona": persona,
@@ -587,28 +754,33 @@ def generate_recommendation(ticker: str, bundle: dict, *, persona_id: str | None
             "unavailable_reason": unavailable_reason,
             "gate": gate,
             "cap": cap_snap,
+            # byo-ai-key additive fields:
+            "key_source": ks if ks is not None else key_source,
+            "remaining_free_uses": remaining if remaining is not None else remaining_free_uses,
+            "free_uses_total": total if total is not None else free_uses_total,
         }
 
-    # (2) Gate short-circuit — belt-and-suspenders (the FE normally gates ahead via §1.3).
+    # (2) No usable key — emit the distinguished unavailable reason. NO LLM, NO meter (AC-1/3/6/24).
+    if key_source == "none":
+        return envelope("unavailable", ks="none",
+                        unavailable_reason=resolved.unavailable_reason or "no_key")
+
+    # (3) Gate short-circuit — belt-and-suspenders (the FE normally gates ahead via §1.3).
     if gate["state"] == "no_fresh_edge" and not override:
         return envelope("gated_off")
 
-    # (3) Cap short-circuit — a calm blocked state, never an HTTP error.
-    block = _rate.check_blocked()
+    # (4) Per-identity global-cap short-circuit — a calm blocked state, never an HTTP error.
+    block = _rate.check_blocked(identity)
     if block == "over_cap":
         return envelope("unavailable", unavailable_reason="over_cap")
 
-    # (4) Availability (no key configured / feature off).
-    if not in_app_enabled():
-        return envelope("unavailable", unavailable_reason="no_key")
-
-    # (5) Call the LLM behind the seam. Any fault => contained `unavailable`.
+    # (5) Call the LLM behind the seam. Any fault => contained `unavailable` (NO meter — AC-17).
     try:
         system_prompt = assemble_persona_prompt(persona_id)
         context = serialize_context(bundle)
         context_json = json.dumps(context, default=str)
         glossary = _read_glossary()
-        provider = _get_provider()
+        provider = _get_provider(resolved)
         raw = provider.generate_strategy(
             system_prompt=system_prompt, context_json=context_json, glossary=glossary,
             dte_min=dte_min, dte_max=dte_max)
@@ -618,10 +790,15 @@ def generate_recommendation(ticker: str, bundle: dict, *, persona_id: str | None
         logger.exception("ai_recommendation: unexpected proxy failure; returning unavailable")
         return envelope("unavailable", unavailable_reason="llm_error")
 
-    # (6) Success — coerce to schema, commit the cap/cooldown counter, refresh cap snapshot.
+    # (6) Success — coerce to schema, commit the per-identity cooldown/cap counter.
     strategy = _coerce_strategy(raw)
-    _rate.commit_query()
-    cap_snap = _rate.snapshot()["cap"]
+    _rate.commit_query(identity)
+    cap_snap = _rate.snapshot(identity)["cap"]
+    # On a shared_admin PRODUCED rec ONLY, consume one per-admin allowance unit (count on success
+    # only — own-key is unmetered against the shared pool; byo-ai-key §6).
+    if key_source == "shared_admin" and resolved.metering_identity:
+        remaining_free_uses = _rate.admin_commit(resolved.metering_identity)
+        free_uses_total = ADMIN_FREE_DAILY
     return {
         "status": "produced",
         "persona": persona,
@@ -632,4 +809,7 @@ def generate_recommendation(ticker: str, bundle: dict, *, persona_id: str | None
         "unavailable_reason": None,
         "gate": gate,
         "cap": cap_snap,
+        "key_source": key_source,
+        "remaining_free_uses": remaining_free_uses,
+        "free_uses_total": free_uses_total,
     }
