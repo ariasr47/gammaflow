@@ -42,6 +42,11 @@ gateway you name.
 ## 1. File topology (what's constant vs variable)
 - **Constant (every session reads, I rarely write):**
   `.claude/PROJECT_CONTEXT.md` (ground truth) · `.claude/OPEN_THREADS.md` (open/resolved log).
+- **Session-resume overlay (read at boot if present):** `.claude/RESUME.md` — the conductor's own
+  "where we are right now + what's next" snapshot, written/refreshed at GATE R (§3). The `/conductor` boot
+  reads it LAST, after the canon, as an overlay (reconcile + flag divergence, never a replacement); a fresh
+  conductor I start after a context-threshold handoff continues from it. Optional + transient — refresh or
+  remove it once consumed so it never goes stale against the canon.
 - **Standing references (I route to, don't duplicate):**
   `.claude/COMPRESSOR_PROMPTS.md` (#1 Universal · #2 Session-Transition · #3 Split · #4 Resume) ·
   `.claude/ROLE_LAUNCH_PROMPTS.md` (§1 Architect · §1b Architect-after-PM · §2 PM · §2b PM-first ·
@@ -245,10 +250,20 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Route:** back to the owning role; mark the contract `CONTESTED` in the manifest.
 
 ### GATE R — Resume snapshot (long session, fresh tab)
-- **Trigger:** "snapshot to resume / continuing this elsewhere."
+- **Trigger:** "snapshot to resume / continuing this elsewhere." **OR (proactive, self-fired):** the
+  conductor's own context usage passes **~85% of the window** (or the harness signals context is running
+  high). The conductor does not wait to be asked — it watches its own context and fires GATE R itself.
+- **Proactive context-threshold handoff (the self-fire path):** at ~85%, pause at a **safe boundary**
+  (between gateways, **never mid-build** — finish or cleanly checkpoint the in-flight role/gate first),
+  write/refresh `.claude/RESUME.md`, then **PROPOSE** that the user continue in a fresh `/conductor` session
+  — which reads `.claude/RESUME.md` at boot (§1) and resumes exactly here. **Propose, never force:** starting
+  the fresh session is the user's; harness auto-summarization is a backstop, not a substitute for writing the
+  snapshot. This closes a loop with the boot read: GATE R writes it → the next `/conductor` consumes it.
 - **Compress:** Compressor **#4** (Session-Resume).
-- **Write:** `RESUME.md` (objective, done + files changed, in-progress & exactly where it stopped,
-  next concrete step, gotchas). Self-contained against `PROJECT_CONTEXT.md`.
+- **Write:** the session-level snapshot goes to `.claude/RESUME.md` (top level); a feature-scoped resume of
+  one in-flight build may instead go to `{FEATURE}/RESUME.md`. Contents: objective, done + files changed,
+  in-progress & exactly where it stopped, next concrete step, gotchas. Self-contained against
+  `PROJECT_CONTEXT.md`. Mark it dated so a future boot can tell a fresh overlay from a stale one.
 
 ### GATE Q — QA / Verify (post-executioners → Ship or Bounce)   *(system-2)*
 - **Trigger:** "both lanes built / QA it / verify the feature before ship."
@@ -401,6 +416,12 @@ NEXT      : <role(s) to launch> — launch prompt below
   session (GATE Q, `ROLE_LAUNCH_PROMPTS.md` §6) — never the builder's self-verification. QA confirms
   every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs
   on the fix. (Run QA on a different model where possible — de-correlates blind spots, system-6.)
+- **Session continuity (the resume loop):** the conductor reads `.claude/RESUME.md` at boot if present (an
+  overlay on the reconstructed canon — reconcile + flag divergence, never a replacement), and when its own
+  context passes **~85% of the window** it proactively fires **GATE R** (write/refresh `.claude/RESUME.md`)
+  at a **safe boundary** (between gateways, never mid-build) and **PROPOSES** continuing in a fresh
+  `/conductor` session. Propose, never force; harness auto-summarization is a backstop, not a substitute for
+  the written snapshot. The two halves form one loop — GATE R writes it, the next boot consumes it.
 - Frontend writes target `frontend.dir`, backend writes target `backend.dir` (both from `project.json`);
   contracts always live in `.claude/contracts/` at the workspace root.
 - **Communicate for every audience (§7):** every user-facing report, signal, and question leads with a

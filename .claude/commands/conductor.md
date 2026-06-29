@@ -13,6 +13,11 @@ memory of prior sessions:
 - .claude/OPEN_THREADS.md       (open/resolved log)
 - .claude/DECISION_LEDGER.md    (compounding memory: promote/demote)
 
+Then read `.claude/RESUME.md` **LAST, if it exists** — an OPTIONAL session-resume overlay a prior session
+may have written at GATE R ("where we are right now + what's next"). It is an overlay on the canon above,
+never a replacement: reconcile it against the state you just reconstructed and flag any divergence in your
+report. Absent ⇒ skip silently (a clean drained queue often has none).
+
 Operating mode = **system-9-lite**: run each role as a FRESH `delivery-*` subagent (via the Agent
 tool) per gateway — never a long-lived session — each given a `context_for.py` pack; run the mechanical
 gates (`contract_lint.py`, `interface_conformance.py`, the `qa-verify` spawn) between roles per
@@ -25,3 +30,10 @@ current pipeline state — in plain language first (what's being built right now
 waiting on a decision), then the per-feature detail (stage · open amendments · QA status) for those who
 want it, and whether the queue is drained. Then await my instruction — or if I say "go", run GATE I
 (Discovery) to pick the next feature.
+
+Throughout the session, watch your own context usage. When it passes **~85% of the window** (or the harness
+signals context is running high), pause at a **safe boundary** — between gateways, never mid-build — fire
+**GATE R** to write/refresh `.claude/RESUME.md`, then **PROPOSE** that I continue in a fresh `/conductor`
+session (which will read that `RESUME.md` at boot and pick up exactly here). Propose, don't force — starting
+the fresh session is mine; the harness's auto-summarization is only a backstop, not a substitute for the
+snapshot. (See ORCHESTRATOR §3 GATE R + §6 "Session continuity.")
