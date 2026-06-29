@@ -43,6 +43,15 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# Non-Claude AI-assistant scaffolding (Nx-generated). This repo uses Claude Code
+# (.claude/) + AGENTS.md; the per-assistant skill mirrors are unused — ignore so
+# `nx` regenerating them doesn't re-add them to the repo.
+.gemini/
+.cursor/
+.codex/
+.opencode/
+.agents/
+
 .claude/worktrees
 .claude/settings.local.json
 .nx/polygraph

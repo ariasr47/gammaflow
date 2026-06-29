@@ -1,107 +1,124 @@
-# New Nx Repository
+# Convexa
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+**Options dealer-gamma (GEX) analytics — read where price is pinned, where it's repelled, and whether there's an edge right now.**
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+Convexa turns an equity's option chain into **dealer gamma-exposure (GEX) structure** — call/put walls, the gamma flip, the magnet — then layers volatility context, real-time order flow, and a rule-based read of the current setup. It's built for **longer-dated (~7–45 DTE) swing trading with optional intraday timing**.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
-## Finish your Nx platform setup
+> **Convexa** is the product/UI brand; **GammaFlow** is the engine and codebase name (package names, identifiers, and this repo stay `gammaflow`).
 
-🚀 [Finish setting up your workspace](https://cloud.nx.app/connect/HrpNeBk5j2) to get faster builds with remote caching, distributed task execution, and self-healing CI. [Learn more about Nx Cloud](https://nx.dev/ci/intro/why-nx-cloud).
+> ⚠️ **Disclaimer** — This is a personal project for research and educational use. It is **not financial advice**, and it does **not** place real trades: all position tracking is **simulated (paper)** with **no broker or order-execution path**. Markets are risky; do your own research.
 
-## Generate a library
+---
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+## What it does
+
+- **GEX strike profile** — net/call/put gamma by strike, walls, peak gamma, gamma flip (zero-crossing of net GEX), max pain, put/call ratio.
+- **Positioning context** — net DEX, Vol/OI, IV skew, and term structure (contango/backwardation), each surfaced as neutral, unscored reads.
+- **Live order flow** — real-time NBBO mid, spread, signed 5-minute net flow, and a live gamma flip over SSE, with honest live-vs-stale and session-aware status.
+- **Off-exchange / dark-pool context** — off-exchange volume ratio, volume-by-price, and the largest block prints (display-only, never a directional signal).
+- **Rule-based setup read + opportunity score/tier** — a gated, change-aware signal designed to resist over-trading.
+- **AI recommendations** *(optional)* — an on-demand, risk-first entry recommendation from an LLM, fed a JSON export of the already-computed state and framed by a selectable trader persona. Advisory only; accepting one maps into the paper-sim tracker.
+- **Simulated positions** — a paper-trading portfolio (manual / market / limit fills) with P/L, trend, grouping, and saved views.
+- **User accounts** — email/username + password auth, sessions, and a few per-user preferences (Google sign-in is wired but disabled until OAuth credentials are configured).
+
+The app is multi-page: a **Landing** splash (`/`), the **Ticker viewer** (`/ticker/:symbol`, the GEX dashboard), the simulated **Positions** portfolio (`/positions`), and a **Scanner** stub (`/scanner`).
+
+---
+
+## Tech stack
+
+- **Monorepo:** [Nx](https://nx.dev) 23 (polyglot)
+- **Backend:** Python · [FastAPI](https://fastapi.tiangolo.com) · Server-Sent Events · in-memory caching
+- **Frontend:** [React 19](https://react.dev) · [Vite](https://vite.dev) · [MUI](https://mui.com)/Emotion · [Recharts](https://recharts.org) · React Router
+- **Market data:** Massive (Polygon.io-compatible) via a vendor-agnostic provider port
+- **Tests:** Vitest + Testing Library (frontend), Playwright (e2e)
+
+---
+
+## Repository layout
+
+```
+apps/
+  api/            FastAPI backend (the GEX/quant engine, SSE, auth)  → :8000
+  dashboard/      React + Vite frontend (Convexa UI)                 → :4200 (proxies /api)
+  dashboard-e2e/  Playwright end-to-end tests
+libs/
+  api/            @org/api — shared, typed API client (consumed as source)
+.claude/          Delivery-orchestration system (contracts, role agents, tools)
+docs/             Design notes
 ```
 
-## Run tasks
+`apps/dashboard` proxies `/api` to the backend in dev, so there's no CORS to configure.
 
-To build the library use:
+---
 
-```sh
-npx nx build pkg1
+## Getting started
+
+### Prerequisites
+
+- **Node.js** (LTS; developed with Node 24 via [nvm](https://github.com/coreybutler/nvm-windows) on Windows) + npm
+- **Python 3.11+** (on Windows, the `py` launcher)
+- A **Massive API key** for live market data (the backend needs one to fetch chains; see *Configuration*)
+
+### Install
+
+```bash
+# JS workspace
+npm install
+
+# Python backend (creates apps/api/.venv and installs deps)
+cd apps/api
+py -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
+# .venv/bin/python -m pip install -r requirements.txt          # macOS/Linux
+cd ../..
 ```
 
-To run any task with Nx use:
+### Configuration
 
-```sh
-npx nx <target> <project-name>
+Create `apps/api/.env` (gitignored — never commit it):
+
+```dotenv
+MASSIVE_API_KEY=your_key_here        # required for live data
+# Optional:
+ANTHROPIC_API_KEY=sk-ant-...         # enables in-app AI recommendations (absent => feature reports "no key")
+AUTH_SESSION_SIGNING_KEY=...         # set for sessions that survive a backend restart
+GOOGLE_CLIENT_ID=...                 # enables "Continue with Google" (absent => button shown disabled)
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=...
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+The full set of tunables (cache TTL, freshness, gating thresholds, etc.) is documented in `.claude/PROJECT_CONTEXT.md` §7.
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+> The user-accounts store defaults to **in-memory** (resets on restart) — a deliberate first cut. The storage seam is built so a persistent database is a contained swap.
 
-## Versioning and releasing
+### Run
 
-To version and release the library use
-
-```
-npx nx release
-```
-
-Pass `--dry-run` to see what would happen without actually releasing the library.
-
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Keep TypeScript project references up to date
-
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
-
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
-
-```sh
-npx nx sync
+```bash
+npm run dev            # serve backend (:8000) + frontend (:4200) together
+# or individually:
+npm run serve:api
+npm run serve:dashboard
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+Then open **http://localhost:4200**.
 
-```sh
-npx nx sync:check
+### Test / lint / format
+
+```bash
+npm test               # all projects
+npx nx test dashboard  # frontend unit/component/integration (Vitest)
+npm run lint
+npm run format         # or: npm run format:check
+npm run graph          # visualize the Nx project graph
 ```
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+---
 
-## Nx Cloud
+## A note on how this is built
 
-Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
+This repo carries its own **delivery-orchestration system** under `.claude/` — a contract-driven pipeline (Architect → PM → UX → Backend ‖ Frontend → QA) with mechanical gate-checks, runtime interface-conformance, and a compounding decision ledger. It's how features are specced, built, and verified here. See [`CLAUDE.md`](CLAUDE.md) and [`.claude/PROJECT_CONTEXT.md`](.claude/PROJECT_CONTEXT.md) for the ground truth.
 
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## License
 
-### Set up CI (non-Github Actions CI)
-
-**Note:** This is only required if your CI provider is not GitHub Actions.
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
-```
-
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Install Nx Console
-
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
-
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Useful links
-
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+MIT
