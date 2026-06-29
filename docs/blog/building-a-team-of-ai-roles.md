@@ -193,7 +193,11 @@ just requested:
   item, that it does what it promised against the actually-running software. It fixes *nothing*:
   a failure bounces back to the builder like any other amendment, and the inspector re-checks
   the fix. Nothing reaches "shipped" without its sign-off. (This was the very first name on our
-  "next hires" wish-list. It's on staff now.)
+  "next hires" wish-list. It's on staff now.) And it earns its keep: on a recent feature we ran the
+  inspector on a *different* AI model than the builders — and it caught a real, security-relevant slip
+  they had shipped, where a "you must be signed in" gate was checked only in the browser and never
+  confirmed by the server. One mind wearing every hat had missed it at every step; a second, *different*
+  mind caught it in a single pass. (More on why that different model matters under "The next hires.")
 - **Bounce, don't bulldoze.** If a later role spots a problem in an earlier decision, it
   doesn't just override it — it sends a labeled **amendment** back to the role that owns that
   call. (In one of our features, the designer flagged that a prompt was assuming *every* trader
@@ -280,7 +284,11 @@ needs, that outside content can't hijack a session, and that nothing private lea
 deliberately holding this hire until the product goes live — handles real money, real data, or
 the open web — because before then, a dedicated red-teamer (ideally on a *different* AI model,
 so its blind spots don't match the builders') costs more than it would catch. We know exactly
-when to make the hire: the day any of those three things enters the picture.
+when to make the hire: the day any of those three things enters the picture. And that day just got
+closer — the product recently grew real user accounts and logins, the first step toward handling real
+data. We even got a preview of the payoff: the inspector catch described earlier happened *because* we
+ran that check on a different model than the builders. A Security reviewer is that same bet — a fresh,
+differently-wired mind — made on purpose and pointed at breaking things.
 
 None of these break the model — they *are* the model: one more fresh expert, one more clean
 handoff, one more lane nobody else is allowed to cross.
@@ -364,6 +372,6 @@ every specialist is brilliant, well-briefed, and never too tired to do their bes
 
 ---
 
-*GammaFlow is a single-ticker options-analytics dashboard. This post is about how it's
-**built**, not what it does — the same approach would work for almost any software. In fact it's now
-packaged as a reusable kit, so it can.*
+*GammaFlow (presented in the UI as **Convexa**) is a multi-page options-analytics app. This post is about
+how it's **built**, not what it does — the same approach would work for almost any software. In fact it's
+now packaged as a reusable kit, so it can.*

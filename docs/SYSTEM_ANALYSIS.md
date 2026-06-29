@@ -5,13 +5,23 @@
 > `OPEN_THREADS.md`, `BACKLOG.md`) **as a tool for one person to build large software fast**.
 > Purpose: drive continuous improvement of the *system itself*. The roadmap (§7) is mirrored into
 > `.claude/BACKLOG.md` §E so GATE I can cull and schedule these like any other feature.
-> Last revised: **2026-06-24**. Treat as a default, not canon — revise it as the system evolves.
+> Last revised: **2026-06-28**. Treat as a default, not canon — revise it as the system evolves.
 >
 > **2026-06-24 — the framework is now a reusable kit (system-13).** What was GammaFlow's `.claude/` is
 > extracted into a standalone **delivery-kit** (separate repo); this project is **consumer #1**.
 > Framework files are byte-identical across projects, all per-project coupling pushed into one seam
 > (`.claude/project.json` + `PROJECT_CONTEXT.md`). The analysis below now covers two things — the system
 > as a build tool **and** its new portability (§2.6, §4.9, §6, §7, §8).
+>
+> **2026-06-28 — first stateful + security-sensitive feature, and the first hard evidence on correlated
+> error.** `user-accounts` (email/password + Google auth, server-side sessions, per-user settings; the
+> eleventh feature shipped) is the first that isn't a stateless additive read — it stands up a
+> credential/session store. The method absorbed it **unchanged**: the same one-way-leaf isolation that keeps
+> the score byte-identical, plus an invariant **carve-out** (§4.2, §5). The headline, though, is correctness
+> evidence — its QA pass, run on a **different base model** than the builders, **caught a real defect they
+> had shipped** (a sign-in gate enforced only in the browser, never server-side). First concrete payoff of
+> the de-correlation pre-payment (§5); it also arms the **going-live trigger** for the system-6 red-team
+> (Track B connects real accounts).
 
 ## 1. What it actually is (precise characterization)
 Strip the metaphors and it is **a state machine over the filesystem that uses LLM sessions as
@@ -82,6 +92,11 @@ ledger, not in your memory. That is the scaling lever for a solo builder.
    hook (system-4b) mechanically stop an author from editing code and any session from writing outside
    its repo. **Residual:** per-role *intra*-repo rules (an author touching `src/`) and "strip
    deliberation" are still trusted, not enforced — a session-global hook can't see the active role.
+   **Illustration (2026-06-28):** the linter is *structural*, so it cannot catch a *semantic* invariant like
+   "this gate is enforced server-side, not just in the client." On `user-accounts` exactly that gap shipped
+   and was caught by the **QA role** (system-2), not a mechanical gate — a reminder that some properties are
+   inherently the adversarial inspector's to catch, not the linter's (and the system logged a new watch-list
+   key, `server-side-gate-enforcement`, straight from the catch).
 3. **Integration is asserted, not verified.** `[ADDRESSED]` `interface_conformance.py` (system-1) runs
    the live backend's response against the `## Conformance spec` embedded in `INTERFACE_CONTRACT.md` at
    GATE Q (and now in the executioners' own pre-done self-check) — a FAIL bounces to Backend. The most
@@ -107,7 +122,11 @@ ledger, not in your memory. That is the scaling lever for a solo builder.
    gateways, compressors, and ledger updates — but the linter now refuses a structurally incomplete
    handoff, and the `/conductor`, `/status`, `/gatecheck`, `/pack` slash commands make the steps
    one-shot. No alarm yet when you skip a *gateway* entirely (that's part of full system-9 + the
-   ledger-crossing hook on the BACKLOG).
+   ledger-crossing hook on the BACKLOG). **New enabler (2026-06-28):** the repo now has a GitHub remote, so
+   the checks that already exist (linter, conformance, test suite) can move from *locally, when you remember*
+   to *automatically, on every push* via a GitHub Actions workflow (queued on the BACKLOG alongside the
+   containerize item). CI doesn't remove you-as-conductor, but it closes the "I skipped a check that already
+   exists" half of this residual.
 9. **The kit introduces its own new seams (2026-06-24, system-13).** `[NEW — partly mitigated]` Making
    the framework reusable created exactly one class of problem it didn't have before: **two copies that
    must stay aligned.** Honest residuals: (a) **version skew** — `.claude/kit.version` records what a
@@ -142,8 +161,24 @@ the builders, so it buys the no-marking-own-homework win without the full de-cor
 so a different-model pass adds cost/overhead with low payoff. It re-promotes on the "going live" trigger.
 So correlated error is *acknowledged and partly pre-paid*, not yet solved.
 
+**Evidence (2026-06-28) — the pre-payment is no longer hypothetical.** On `user-accounts`, QA ran on a
+**different base model (Sonnet)** than the **Opus** builders and **caught a real, security-relevant defect
+they had shipped**: the sign-in gate on the simulated-positions write actions was enforced **only in the
+frontend** — the UI prompted for login, but the action never called the server-side gate the backend had
+actually built, so a bypassed client check would have let the write through. One model wearing every hat had
+replicated the same blind spot across design, build, and self-test; a *different* vantage point caught it in
+a single pass — exactly the failure mode this section predicts, and the first time the partial fix
+demonstrably earned its keep. It *strengthens* the case for funding the full fix at go-live: if a different
+model catches a real bug as a **side-effect** of QA, a different model whose **whole job** is to break
+things will catch more. (Characteristically, the system also turned the catch into a rule — it logged a new
+watch-list invariant, `server-side-gate-enforcement`: "an access gate on an action must be enforced
+server-side, not in the client." The flywheel manufacturing its own next guardrail from a failure.)
+
 ## 6. Where it sits on the scaling curve
-- Excellent at the current scale: solo, one feature at a time, seven features shipped.
+- Excellent at the current scale: solo, one feature at a time, **eleven features shipped** — including
+  (2026-06-28) the first that is **stateful and security-sensitive** (`user-accounts`: a credential/session
+  store). The pattern absorbed it unchanged — same one-way-leaf isolation, plus an invariant carve-out —
+  evidence it generalizes past the stateless additive reads it cut its teeth on.
 - **A new axis as of 2026-06-24: reuse across *projects*, not just features.** Until now every scaling
   statement was *within* one project (cost per feature, attention per feature). The kit extraction adds a
   second axis — the *methodology itself* now compounds across projects: a framework refinement made while
@@ -177,7 +212,10 @@ Ordered by leverage, deliberately sequenced. Status as of 2026-06-23.
   *different* model (system-6), to break correlated error. Pre-live the different-model cost/overhead
   outweighs the payoff (no real data/exposure/untrusted input yet); re-promote on the "going live"
   trigger. Tiers 4–5 may proceed ahead of it (this defers Tier 3, not the later tiers). The QA role's
-  "run on a different model" guidance is the partial pre-payment.
+  "run on a different model" guidance is the partial pre-payment. **Update (2026-06-28):** the trigger is now
+  in sight — `user-accounts` shipped real credentials/sessions and Track B (`broker-connect`) will arm
+  "going live" — and the partial pre-payment has now **caught a real defect** (§5), turning the case for
+  system-6 from theoretical to evidenced.
 - **Tier 4 — close the flywheel: `◑ PARTIAL`** — the **demotion path** has landed (system-7: a promoted
   invariant contradicted by a runtime signal or an accepted bounce gets demoted — memory tracks truth,
   not just recurrence). Still open: wiring observability metrics back into GATE I so Discovery harvests
@@ -205,8 +243,8 @@ A legitimately strong solo-dev pattern — *stateless model, stateful files, hum
 contracts as types, recurrence as memory.* The Tier 1–2 + demotion mechanizations have closed the
 *trusted-not-enforced* gaps (lanes, integration, QA, economics, memory-tracks-truth). Its ceiling is now
 set by the two **structural** problems the roadmap can only partly touch pre-live: **correlated error**
-(one model, all hats — partly pre-paid by QA, fully addressed only by a different-model red-team once
-live) and **you-as-bottleneck** (conductor + sole reviewer — eased by system-9-lite, removed only by full
+(one model, all hats — partly pre-paid by QA and, **as of 2026-06-28, demonstrably so** — a different-model
+QA pass caught a real shipped defect (§5) — fully addressed only by a different-model red-team once live) and **you-as-bottleneck** (conductor + sole reviewer — eased by system-9-lite, removed only by full
 system-9, which is deliberately parked until the guardrails are proven). Everything remaining on the
 roadmap serves those two. As of 2026-06-24 the pattern is also **portable** — extracted into a reusable
 kit so it compounds across projects, not just features — which raises its value as a *tool* without
