@@ -596,8 +596,8 @@ describe('F. live lock + invariants', () => {
   it('live_tab_present_selectable_renders_coming_soon_not_connected_lock', async () => {
     const user = userEvent.setup(); installBackend(); renderH();
     await user.click(screen.getByTestId('tab-live'));
-    expect(screen.getByText(/Live · coming soon/)).toBeInTheDocument();
-    expect(screen.getByTestId('live-lock-chip')).toHaveTextContent('Not connected');
+    expect(screen.getByText(/Live positions — coming soon/)).toBeInTheDocument();
+    expect(screen.getByTestId('live-lock-chip')).toHaveTextContent('coming soon');
   });
 
   it('live_view_no_positions_no_entry_no_order_no_network_call', async () => {

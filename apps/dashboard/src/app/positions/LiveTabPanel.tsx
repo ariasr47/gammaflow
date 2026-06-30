@@ -35,7 +35,7 @@ export function LiveTabPanel() {
       </Typography>
       <Typography
         component="p"
-        sx={{ maxWidth: 440, mx: 'auto', fontSize: '0.9rem', color: 'text.secondary', lineHeight: 1.55, m: 0 }}
+        sx={{ maxWidth: 440, mx: 'auto', my: 0, fontSize: '0.9rem', color: 'text.secondary', lineHeight: 1.55, textAlign: 'center' }}
       >
         {LIVE_BODY}
       </Typography>

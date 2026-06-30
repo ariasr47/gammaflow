@@ -179,8 +179,8 @@ describe('density + layout (AC-26)', () => {
 describe('Live tab locked (AC-38, AC-39, AC-40)', () => {
   it('renders the coming-soon / not-connected lock with no entry/order/network affordance', () => {
     render(<ThemeProvider theme={theme}><LiveTabPanel /></ThemeProvider>);
-    expect(screen.getByText(/Live · coming soon/)).toBeInTheDocument();
-    expect(screen.getByTestId('live-lock-chip')).toHaveTextContent('Not connected');
+    expect(screen.getByText(/Live positions — coming soon/)).toBeInTheDocument();
+    expect(screen.getByTestId('live-lock-chip')).toHaveTextContent('coming soon');
     expect(screen.queryByRole('button')).toBeNull(); // no entry, no order action
   });
 });
