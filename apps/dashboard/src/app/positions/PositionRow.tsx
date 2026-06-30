@@ -21,7 +21,12 @@ import type { PlSample } from './useTrends';
 import { typographyTokens } from '../tokens';
 
 const OFFLINE = '⏸ offline';
-const MONO = { fontFamily: typographyTokens.monoFontFamily, fontVariantNumeric: 'tabular-nums' } as const;
+// Figma table cell numerics: Roboto Mono, 13.8px (0.86rem), letterSpacing 0 (MUI `body2` would
+// otherwise force 0.875rem + its own letter-spacing). Spread LAST in each cell's sx so it wins.
+const MONO = {
+  fontFamily: typographyTokens.monoFontFamily, fontVariantNumeric: 'tabular-nums',
+  fontSize: '0.86rem', letterSpacing: 0,
+} as const;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /** Frame "Expiry" format: `Mon DD · {dte}d` (e.g. `Jul 18 · 19d`). Parses the YYYY-MM-DD parts
@@ -67,7 +72,7 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       return (
         <Stack direction="row" spacing={0.875} sx={{ alignItems: 'baseline' }} data-testid="cell-contract">
           <Typography component="span" variant="body2" sx={{ ...MONO, fontWeight: 600 }}>{p.ticker}</Typography>
-          <Typography component="span" variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+          <Typography component="span" variant="body2" sx={{ fontSize: '0.8rem', letterSpacing: 0, color: 'text.secondary' }}>
             ${p.strike} {p.right === 'call' ? 'Call' : 'Put'}
           </Typography>
         </Stack>
@@ -94,7 +99,7 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
         );
       }
       if (mtr.unavailable) {
-        return <Tooltip arrow title={ROW_UNAVAILABLE_TIP}><Typography variant="body2" color="text.disabled" data-testid="cell-unavailable">unavailable</Typography></Tooltip>;
+        return <Tooltip arrow title={ROW_UNAVAILABLE_TIP}><Typography variant="body2" sx={{ color: 'text.disabled' }} data-testid="cell-unavailable">unavailable</Typography></Tooltip>;
       }
       const basisMeta = markRes ? MARK_BASIS_META[markRes.basis as keyof typeof MARK_BASIS_META] : null;
       return (
@@ -109,10 +114,10 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
     }
     case 'pl': {
       if (p.status === 'pending') {
-        return <Tooltip arrow title={PENDING_PL_TIP}><Typography variant="body2" color="text.disabled">—</Typography></Tooltip>;
+        return <Tooltip arrow title={PENDING_PL_TIP}><Typography variant="body2" sx={{ color: 'text.disabled' }}>—</Typography></Tooltip>;
       }
       if (mtr.unavailable) {
-        return <Tooltip arrow title={ROW_UNAVAILABLE_TIP}><Typography variant="body2" color="text.disabled" data-testid="cell-unavailable">unavailable</Typography></Tooltip>;
+        return <Tooltip arrow title={ROW_UNAVAILABLE_TIP}><Typography variant="body2" sx={{ color: 'text.disabled' }} data-testid="cell-unavailable">unavailable</Typography></Tooltip>;
       }
       const color = mtr.plDollar == null ? 'text.primary' : mtr.plDollar >= 0 ? 'success.main' : 'error.main';
       // REVISION 1 — $ amount ONLY (the % moved to the dedicated `pl_pct` column).
@@ -131,10 +136,10 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       // REVISION 1 — % ONLY, same sign-color + offline dim. Reuses the row's already-computed
       // metrics (mtr.plPct) — no new compute path.
       if (p.status === 'pending') {
-        return <Tooltip arrow title={PENDING_PL_TIP}><Typography variant="body2" color="text.disabled">—</Typography></Tooltip>;
+        return <Tooltip arrow title={PENDING_PL_TIP}><Typography variant="body2" sx={{ color: 'text.disabled' }}>—</Typography></Tooltip>;
       }
       if (mtr.unavailable) {
-        return <Tooltip arrow title={ROW_UNAVAILABLE_TIP}><Typography variant="body2" color="text.disabled" data-testid="cell-unavailable">unavailable</Typography></Tooltip>;
+        return <Tooltip arrow title={ROW_UNAVAILABLE_TIP}><Typography variant="body2" sx={{ color: 'text.disabled' }} data-testid="cell-unavailable">unavailable</Typography></Tooltip>;
       }
       const color = mtr.plDollar == null ? 'text.primary' : mtr.plDollar >= 0 ? 'success.main' : 'error.main';
       return (
@@ -149,17 +154,17 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       );
     }
     case 'delta_entry': {
-      if (p.status !== 'open') return <Typography variant="body2" color="text.disabled">—</Typography>;
+      if (p.status !== 'open') return <Typography variant="body2" sx={{ color: 'text.disabled' }}>—</Typography>;
       return (
         <Tooltip arrow title={DELTA_ENTRY_TIP}>
-          <Typography variant="body2" color="text.secondary" sx={{ opacity: liveDim, ...MONO }} data-testid="cell-delta-entry">
+          <Typography variant="body2" sx={{ opacity: liveDim, ...MONO, color: 'text.secondary' }} data-testid="cell-delta-entry">
             {mtr.deltaEntry == null ? '—' : money(mtr.deltaEntry)}{streamOffline ? ' ⏸' : ''}
           </Typography>
         </Tooltip>
       );
     }
     case 'session_delta': {
-      if (p.status !== 'open') return <Typography variant="body2" color="text.disabled">—</Typography>;
+      if (p.status !== 'open') return <Typography variant="body2" sx={{ color: 'text.disabled' }}>—</Typography>;
       return (
         <Tooltip arrow title={SESSION_DELTA_TIP}>
           <Typography variant="body2" sx={{ opacity: liveDim }} data-testid="cell-session-delta">
@@ -169,7 +174,7 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       );
     }
     case 'trend': {
-      if (p.status !== 'open') return <Typography variant="body2" color="text.disabled">—</Typography>;
+      if (p.status !== 'open') return <Typography variant="body2" sx={{ color: 'text.disabled' }}>—</Typography>;
       return <Tooltip arrow title={TREND_TIP}><span><PlSparkline samples={ctx.trend} offline={streamOffline} /></span></Tooltip>;
     }
     case 'entry': {
@@ -177,17 +182,17 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       // hover tooltip (honesty kept) rather than an inline chip the frame doesn't show.
       const basisMeta = ENTRY_BASIS_META[p.entry_basis];
       const price = (
-        <Typography component="span" variant="body2" color="text.secondary" sx={MONO} data-testid="cell-entry">
+        <Typography component="span" variant="body2" sx={{ ...MONO, color: 'text.secondary' }} data-testid="cell-entry">
           ${p.entry_mark.toFixed(2)}
         </Typography>
       );
       return basisMeta ? <Tooltip arrow title={basisMeta.tip}>{price}</Tooltip> : price;
     }
     case 'qty': return <Typography variant="body2" sx={MONO}>{p.qty} ×</Typography>;
-    case 'expiry': return <Typography variant="body2" data-testid="cell-expiry">{formatExpiry(p.expiration)}</Typography>;
+    case 'expiry': return <Typography component="span" variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', letterSpacing: 0 }} data-testid="cell-expiry">{formatExpiry(p.expiration)}</Typography>;
     case 'strike': return <Typography variant="body2">${p.strike}</Typography>;
     case 'right': return <Typography variant="body2">{p.right === 'call' ? 'Call' : 'Put'}</Typography>;
-    case 'strategy': return <Typography variant="body2">{strategyLabel(row.strategy)}</Typography>;
+    case 'strategy': return <Typography component="span" variant="body2" sx={{ fontSize: '0.78rem', color: 'text.secondary', letterSpacing: 0 }}>{strategyLabel(row.strategy)}</Typography>;
     case 'dte': return <Typography variant="body2">{mtr.dte == null ? '—' : mtr.dte}</Typography>;
     case 'entry_time': return <Typography variant="body2">{p.entry_time ? new Date(p.entry_time).toLocaleString() : '—'}</Typography>;
     case 'stop': return <Typography variant="body2">{p.stop == null ? '—' : `$${p.stop}`}</Typography>;
