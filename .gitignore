@@ -33,6 +33,8 @@ npm-debug.log
 yarn-error.log
 testem.log
 /typings
+/design_handoff_convexa_redesign
+/figma_frames
 
 # System Files
 .DS_Store
