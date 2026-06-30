@@ -5,7 +5,7 @@
  * rendering; a per-row lookup failure shows "unavailable" only on that row. Pending limits show the
  * waiting affordance + Cancel; nothing here can place a real order.
  */
-import { Stack, Typography, Chip, Tooltip, Button } from '@mui/material';
+import { Box, Stack, Typography, Chip, Tooltip, Button } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { MARK_BASIS_META } from '../ghost-trade/mark';
 import type { DerivedRow } from './derive';
@@ -235,5 +235,46 @@ export function ClosedSummary({ row }: { row: DerivedRow }) {
     <Typography variant="body2" sx={{ color: r$ >= 0 ? theme.palette.success.main : theme.palette.error.main }}>
       Closed · realized {money(r$)} ({pct(p.realized_pl_pct ?? 0)}) · held {held < 60 ? `${held}m` : `${Math.floor(held / 60)}h ${held % 60}m`}
     </Typography>
+  );
+}
+
+const rowActionSx = {
+  cursor: 'pointer', border: '1px solid', borderColor: 'divider', background: 'transparent',
+  font: 'inherit', fontSize: '0.76rem', color: 'text.secondary', borderRadius: '6px', padding: '3px 9px',
+} as const;
+
+/**
+ * PositionRow (convexa-redesign · Positions — Figma PositionRow `106:52`). One position rendered as a
+ * table `<tr>` of `cellContent` cells across the passed (fixed Figma) column set + a trailing actions
+ * cell. EXTRACTED from `PositionsView.TableLayout`'s per-row mapping — same markup, same `data-testid`s
+ * (`position-row` + `data-id`/`data-status`), same actions (Close / pending Cancel / closed summary).
+ * Mono figures + direction-colored P/L come from `cellContent`; live cells dim + show `⏸ offline` on an
+ * SSE drop while static cells keep rendering. Nothing here places a real order (`[no-real-order-path]`).
+ */
+export function PositionRow({
+  ctx, columns, tdPad, onClose,
+}: {
+  ctx: RowContext;
+  columns: ColumnKey[];
+  tdPad: string;
+  onClose: (id: string) => void;
+}) {
+  const { row } = ctx;
+  const p = row.position;
+  const isTerminal = p.status === 'closed' || p.status === 'cancelled';
+  const tdSx = {
+    padding: tdPad, fontSize: '0.86rem', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' as const,
+  };
+  return (
+    <Box component="tr" data-testid="position-row" data-id={p.id} data-status={p.status}>
+      {columns.map((c) => <Box component="td" key={c} sx={tdSx}>{cellContent(c, ctx)}</Box>)}
+      <Box component="td" sx={tdSx}>
+        {p.status === 'open' && (
+          <Box component="button" type="button" onClick={() => onClose(p.id)} sx={rowActionSx}>Close</Box>
+        )}
+        {p.status === 'pending' && <PendingAffordance ctx={ctx} />}
+        {isTerminal && <ClosedSummary row={row} />}
+      </Box>
+    </Box>
   );
 }

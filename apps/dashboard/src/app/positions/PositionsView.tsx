@@ -16,13 +16,12 @@ import { Box, Typography } from '@mui/material';
 import type { DerivedGroup, DerivedRow } from './derive';
 import type { ColumnKey, Density, LayoutMode } from './types';
 import { COLUMN_LABELS, TABLE_HEADER_LABELS } from './defaults';
-import { cellContent, PendingAffordance, ClosedSummary, formatExpiry, RowContext } from './PositionRow';
+import { RowContext } from './PositionRow';
+import { PositionRow } from './PositionRow';
+import { PositionCard } from './PositionCard';
 import type { PlSample } from './useTrends';
 import { money, EMPTY_NO_POSITIONS, EMPTY_FILTERED, HISTORY_CAPTION } from './labels';
-import { extras, typographyTokens } from '../tokens';
-
-const monoSx = typographyTokens.monoFontFamily;
-const pctStr = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
+import { extras } from '../tokens';
 
 /**
  * REVISION 2 — the FIXED Figma column set (left→right). The table/cards render from this directly and
@@ -166,9 +165,6 @@ function TableLayout(props: ViewProps) {
 }
 
 function GroupRows({ group, props, columns, showHeader, tdPad }: { group: DerivedGroup; props: ViewProps; columns: ColumnKey[]; showHeader: boolean; tdPad: string }) {
-  const tdSx = {
-    padding: tdPad, fontSize: '0.86rem', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' as const,
-  };
   return (
     <>
       {showHeader && (
@@ -186,30 +182,18 @@ function GroupRows({ group, props, columns, showHeader, tdPad }: { group: Derive
           </Box>
         </Box>
       )}
-      {group.rows.map((row) => {
-        const ctx = ctxFor(props, row);
-        const isTerminal = row.position.status === 'closed' || row.position.status === 'cancelled';
-        return (
-          <Box component="tr" key={row.position.id} data-testid="position-row" data-id={row.position.id} data-status={row.position.status}>
-            {columns.map((c) => <Box component="td" key={c} sx={tdSx}>{cellContent(c, ctx)}</Box>)}
-            <Box component="td" sx={tdSx}>
-              {row.position.status === 'open' && (
-                <Box component="button" type="button" onClick={() => props.onClose(row.position.id)} sx={rowActionSx}>Close</Box>
-              )}
-              {row.position.status === 'pending' && <PendingAffordance ctx={ctx} />}
-              {isTerminal && <ClosedSummary row={row} />}
-            </Box>
-          </Box>
-        );
-      })}
+      {group.rows.map((row) => (
+        <PositionRow
+          key={row.position.id}
+          ctx={ctxFor(props, row)}
+          columns={columns}
+          tdPad={tdPad}
+          onClose={props.onClose}
+        />
+      ))}
     </>
   );
 }
-
-const rowActionSx = {
-  cursor: 'pointer', border: '1px solid', borderColor: 'divider', background: 'transparent',
-  font: 'inherit', fontSize: '0.76rem', color: 'text.secondary', borderRadius: '6px', padding: '3px 9px',
-};
 
 // ---- Cards layout ------------------------------------------------------------------------------
 
@@ -227,80 +211,17 @@ function CardLayout(props: ViewProps) {
           )}
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             {g.rows.map((row) => (
-              <PositionCard key={row.position.id} props={props} row={row} />
+              <PositionCard
+                key={row.position.id}
+                row={row}
+                ctx={ctxFor(props, row)}
+                streamOffline={props.streamOffline}
+                onClose={props.onClose}
+              />
             ))}
           </Box>
         </Box>
       ))}
-    </Box>
-  );
-}
-
-function PositionCard({ props, row }: { props: ViewProps; row: DerivedRow }) {
-  const ctx = ctxFor(props, row);
-  const p = row.position;
-  const mtr = row.metrics;
-  const isTerminal = p.status === 'closed' || p.status === 'cancelled';
-  const liveDim = props.streamOffline ? 0.5 : 1;
-  const plColor = mtr.plDollar == null ? 'text.primary' : mtr.plDollar >= 0 ? 'success.main' : 'error.main';
-  const strikeLeg = `$${p.strike} ${p.right === 'call' ? 'Call' : 'Put'}`;
-  const strategyName = row.strategy === 'long_call' ? 'Long call' : 'Long put';
-  // Footer Mark value (Figma: bold mono, matches Qty/Entry). Compact states inline (no chip/tag in the
-  // footer); the live block + this value dim together on offline via `liveDim`.
-  const markRes = ctx.markRes;
-  const markStr = p.status === 'pending'
-    ? `limit $${(p.limit_price ?? 0).toFixed(2)}`
-    : mtr.unavailable || markRes?.mark == null
-      ? '—'
-      : `${markRes.basis === 'modeled' ? '≈ ' : ''}$${markRes.mark.toFixed(2)}`;
-  // Figma footer value: Roboto Mono Bold 700, primary; the label inherits the footer's secondary 0.76rem.
-  const footValSx = { fontFamily: monoSx, fontWeight: 700, color: 'text.primary' } as const;
-  return (
-    <Box
-      data-testid="position-card"
-      data-id={p.id}
-      data-status={p.status}
-      sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '10px', padding: '15px' }}
-    >
-      {/* Top row: symbol + leg / strategy chip. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: '12px' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Box component="span" sx={{ fontFamily: monoSx, fontWeight: 700, fontSize: '1rem' }}>{p.ticker}</Box>
-          <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>{strikeLeg}</Box>
-        </Box>
-        <Box component="span" sx={{ fontSize: '0.7rem', color: 'text.disabled', border: '1px solid', borderColor: 'divider', borderRadius: '5px', padding: '2px 7px' }}>
-          {strategyName}
-        </Box>
-      </Box>
-
-      {/* Middle row: big P/L + % / sparkline (the live block — dims offline). */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', opacity: liveDim }} data-testid="card-pl">
-        <Box>
-          <Box component="div" sx={{ fontFamily: monoSx, fontWeight: 700, fontSize: '1.5rem', color: plColor, fontVariantNumeric: 'tabular-nums' }}>
-            {p.status === 'open' && mtr.plDollar != null ? money(mtr.plDollar) : '—'}
-          </Box>
-          <Box component="div" sx={{ fontFamily: monoSx, fontSize: '0.85rem', color: plColor }}>
-            {p.status === 'open' && mtr.plPct != null ? pctStr(mtr.plPct) : ''}
-          </Box>
-        </Box>
-        <Box>{cellContent('trend', ctx)}</Box>
-      </Box>
-
-      {/* Footer: Qty · Entry · Mark · expiry (labels secondary, values bold mono primary — Figma). */}
-      <Box sx={{ display: 'flex', gap: '16px', mt: '12px', pt: '12px', borderTop: '1px solid', borderColor: 'divider', fontSize: '0.76rem', color: 'text.secondary', alignItems: 'center' }}>
-        <Box component="span">Qty <Box component="span" sx={footValSx}>{p.qty}</Box></Box>
-        <Box component="span">Entry <Box component="span" sx={footValSx}>${p.entry_mark.toFixed(2)}</Box></Box>
-        <Box component="span" sx={{ opacity: liveDim }} data-testid="card-mark">Mark <Box component="span" sx={footValSx}>{markStr}</Box></Box>
-        <Box component="span" sx={{ ml: 'auto' }}>{formatExpiry(p.expiration)}</Box>
-      </Box>
-
-      {isTerminal && <Box sx={{ mt: '10px' }}><ClosedSummary row={row} /></Box>}
-      {p.status === 'pending' && <PendingAffordance ctx={ctx} />}
-      {p.status === 'open' && (
-        <Box sx={{ mt: '10px' }}>
-          <Box component="button" type="button" onClick={() => props.onClose(p.id)} sx={rowActionSx}>Close</Box>
-        </Box>
-      )}
     </Box>
   );
 }

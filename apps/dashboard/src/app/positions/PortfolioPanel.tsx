@@ -12,20 +12,14 @@
  * (`data-testid="open-entry"`). The mandatory `positions-disclosure` (D6d) + the in-context sign-in
  * prompt + the server-gate wiring are all preserved verbatim. No data/handler changes.
  */
-import { useMemo, useState } from 'react';
-import { Box, Typography, Snackbar, Alert } from '@mui/material';
+import { useState } from 'react';
+import { Box, Snackbar, Alert } from '@mui/material';
 import type { TickerBundle, LiveUpdate } from '@org/api';
 import { usePortfolio, OpenPositionInput } from './usePortfolio';
-import { deriveGroups } from './derive';
-import type { DerivedRow } from './derive';
-import type { PositionStatus } from './types';
-import { PositionsView } from './PositionsView';
-import { CustomizationToolbar } from './CustomizationToolbar';
+import { PositionsPanel } from './PositionsPanel';
 import { LiveTabPanel } from './LiveTabPanel';
-import { PositionEntryDialog, EntryPrefill } from './PositionEntryDialog';
-import type { RowContext } from './PositionRow';
+import { EntryPrefill } from './PositionEntryDialog';
 import { useGate } from '../auth/useGate';
-import { SignInPrompt } from '../auth/SignInPrompt';
 import { AUTH_COPY } from '../auth/copy';
 
 type Portfolio = ReturnType<typeof usePortfolio>;
@@ -43,32 +37,13 @@ interface Props {
   onEntryOpen: (open: boolean) => void;
 }
 
-function isHistoryFilter(status: PositionStatus[]): boolean {
-  return status.length > 0 && status.every((s) => s === 'closed' || s === 'cancelled');
-}
-
 export function PortfolioPanel({ pf, data, streamOffline, ticker, entryPrefill, entryOpen, onEntryOpen }: Props) {
   const [tab, setTab] = useState<'simulated' | 'live'>('simulated');
   const [toast, setToast] = useState<string | null>(null);
-  const m = data?.market_state;
 
   // Gated WRITE actions (UX_BLUEPRINT §2.6, AC-E1/E2/E3/E7). The route stays viewable anonymously;
   // ONLY the write actions gate. Logged-out ⇒ an in-context sign-in prompt, no execute.
   const gate = useGate();
-
-  // Build a markRes for a row by re-running the existing engine off the row's tracked stats.
-  const markResFor = (row: DerivedRow): RowContext['markRes'] => {
-    if (row.position.status !== 'open' && row.position.status !== 'pending') return null;
-    return pf.markFor(row.position);
-  };
-
-  const { working } = pf;
-  const groups = useMemo(
-    () => deriveGroups(pf.rows, {
-      filter: working.filter, sortKey: working.sortKey, sortDir: working.sortDir, group: working.group,
-    }),
-    [pf.rows, working.filter, working.sortKey, working.sortDir, working.group],
-  );
 
   // Opening the entry dialog is itself a write intent: gate it logged-out (prompt, no dialog).
   const requestOpenEntry = () => {
@@ -95,9 +70,6 @@ export function PortfolioPanel({ pf, data, streamOffline, ticker, entryPrefill, 
   const guardSaveView = (run: () => void) => {
     void gate.guard(AUTH_COPY.positions.gateSaveView, run, { serverGate: gate.simTradeGate });
   };
-
-  const strikeList = Array.from(new Set((data?.strike_profile.strikes ?? []).map((s) => s.strike))).sort((a, b) => a - b);
-  const expirations = data?.expirations.map((e) => e.date) ?? [];
 
   const tabSx = (active: boolean, activeColor: string, inactiveColor: string) => ({
     cursor: 'pointer',
@@ -152,60 +124,19 @@ export function PortfolioPanel({ pf, data, streamOffline, ticker, entryPrefill, 
       {tab === 'live' ? (
         <LiveTabPanel />
       ) : (
-        <Box data-testid="simulated-surface">
-          {/* In-context sign-in prompt for a gated write (never silent; never a misleading error). */}
-          <SignInPrompt
-            text={gate.promptText}
-            onSignIn={() => gate.signIn(gate.promptText ?? AUTH_COPY.positions.gateTrack)}
-            testid="positions-signin-prompt"
-          />
-
-          <CustomizationToolbar
-            pf={pf}
-            positions={pf.positions}
-            guardSaveView={guardSaveView}
-            streamOffline={streamOffline}
-            onOpenEntry={requestOpenEntry}
-            canOpenEntry={!!data}
-          />
-
-          {/* Honest browser-local disclosure (D6d, mandatory) — a subtle info line; shown whether signed
-              in or out (a property of data residency, not auth state). Must NOT imply sync/account-scoping. */}
-          <Typography
-            component="p"
-            data-testid="positions-disclosure"
-            sx={{ fontSize: '0.72rem', color: 'text.disabled', m: '0 0 12px', lineHeight: 1.5 }}
-          >
-            {AUTH_COPY.positions.disclosure}
-          </Typography>
-
-          <PositionsView
-            groups={groups}
-            columns={working.columns}
-            layout={working.layout}
-            density={working.density}
-            streamOffline={streamOffline}
-            totalCount={pf.positions.length}
-            isHistory={isHistoryFilter(working.filter.status)}
-            markResFor={markResFor}
-            trendFor={pf.trendFor}
-            onOpenEntry={requestOpenEntry}
-            onClearFilter={() => pf.setFilter({ ticker: null, strategy: null, expiry: null, status: ['open'] })}
-            onClose={pf.closePosition}
-            onCancel={pf.cancelLimit}
-          />
-
-          <PositionEntryDialog
-            open={entryOpen}
-            ticker={ticker}
-            expirations={expirations}
-            strikes={strikeList}
-            spot={m?.price ?? 0}
-            prefill={entryPrefill}
-            onClose={() => onEntryOpen(false)}
-            onConfirm={handleConfirm}
-          />
-        </Box>
+        <PositionsPanel
+          pf={pf}
+          data={data}
+          streamOffline={streamOffline}
+          ticker={ticker}
+          gate={{ promptText: gate.promptText, signIn: gate.signIn }}
+          onRequestOpenEntry={requestOpenEntry}
+          guardSaveView={guardSaveView}
+          onConfirm={handleConfirm}
+          entryPrefill={entryPrefill}
+          entryOpen={entryOpen}
+          onEntryOpen={onEntryOpen}
+        />
       )}
 
       <Snackbar open={!!toast} autoHideDuration={6000} onClose={() => setToast(null)}>
