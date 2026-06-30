@@ -1,10 +1,11 @@
 # convexa-redesign — pipeline manifest
 Entry:        restart 2026-06-29 — implement-from-Figma (v1 slice attempt reset; archived `convexa-redesign-v1-archive`)
-Stage:        SURFACE: Ticker ✅ DONE — re-skin e4a8eff + layout/UX 32d4027 (committed 2026-06-30); RESUME refreshed 7c8df99. Now: GATE V CLEANUP pass (token de-drift + remove dead HandoffDialog + theme.h6 QA) dispatched to delivery-frontend 2026-06-30. Remaining surface after: full-page /auth.
+Stage:        GATE V CLEANUP ✅ DONE — committed 82f63ee (token de-drift ×4 onto tokens.ts; removed dead HandoffDialog+SectionBadges; theme.h6 QA PASS; nx test dashboard 412/412; NO_BACKEND_CHANGE). Ticker surface re-skin shipped earlier (e4a8eff + 32d4027). All code surfaces DONE. Remaining: fresh QA pass vs README ACs + 8 invariants → merge to main (GATE S). (Owner-only Figma kit publish/dark-mode is parallel, not a code blocker.)
+Scope change (owner, 2026-06-30): the full-page /auth route is DROPPED from the redesign — the existing AuthDialog modal stays the sign-in/signup surface (the full-page route was never built; nothing lost). The redesign is now code-complete pending QA + merge.
 Branch:       convexa-redesign (off main @ 2828bfa) — DS bridge (tokens.ts + cssVariables + sync script) kept; merge to main at GATE S
 Repos:        frontend  (NO_BACKEND_CHANGE — apps/api untouched)
 Brief:        n/a (restart) — README §5 + figma_frames/08-scanner-soon.html + FIGMA_COMPONENT_MAP.md are the brief
-Surfaces:     Landing ✅ committed (0353758) · Settings/Auth ✅ committed (0353758) · Scanner ✅ committed (fbb1e2d) · Positions ✅ committed (c722dd7 / 9336856 + ab52759) · Ticker ✅ committed (e4a8eff + 32d4027) · GATE V cleanup ◀ IN FLIGHT · /auth (full page) ⬜
+Surfaces:     Landing ✅ committed (0353758) · Settings/Auth ✅ committed (0353758) · Scanner ✅ committed (fbb1e2d) · Positions ✅ committed (c722dd7 / 9336856 + ab52759) · Ticker ✅ committed (e4a8eff + 32d4027) · GATE V cleanup ✅ committed (82f63ee) · /auth (full page) ❌ DROPPED (owner 2026-06-30 — AuthDialog modal stays the auth surface)
 Contracts:
   - ARCHITECTURE_CONTRACT.md   n/a (presentation-only)
   - PRODUCT_CONTRACT.md        n/a (README is product/UX spec)

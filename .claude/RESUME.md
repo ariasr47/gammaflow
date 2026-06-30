@@ -7,10 +7,19 @@
 
 ## Where we are
 `convexa-redesign` is mid-pipeline — the full FE re-skin to the Figma dark-fintech DS (implement-from-Figma).
-**Surfaces:** Landing ✅ · Settings/Auth ✅ · Scanner ✅ · Positions ✅ · **Ticker ✅ (this session, code re-skin)** ·
-full-page **`/auth`** route ⬜ (not started). After `/auth`: a fresh QA pass, then merge to `main` (GATE S).
+**Surfaces:** Landing ✅ · Settings/Auth ✅ · Scanner ✅ · Positions ✅ · **Ticker ✅ (code re-skin)** ·
+GATE V cleanup ✅ (committed `82f63ee`). Full-page **`/auth`** route ❌ **DROPPED** (owner 2026-06-30 — the
+existing `AuthDialog` modal stays the auth surface; never built, nothing lost). **All code surfaces done.**
+Remaining: a fresh QA pass vs README ACs + the 8 invariants, then merge to `main` (GATE S).
 
-## This session (2026-06-30) — Ticker surface re-skin (committed on `convexa-redesign`)
+## Latest (2026-06-30) — GATE V cleanup pass (committed `82f63ee`)
+- Token de-drift ×4 onto `tokens.ts` (AuthDialog `panelRaised`; hatch gradient in
+  ComingSoonBox/Scanner/LiveTabPanel; ValueCard brand gradient) — output-neutral.
+- Removed the dead `HandoffDialog` + `SectionBadges` from `personas/components.tsx` (owner had removed
+  the hand-off viewer; never imported/rendered). `theme.h6` QA PASS. `nx test dashboard` 412/412.
+- **Owner scope cut (2026-06-30):** the full-page `/auth` route is **dropped** — `AuthDialog` modal stays.
+
+## Earlier this session (2026-06-30) — Ticker surface re-skin (committed on `convexa-redesign`)
 - **`e4a8eff`** — Ticker re-skin: `TickerDashboard` → `ticker/sections/*` (Toolbar, Header, LiveTape,
   DealerPositioning, GexStrikeProfile, TermStructure, FreshPositioning, OffExchangeBlocks, Setups, StatTile,
   TintChip) + AI-rec panel re-skin (signed-in + signed-out states).
@@ -44,9 +53,9 @@ full-page **`/auth`** route ⬜ (not started). After `/auth`: a fresh QA pass, t
    `HandoffDialog`** in `apps/dashboard/src/app/personas/components.tsx`; **update `THEME_TOKENS.md`** to record
    the expanded Foundations + kit aliasing; **QA the global `theme.h6` 16/600** change for section-title
    regressions on Positions/Settings/Landing.
-3. **Remaining surface + ship:** the full-page **`/auth`** route (reuse the `AuthDialog` form); a fresh **QA
-   pass** vs `design_handoff_convexa_redesign/README.md` ACs + the 8 invariants; **merge `convexa-redesign` →
-   `main`** (GATE S). Optionally push the branch / open a PR.
+3. **Ship:** a fresh **QA pass** vs `design_handoff_convexa_redesign/README.md` ACs + the 8 invariants;
+   **merge `convexa-redesign` → `main`** (GATE S). Optionally push the branch / open a PR. (Full-page
+   `/auth` route DROPPED by owner 2026-06-30 — `AuthDialog` modal stays the auth surface.)
 
 ## Gotchas
 - **Preview:** `.claude/launch.json` `dashboard` on **:4300** (drive via the Claude_Preview MCP —

@@ -380,8 +380,11 @@ Cull verdicts (so the next discovery doesn't re-litigate):
     `personas/components.tsx` (AI-rec no longer opens it — the hand-off viewer was removed per owner); **update
     `THEME_TOKENS.md`** to record the expanded Foundations + kit aliasing; **QA the global `theme.h6` 16/600 change**
     for regressions on Positions/Settings/Landing section titles.
-  - **Remaining surface + ship:** the full-page **`/auth`** route; a fresh **QA pass** vs
-    `design_handoff_convexa_redesign/README.md` ACs + the 8 invariants; **merge `convexa-redesign` → main** (GATE S).
+  - **Ship:** a fresh **QA pass** vs `design_handoff_convexa_redesign/README.md` ACs + the 8 invariants;
+    **merge `convexa-redesign` → main** (GATE S). *(Full-page `/auth` route DROPPED by owner 2026-06-30 —
+    the existing `AuthDialog` modal stays the sign-in/signup surface; never built, nothing lost.)*
+    *(GATE V cleanup pass committed `82f63ee` 2026-06-30: token de-drift ×4 + removed dead HandoffDialog;
+    `nx test dashboard` 412/412. All code surfaces now done.)*
   - **Intentional Figma deviations (record, don't "fix"):** GEX is a **vertical** diverging bar chart (not the
     horizontal Figma `149:172`) — owner UX call (wider/shorter); the AI-rec **hand-off viewer** + the ticker's
     **portfolio/ghost-trade panels** were **removed** per owner. *Value H (ship the redesign) · Effort M.*
