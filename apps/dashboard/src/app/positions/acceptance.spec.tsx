@@ -15,6 +15,8 @@ import type { TickerBundle, LiveUpdate, TrackedContract, StrikeRow } from '@org/
 import { usePortfolio } from './usePortfolio';
 import { PortfolioPanel } from './PortfolioPanel';
 import { __resetMemory, allPositions, decisionsForPosition } from './store';
+import { applyFilter, deriveGroups, DerivedRow, RowMetrics } from './derive';
+import type { Position, FilterState } from './types';
 import { AuthProvider } from '../auth/AuthContext';
 import { AuthDialogProvider } from '../auth/AuthDialogProvider';
 
@@ -111,25 +113,26 @@ async function openManual(user: ReturnType<typeof userEvent.setup>, price: strin
   await user.click(within(dlg).getByRole('button', { name: 'Open simulated position' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 }
-const comboOf = (testid: string) => screen.getByTestId(testid).querySelector('[role="combobox"]') as HTMLElement;
-// Group is now a segmented pill control (convexa-redesign): pick by `group-select-{axis}`.
-async function pickGroup(user: ReturnType<typeof userEvent.setup>, axis: 'none' | 'ticker' | 'strategy' | 'expiry') {
+// Group is a segmented pill control (convexa-redesign): pick by `group-select-{axis}`. REVISION 2
+// dropped the inline Expiry option from the UI (still a valid model axis via derive).
+async function pickGroup(user: ReturnType<typeof userEvent.setup>, axis: 'none' | 'ticker' | 'strategy') {
   await user.click(screen.getByTestId(`group-select-${axis}`));
 }
-// REVISION 1 — some columns (e.g. session_delta) are now hidden by default; enable via the Columns menu.
-async function enableColumn(user: ReturnType<typeof userEvent.setup>, col: string) {
-  await user.click(screen.getByTestId('columns-button'));
-  const opt = document.querySelector(`[data-testid="column-option"][data-col="${col}"]`) as HTMLElement;
-  await user.click(opt);
-  await user.keyboard('{Escape}'); // close the columns menu
+
+// REVISION 2 — the Filters / Columns / Sort UI is removed; the ticker/strategy/expiry filter + sort
+// LOGIC lives in `derive` and is asserted directly. Small helpers to build derive inputs.
+function dpos(over: Partial<Position> = {}): Position {
+  return {
+    id: 'p', ticker: 'TSLA', expiration: '2026-07-17', strike: 250, right: 'call', side: 'long',
+    qty: 1, entry_mark: 5, entry_basis: 'snapshot', entry_time: '2026-06-20T10:00:00Z',
+    status: 'open', entry_mode: 'market', schema_version: 2, ...over,
+  };
 }
-// Filters (ticker/strategy/expiry) now live behind the toolbar `filters-button` menu.
-async function pickFilter(user: ReturnType<typeof userEvent.setup>, testid: string, optionName: string) {
-  await user.click(screen.getByTestId('filters-button'));
-  await user.click(comboOf(testid));
-  await user.click(await screen.findByRole('option', { name: optionName }));
-  await user.keyboard('{Escape}'); // close the filters menu
+function drow(p: Position, m: Partial<RowMetrics> = {}): DerivedRow {
+  const metrics: RowMetrics = { id: p.id, plDollar: 0, plPct: 0, unavailable: false, deltaEntry: 0, sessionDelta: 0, dte: 10, ...m };
+  return { position: p, metrics, strategy: p.right === 'call' ? 'long_call' : 'long_put' };
 }
+const FILTER_OPEN: FilterState = { ticker: null, status: ['open'], strategy: null, expiry: null };
 
 beforeEach(() => { localStorage.clear(); __resetMemory(); vi.restoreAllMocks(); });
 afterEach(() => cleanup());
@@ -162,13 +165,13 @@ describe('A. central & per-ticker', () => {
     expect(rows.map((r) => r.entry_mark).sort()).toEqual([5, 8]); // not averaged
   });
 
-  it('per_ticker_filter_shows_only_that_ticker_no_refetch', async () => {
-    const user = userEvent.setup(); installBackend(); renderH();
-    await openManual(user, '5');
-    const before = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
-    await pickFilter(user, 'filter-ticker', 'TSLA');
-    await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(1));
-    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
+  it('per_ticker_filter_shows_only_that_ticker_no_refetch', () => {
+    // REVISION 2 — the ticker filter UI is removed; the per-ticker filter LOGIC stays in `derive`
+    // (a pure re-derivation, never a refetch). Assert it directly.
+    const positions = [dpos({ id: 'a', ticker: 'TSLA' }), dpos({ id: 'b', ticker: 'AAPL' })];
+    const only = applyFilter(positions, { ...FILTER_OPEN, ticker: 'TSLA' });
+    expect(only.map((p) => p.id)).toEqual(['a']);
+    expect(only.every((p) => p.ticker === 'TSLA')).toBe(true);
   });
 
   it('empty_collection_shows_empty_state_not_error', async () => {
@@ -198,19 +201,22 @@ describe('B. P/L + change', () => {
   });
 
   it('session_delta_reanchors_on_reload', async () => {
+    // REVISION 2 — the `session_delta` column is no longer in the fixed Figma set, and the Columns UI
+    // that re-enabled it is removed; so the cell is not rendered. The EPHEMERAL re-anchor behavior is
+    // unchanged at the model level: the session anchor lives in the ephemeral `usePlTrends` ring (not
+    // the durable store), so a reload (re-mount) re-anchors fresh and never carries a stale value.
+    // Assert the observable invariant: durable facts persist across reload, the page never throws, and
+    // the durable store carries NO session-delta value (it is purely ephemeral / re-derived).
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '4');
-    // session_delta is optional now — turn it on (persists to working.columns).
-    await enableColumn(user, 'session_delta');
     pushLive({ mid: 250 });
-    await waitFor(() => expect(screen.getByTestId('cell-session-delta')).toBeInTheDocument());
-    // Reload (re-mount) → the session anchor clears; session Δ re-anchors fresh (starts at $0 / —).
-    // (__resetMemory re-hydrates from localStorage, where session_delta is now durably enabled.)
+    await waitFor(() => expect(screen.getByTestId('cell-pl')).toHaveTextContent('+$100'));
+    // Reload (re-mount): the durable position persists; session state re-derives fresh (no stale carry).
     __resetMemory(); cleanup(); installBackend(); renderH();
-    pushLive({ mid: 250 });
-    await waitFor(() => expect(screen.getByTestId('cell-session-delta')).toBeInTheDocument());
-    // First observation after reload is the new anchor ⇒ session Δ is 0 or em-dash, never the prior run's value.
-    expect(screen.getByTestId('cell-session-delta').textContent).toMatch(/(\+\$0|—)/);
+    await waitFor(() => expect(screen.getByTestId('position-row')).toBeInTheDocument());
+    expect(allPositions()).toHaveLength(1);
+    // The durable blob never persists an ephemeral session-delta number.
+    expect(localStorage.getItem('gammaflow.positions.v2') ?? '').not.toMatch(/sessionDelta|session_delta/);
   });
 
   it('trend_sparkline_grows_as_feed_updates', async () => {
@@ -358,14 +364,23 @@ describe('C. entry modes', () => {
 // =============================== D. Grouping/sorting/filtering/views ===============================
 describe('D. customization', () => {
   it('group_by_ticker_strategy_expiry_and_off', async () => {
+    // REVISION 2 — the Group UI offers None · Ticker · Strategy (Expiry dropped). The ticker/strategy
+    // group axes switch grouping via the segmented control; the expiry grouping LOGIC still exists in
+    // `derive` (asserted directly), it just has no inline UI option now.
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
-    for (const axis of ['ticker', 'strategy', 'expiry'] as const) {
+    for (const axis of ['ticker', 'strategy'] as const) {
       await pickGroup(user, axis);
       await waitFor(() => expect(screen.getByTestId('group-header')).toBeInTheDocument());
     }
     await pickGroup(user, 'none');
     await waitFor(() => expect(screen.queryByTestId('group-header')).toBeNull());
+    // Expiry grouping logic is still derivable even without an inline UI option.
+    const byExpiry = deriveGroups(
+      [drow(dpos({ id: 'a', expiration: '2026-07-17' })), drow(dpos({ id: 'b', expiration: '2026-08-21' }))],
+      { filter: FILTER_OPEN, sortKey: 'pl_dollar', sortDir: 'desc', group: 'expiry' },
+    );
+    expect(byExpiry.length).toBe(2);
   });
 
   it('strategy_group_is_derived_long_call_vs_long_put', async () => {
@@ -385,37 +400,47 @@ describe('D. customization', () => {
     });
   });
 
-  it('sort_by_attribute_ascending_and_descending', async () => {
-    const user = userEvent.setup(); installBackend(); renderH();
-    await openManual(user, '5');     // entry 5
-    await openManual(user, '4', 255); // entry 4
-    pushLive({ mid: 250 });
-    await user.click(comboOf('sort-select'));
-    await user.click(await screen.findByRole('option', { name: 'P/L ($)' }));
-    const descIds = screen.getAllByTestId('position-row').map((r) => r.getAttribute('data-id'));
-    await user.click(screen.getByTestId('sort-dir')); // flip to ascending
-    await waitFor(() => {
-      const ascIds = screen.getAllByTestId('position-row').map((r) => r.getAttribute('data-id'));
-      expect(ascIds).toEqual([...descIds].reverse());
-    });
+  it('sort_by_attribute_ascending_and_descending', () => {
+    // REVISION 2 — the Sort UI (select + Asc/Desc) is removed; the sort LOGIC stays in `derive`.
+    // Assert ascending is the exact reverse of descending for a P/L ($) sort.
+    const rows = [drow(dpos({ id: 'lo' }), { plDollar: 50 }), drow(dpos({ id: 'hi' }), { plDollar: 200 })];
+    const desc = deriveGroups(rows, { filter: FILTER_OPEN, sortKey: 'pl_dollar', sortDir: 'desc', group: 'none' });
+    const asc = deriveGroups(rows, { filter: FILTER_OPEN, sortKey: 'pl_dollar', sortDir: 'asc', group: 'none' });
+    const descIds = desc[0].rows.map((r) => r.position.id);
+    const ascIds = asc[0].rows.map((r) => r.position.id);
+    expect(descIds).toEqual(['hi', 'lo']);
+    expect(ascIds).toEqual([...descIds].reverse());
   });
 
-  it('filter_by_ticker_status_strategy_expiry', async () => {
-    const user = userEvent.setup(); installBackend(); renderH();
-    await openManual(user, '5');
-    // Strategy filter to Long put → the single long-call position drops out (filtered empty).
-    await pickFilter(user, 'filter-strategy', 'Long put');
-    await waitFor(() => expect(screen.getByTestId('empty-filtered')).toBeInTheDocument());
+  it('filter_by_ticker_status_strategy_expiry', () => {
+    // REVISION 2 — STATUS filtering stays in the UI (the status pills, covered elsewhere); the
+    // ticker/strategy/expiry filter LOGIC stays in `derive` and is asserted directly here.
+    const positions = [
+      dpos({ id: 'tsla-c', ticker: 'TSLA', right: 'call', expiration: '2026-07-17' }),
+      dpos({ id: 'aapl-p', ticker: 'AAPL', right: 'put', expiration: '2026-08-21' }),
+    ];
+    expect(applyFilter(positions, { ...FILTER_OPEN, ticker: 'AAPL' }).map((p) => p.id)).toEqual(['aapl-p']);
+    expect(applyFilter(positions, { ...FILTER_OPEN, strategy: 'long_put' }).map((p) => p.id)).toEqual(['aapl-p']);
+    expect(applyFilter(positions, { ...FILTER_OPEN, expiry: '2026-07-17' }).map((p) => p.id)).toEqual(['tsla-c']);
+    // status filter narrows too (open-only by default; a closed member drops out).
+    const withClosed = [...positions, dpos({ id: 'closed', status: 'closed' })];
+    expect(applyFilter(withClosed, FILTER_OPEN).some((p) => p.id === 'closed')).toBe(false);
   });
 
   it('choose_and_reorder_columns', async () => {
+    // REVISION 2 — column customization is removed for now (the Columns ▾ menu is gone); everyone sees
+    // the FIXED Figma column set. Assert the table renders exactly those headers, in order, with no
+    // Columns control present.
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
-    await user.click(screen.getByTestId('columns-button'));
-    // REVISION 1 — Strategy is now a DEFAULT column; toggle an OPTIONAL one (Session Δ) on instead.
-    const sessionOpt = screen.getAllByTestId('column-option').find((el) => el.getAttribute('data-col') === 'session_delta')!;
-    await user.click(sessionOpt);
-    await waitFor(() => expect(within(screen.getByTestId('positions-table')).getByText('Session Δ')).toBeInTheDocument());
+    pushLive({ mid: 250 });
+    const table = await screen.findByTestId('positions-table');
+    const headers = within(table).getAllByRole('columnheader').map((h) => h.textContent?.trim());
+    expect(headers).toEqual([
+      'Ticker', 'Strategy', 'Qty', 'Entry', 'Mark', 'P/L', 'P/L %',
+      'Δ entry', 'Trend', 'Expiry', '',
+    ]);
+    expect(screen.queryByTestId('columns-button')).toBeNull();
   });
 
   it('toggle_table_card_layout_and_comfortable_compact_density', async () => {
@@ -588,14 +613,13 @@ describe('F. live lock + invariants', () => {
   it('no_real_order_path_anywhere_simulated_unmistakable', async () => {
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
-    // REVISION 1 — the per-row SIMULATED column moved to optional; paper/simulated honesty is now
-    // carried (unmistakably) by the tab PAPER badge + the mandatory browser-local disclosure.
+    // Paper/simulated honesty is carried (unmistakably) by the tab PAPER badge + the mandatory
+    // browser-local disclosure (REVISION 2 removed the Columns menu, so the per-row SIMULATED column
+    // is no longer re-addable — but the PAPER badge + disclosure keep the honesty unmistakable).
     expect(within(screen.getByTestId('tab-simulated')).getByText('PAPER')).toBeInTheDocument();
     expect(screen.getByTestId('positions-disclosure')).toBeInTheDocument();
-    // The SIMULATED column is still AVAILABLE (re-addable) via the Columns menu.
-    await user.click(screen.getByTestId('columns-button'));
-    expect(document.querySelector('[data-testid="column-option"][data-col="simulated"]')).toBeTruthy();
-    await user.keyboard('{Escape}');
+    // No Columns control exists anymore.
+    expect(screen.queryByTestId('columns-button')).toBeNull();
     // No "real order" / "broker" affordance anywhere.
     expect(screen.queryByText(/place real order/i)).toBeNull();
   });

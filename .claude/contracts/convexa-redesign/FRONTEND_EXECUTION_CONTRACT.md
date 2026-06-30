@@ -9,6 +9,40 @@
 > The conductor inspected all three frames + the authoritative frame source (`figma_frames/05/06/07` →
 > `screenPositions()`); this contract carries every pixel value (the lane has NO live Figma access).
 
+## REVISION 2 (owner 2026-06-29) — TOOLBAR must match the Figma exactly (remove Sort/Filters/Columns; fixed columns)
+> Owner feedback on the shipped build (`ab52759`): "styling is off, it doesn't use the same columns, remove
+> sorting for now so it matches the figma." The current toolbar carries **Sort, Filters ▾, and Columns ▾**
+> controls that are NOT in the Figma — they wrap the toolbar onto 3 rows and push the "+ Open" button down.
+> The Figma toolbar is **ONE clean row**. Fix to match the mock exactly. (Builds on REVISIONs below; same
+> preservation rules — gating/lock/score-identity/durable store all intact.)
+- **Toolbar = exactly ONE row** (`display:flex`, `alignItems:center`, `gap:10px`, `flexWrap:nowrap` — must NOT
+  wrap), left→right: **View picker** · a thin vertical divider · **[Table | Cards]** segmented · **[Comfortable
+  | Compact]** segmented · **Group [None · Ticker · Strategy]** segmented · a flex **spacer** · the blue
+  **+ Open simulated position** pill. Then BELOW it the status-pill row (`open · pending · closed · cancelled` +
+  `History`) — unchanged.
+- **REMOVE these controls entirely (for now):** the **Sort** select + **Desc/Asc** toggle, the **Filters ▾**
+  menu, and the **Columns ▾** menu. (Keep the underlying `derive` sort/filter logic + `working.*` in the model
+  for later; just remove the UI. Default sort stays `pl_dollar`/`desc` under the hood.)
+- **Group:** show **None · Ticker · Strategy** only (drop the inline `Expiry` option to match the frame).
+- **Fixed columns (column customization is removed for now):** render the table/cards from the **fixed Figma
+  column set** directly — `['contract','strategy','qty','entry','mark','pl','pl_pct','delta_entry','trend','expiry']`
+  — do NOT read persisted `working.columns` for the visible set (an existing user's old saved columns must NOT
+  override; everyone sees the Figma columns). Keep `working.columns` in the model untouched for when Columns
+  customization returns.
+- **Header labels match the frame terse text:** `entry` → **"Entry"** (not "Entry price"), `delta_entry` →
+  **"Δ entry"** (not "Δ since entry"). (These two table-header labels only; leave the Columns-menu/tooltip
+  copy as-is in `COLUMN_LABELS` if it's shared — use a table-header label map if needed so you don't disturb
+  other consumers.)
+- **Compact segmented styling (match the frame, not chunky MUI defaults):** each segment `padding:'6px 12px'`,
+  `fontSize:'0.78rem'`, `fontWeight:600`, `borderRadius:'7px'`; the segmented **container** `bgcolor` panelRaised
+  `#1c2330`, `border:'1px solid' divider`, `borderRadius:8`, `padding:'3px'`, `gap:'3px'`; active segment =
+  `text.primary` + subtle raised bg, inactive = `text.secondary` transparent. The **View picker** + **+ Open**
+  pill keep their REVISION-baseline styling but must sit inline on the single row.
+- **Tests:** remove/replace the `sort-select`/`sort-dir`/`filters-button`/`columns`(menu) selectors in the specs
+  (those controls no longer exist); assert the toolbar renders View/Table-Cards/density/Group(None/Ticker/Strategy)/
+  +Open in one row, the fixed Figma column headers, and NO Sort/Filters/Columns controls. Keep all behavioral/
+  invariant tests green. `nx test dashboard` green.
+
 ## REVISION 1 (owner decision 2026-06-29) — default table columns MATCH THE MOCK
 > Supersedes the "Table/cards stay column-driven / keep DEFAULT_COLUMNS / `types.ts`+`defaults.ts` DO-NOT-TOUCH"
 > stance below. The baseline re-skin shipped (commit `9336856`); this revision re-models the **default visible

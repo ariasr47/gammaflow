@@ -5,14 +5,17 @@
  * cells degrade via PositionRow; static cells keep rendering.
  *
  * Re-skin (convexa-redesign · Positions): the framed table (uppercase 0.7rem headers, panel-bordered
- * outer, panel-raised group-subtotal rows) + the 2-col cards grid per the frame. The view is still
- * driven by `working.columns` (column selection/order/persistence + the toggle wiring are unchanged) —
- * only the chrome/styling changed; `cellContent` (incl. the offline-dim live cells) is reused as-is.
+ * outer, panel-raised group-subtotal rows) + the 2-col cards grid per the frame.
+ * REVISION 2 (owner 2026-06-29): the visible column set is the FIXED Figma set (`FIGMA_COLUMNS`) —
+ * the table/cards render from it directly and IGNORE the passed `columns` (persisted `working.columns`)
+ * for the visible set, so an existing user's old saved columns can't override the Figma layout; everyone
+ * sees the same columns until column-customization returns. Header copy uses the terse table-header
+ * map. `cellContent` (incl. the offline-dim live cells) is reused as-is.
  */
 import { Box, Typography } from '@mui/material';
 import type { DerivedGroup, DerivedRow } from './derive';
 import type { ColumnKey, Density, LayoutMode } from './types';
-import { COLUMN_LABELS } from './defaults';
+import { COLUMN_LABELS, TABLE_HEADER_LABELS } from './defaults';
 import { cellContent, PendingAffordance, ClosedSummary, RowContext } from './PositionRow';
 import type { PlSample } from './useTrends';
 import { money, EMPTY_NO_POSITIONS, EMPTY_FILTERED, HISTORY_CAPTION } from './labels';
@@ -20,6 +23,16 @@ import { extras, typographyTokens } from '../tokens';
 
 const monoSx = typographyTokens.monoFontFamily;
 const pctStr = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
+
+/**
+ * REVISION 2 — the FIXED Figma column set (left→right). The table/cards render from this directly and
+ * do NOT read the persisted `working.columns` for the visible set (an existing user's saved columns
+ * must not override the Figma layout). `working.columns` stays in the model for when customization returns.
+ */
+const FIGMA_COLUMNS: ColumnKey[] = [
+  'contract', 'strategy', 'qty', 'entry', 'mark', 'pl', 'pl_pct', 'delta_entry', 'trend', 'expiry',
+];
+const headerLabel = (c: ColumnKey) => (c === 'simulated' ? '' : TABLE_HEADER_LABELS[c] ?? COLUMN_LABELS[c]);
 
 export interface ViewProps {
   groups: DerivedGroup[];
@@ -125,7 +138,8 @@ const thSx = {
 };
 
 function TableLayout(props: ViewProps) {
-  const { columns, density } = props;
+  const { density } = props;
+  const columns = FIGMA_COLUMNS; // REVISION 2 — fixed Figma set, not props.columns
   const isGrouped = props.groups.length > 1 || props.groups[0]?.key !== '__all__';
   const tdPad = density === 'compact' ? '7px 12px' : '12px';
   return (
@@ -136,7 +150,7 @@ function TableLayout(props: ViewProps) {
         <Box component="thead">
           <Box component="tr">
             {columns.map((c) => (
-              <Box component="th" key={c} sx={thSx}>{c === 'simulated' ? '' : COLUMN_LABELS[c]}</Box>
+              <Box component="th" key={c} sx={thSx}>{headerLabel(c)}</Box>
             ))}
             <Box component="th" sx={thSx} />
           </Box>

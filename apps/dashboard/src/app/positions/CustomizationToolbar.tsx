@@ -1,51 +1,44 @@
 /**
  * The customization toolbar (UX_BLUEPRINT §6 S8 / §5): view picker (+ unsaved-changes dot), layout
- * toggle, density toggle, group selector, sort control, filter selectors, Columns menu, the primary
- * Open-CTA, and the saved-view create/rename/delete/switch UX. All controls re-derive the view — NONE
- * triggers a fetch or mutates a position. Static/durable: untouched by an SSE drop.
+ * toggle, density toggle, group selector, the primary Open-CTA, and the saved-view create/rename/
+ * delete/switch UX. All controls re-derive the view — NONE triggers a fetch or mutates a position.
+ * Static/durable: untouched by an SSE drop.
  *
- * Re-skin (convexa-redesign · Positions): re-laid-out to the frame — a controls row (View · Table/Cards ·
- * Comfortable/Compact · Group None/Ticker/Strategy/Expiry · Columns · spacer · the blue "+ Open
+ * Re-skin (convexa-redesign · Positions): re-laid-out to the frame — a single controls row (View ·
+ * Table/Cards · Comfortable/Compact · Group None/Ticker/Strategy · spacer · the blue "+ Open
  * simulated position" pill), then a status-pill row (open/pending/closed/cancelled + History + the
- * offline banner). Layout/density/group become segmented pill controls; the saved-view/columns/filter/
- * sort wiring is unchanged. The Open-CTA handler (`onOpenEntry`, gated upstream) lands here.
+ * offline banner). Layout/density/group are segmented pill controls; the saved-view wiring is unchanged.
+ * REVISION 2 (owner 2026-06-29): the Sort select + Desc/Asc toggle, the Filters ▾ menu, and the
+ * Columns ▾ menu are REMOVED from the UI to match the Figma's one clean row — the underlying
+ * `derive` sort/filter logic + `working.*` stay in the model (default sort `pl_dollar`/`desc`), only
+ * the controls are gone. The Open-CTA handler (`onOpenEntry`, gated upstream) lands here.
  */
 import { useState } from 'react';
 import {
-  FormControl, InputLabel, Select, MenuItem, Button,
-  Tooltip, Menu, Checkbox, ListItemText, Box, Dialog, DialogTitle, DialogContent, DialogActions,
+  MenuItem, Button,
+  Tooltip, Menu, ListItemText, Box, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Typography, IconButton, Divider,
 } from '@mui/material';
 import type { usePortfolio } from './usePortfolio';
-import type { ColumnKey, GroupAxis, SortKey, SortDir, PositionStatus, Strategy } from './types';
-import { DEFAULT_COLUMNS, OPTIONAL_COLUMNS, COLUMN_LABELS } from './defaults';
+import type { GroupAxis, PositionStatus } from './types';
 import { SAVED_VIEW_TIP } from './labels';
-import { distinctTickers, distinctExpirations } from './derive';
 import type { Position } from './types';
 import { extras } from '../tokens';
 
 type Portfolio = ReturnType<typeof usePortfolio>;
 
-const SORT_KEYS: { key: SortKey; label: string }[] = [
-  { key: 'pl_dollar', label: 'P/L ($)' }, { key: 'pl_pct', label: 'P/L (%)' },
-  { key: 'delta_entry', label: 'Δ since entry' }, { key: 'session_delta', label: 'Session Δ' },
-  { key: 'ticker', label: 'Ticker' }, { key: 'strategy', label: 'Strategy' },
-  { key: 'expiry', label: 'Expiry' }, { key: 'dte', label: 'DTE' },
-  { key: 'qty', label: 'Qty' }, { key: 'entry_time', label: 'Entry time' },
-];
-
 const STATUSES: PositionStatus[] = ['open', 'pending', 'closed', 'cancelled'];
-const STRATEGIES: { key: Strategy; label: string }[] = [
-  { key: 'long_call', label: 'Long call' }, { key: 'long_put', label: 'Long put' },
-];
+// REVISION 2 — Group shows None · Ticker · Strategy only (the inline Expiry option is dropped to match
+// the frame). The `expiry` group axis remains in the model + derive for later; only the UI option goes.
 const GROUP_AXES: { key: GroupAxis; label: string }[] = [
   { key: 'none', label: 'None' }, { key: 'ticker', label: 'Ticker' },
-  { key: 'strategy', label: 'Strategy' }, { key: 'expiry', label: 'Expiry' },
+  { key: 'strategy', label: 'Strategy' },
 ];
 
 interface ToolbarProps {
   pf: Portfolio;
-  positions: Position[];
+  /** Retained for callers + future filter/columns UI; unused by the REVISION-2 one-row toolbar. */
+  positions?: Position[];
   /** Gate a save-view WRITE (UX_BLUEPRINT §2.6): logged-out ⇒ run shows the sign-in prompt instead of
    *  saving. Defaults to running the action directly (e.g. in isolated renders). */
   guardSaveView?: (run: () => void) => void;
@@ -109,27 +102,14 @@ const selectBoxSx = {
   borderRadius: '8px', padding: '7px 11px', fontSize: '0.8rem',
 };
 
-export function CustomizationToolbar({ pf, positions, guardSaveView, streamOffline, onOpenEntry, canOpenEntry }: ToolbarProps) {
+export function CustomizationToolbar({ pf, guardSaveView, streamOffline, onOpenEntry, canOpenEntry }: ToolbarProps) {
   const guard = guardSaveView ?? ((run: () => void) => run());
   const { working, activeView, custom, hasUnsavedChanges } = pf;
-  const [colAnchor, setColAnchor] = useState<null | HTMLElement>(null);
   const [viewAnchor, setViewAnchor] = useState<null | HTMLElement>(null);
-  const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState<string | null>(null);
   const [name, setName] = useState('');
-
-  const tickers = distinctTickers(positions);
-  const expirations = distinctExpirations(positions);
-  const allColumns: ColumnKey[] = [...DEFAULT_COLUMNS, ...OPTIONAL_COLUMNS];
-
-  const toggleColumn = (c: ColumnKey) => {
-    if (c === 'simulated') return; // not removable
-    const has = working.columns.includes(c);
-    const columns = has ? working.columns.filter((x) => x !== c) : [...working.columns, c];
-    pf.setWorking({ columns });
-  };
 
   const toggleStatus = (s: PositionStatus) => {
     const has = working.filter.status.includes(s);
@@ -147,8 +127,8 @@ export function CustomizationToolbar({ pf, positions, guardSaveView, streamOffli
 
   return (
     <Box data-testid="customization-toolbar">
-      {/* Controls row. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', mb: '6px' }}>
+      {/* Controls row — REVISION 2: ONE clean row (no wrap) matching the Figma. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'nowrap', mb: '6px' }}>
         {/* View picker (saved views). */}
         <Box
           component="button"
@@ -212,7 +192,7 @@ export function CustomizationToolbar({ pf, positions, guardSaveView, streamOffli
           onChange={(v) => pf.setWorking({ density: v })}
         />
 
-        {/* Group segmented (None · Ticker · Strategy · Expiry). */}
+        {/* Group segmented (None · Ticker · Strategy) — REVISION 2: Expiry option dropped. */}
         <Segmented
           ariaLabel="group"
           testid="group-select"
@@ -221,74 +201,6 @@ export function CustomizationToolbar({ pf, positions, guardSaveView, streamOffli
           options={GROUP_AXES}
           onChange={(v) => pf.setWorking({ group: v })}
         />
-
-        {/* Sort control (kept; the frame trimmed it for space). */}
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Sort</InputLabel>
-            <Select label="Sort" value={working.sortKey} onChange={(e) => pf.setWorking({ sortKey: e.target.value as SortKey })} data-testid="sort-select">
-              {SORT_KEYS.map((s) => <MenuItem key={s.key} value={s.key}>{s.label}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <Button size="small" onClick={() => pf.setWorking({ sortDir: (working.sortDir === 'asc' ? 'desc' : 'asc') as SortDir })} data-testid="sort-dir">
-            {working.sortDir === 'asc' ? 'Asc ▲' : 'Desc ▼'}
-          </Button>
-        </Box>
-
-        {/* Filters (ticker / strategy / expiry). */}
-        <Box
-          component="button"
-          type="button"
-          onClick={(e) => setFilterAnchor(e.currentTarget)}
-          data-testid="filters-button"
-          sx={{ ...selectBoxSx, cursor: 'pointer', font: 'inherit', color: 'text.primary', fontWeight: 600 }}
-        >
-          Filters ▾
-        </Box>
-        <Menu anchorEl={filterAnchor} open={!!filterAnchor} onClose={() => setFilterAnchor(null)}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', px: 2, py: 1, minWidth: 180 }}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Ticker</InputLabel>
-              <Select label="Ticker" value={working.filter.ticker ?? ''} onChange={(e) => pf.setFilter({ ticker: e.target.value === '' ? null : String(e.target.value) })} data-testid="filter-ticker">
-                <MenuItem value="">All</MenuItem>
-                {tickers.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Strategy</InputLabel>
-              <Select label="Strategy" value={working.filter.strategy ?? ''} onChange={(e) => pf.setFilter({ strategy: (e.target.value as string) === '' ? null : e.target.value as Strategy })} data-testid="filter-strategy">
-                <MenuItem value="">All</MenuItem>
-                {STRATEGIES.map((s) => <MenuItem key={s.key} value={s.key}>{s.label}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Expiry</InputLabel>
-              <Select label="Expiry" value={working.filter.expiry ?? ''} onChange={(e) => pf.setFilter({ expiry: e.target.value === '' ? null : String(e.target.value) })} data-testid="filter-expiry">
-                <MenuItem value="">All</MenuItem>
-                {expirations.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </Box>
-        </Menu>
-
-        {/* Columns menu. */}
-        <Box
-          component="button"
-          type="button"
-          onClick={(e) => setColAnchor(e.currentTarget)}
-          data-testid="columns-button"
-          sx={{ ...selectBoxSx, cursor: 'pointer', font: 'inherit', color: 'text.primary', fontWeight: 600 }}
-        >
-          Columns ▾
-        </Box>
-        <Menu anchorEl={colAnchor} open={!!colAnchor} onClose={() => setColAnchor(null)}>
-          {allColumns.map((c) => (
-            <MenuItem key={c} onClick={() => toggleColumn(c)} disabled={c === 'simulated'} data-testid="column-option" data-col={c}>
-              <Checkbox size="small" checked={working.columns.includes(c)} />
-              <ListItemText>{COLUMN_LABELS[c]}</ListItemText>
-            </MenuItem>
-          ))}
-        </Menu>
 
         {/* Spacer + the primary CTA. */}
         <Box sx={{ flex: 1 }} />

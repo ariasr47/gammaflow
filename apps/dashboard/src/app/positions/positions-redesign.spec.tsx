@@ -153,16 +153,43 @@ describe('toolbar segmented controls wire to working.*', () => {
     await waitFor(() => expect(screen.getByTestId('positions-table').getAttribute('data-density')).toBe('compact'));
   });
 
-  it('Group None/Ticker/Strategy/Expiry are all present and switch grouping', async () => {
+  // REVISION 2 — Group shows None · Ticker · Strategy only (the Expiry option is dropped to match the frame).
+  it('Group None/Ticker/Strategy are present (Expiry dropped) and switch grouping', async () => {
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
-    for (const axis of ['ticker', 'strategy', 'expiry'] as const) {
+    for (const axis of ['ticker', 'strategy'] as const) {
       expect(screen.getByTestId(`group-select-${axis}`)).toBeInTheDocument();
       await user.click(screen.getByTestId(`group-select-${axis}`));
       await waitFor(() => expect(screen.getByTestId('group-header')).toBeInTheDocument());
     }
+    expect(screen.getByTestId('group-select-none')).toBeInTheDocument();
+    // The inline Expiry group option no longer exists.
+    expect(screen.queryByTestId('group-select-expiry')).toBeNull();
     await user.click(screen.getByTestId('group-select-none'));
     await waitFor(() => expect(screen.queryByTestId('group-header')).toBeNull());
+  });
+
+  // REVISION 2 — the toolbar is ONE clean row; the Sort/Filters/Columns controls are gone.
+  it('shows View/Table-Cards/density/Group/+Open in one row with NO Sort/Filters/Columns controls', async () => {
+    const user = userEvent.setup(); installBackend(); renderH();
+    // Present: view picker, layout, density, group, the blue CTA.
+    expect(screen.getByTestId('view-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-toggle-table')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-toggle-card')).toBeInTheDocument();
+    expect(screen.getByTestId('density-toggle-comfortable')).toBeInTheDocument();
+    expect(screen.getByTestId('density-toggle-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('group-select-none')).toBeInTheDocument();
+    expect(screen.getByTestId('open-entry')).toBeInTheDocument();
+    // Removed (REVISION 2): Sort select + Asc/Desc toggle, Filters menu, Columns menu.
+    expect(screen.queryByTestId('sort-select')).toBeNull();
+    expect(screen.queryByTestId('sort-dir')).toBeNull();
+    expect(screen.queryByTestId('filters-button')).toBeNull();
+    expect(screen.queryByTestId('columns-button')).toBeNull();
+    // The controls row does not wrap (single Figma row).
+    const toolbar = screen.getByTestId('customization-toolbar');
+    const controlsRow = within(toolbar).getByTestId('view-picker').parentElement as HTMLElement;
+    expect(controlsRow).toHaveStyle({ flexWrap: 'nowrap' });
+    expect(user).toBeTruthy();
   });
 
   it('the blue Open CTA carries data-testid="open-entry" and opens the entry dialog', async () => {
@@ -205,11 +232,11 @@ describe('REVISION 1 default table columns (match the Figma mock)', () => {
     pushLive({ mid: 250 });
     const table = await screen.findByTestId('positions-table');
     const headers = within(table).getAllByRole('columnheader').map((h) => h.textContent?.trim());
-    // The default visible set, left→right, exactly the mock (plus the trailing empty actions th).
-    // COLUMN_LABELS.entry stays 'Entry price' (REVISION 1 changed only pl/pl_pct/contract labels).
+    // The fixed Figma set, left→right (plus the trailing empty actions th). REVISION 2 terse
+    // table-header copy: 'Entry' (not 'Entry price'), 'Δ entry' (not 'Δ since entry').
     expect(headers).toEqual([
-      'Ticker', 'Strategy', 'Qty', 'Entry price', 'Mark', 'P/L', 'P/L %',
-      'Δ since entry', 'Trend', 'Expiry', '',
+      'Ticker', 'Strategy', 'Qty', 'Entry', 'Mark', 'P/L', 'P/L %',
+      'Δ entry', 'Trend', 'Expiry', '',
     ]);
     // P/L $ and P/L % are now distinct cells (the old combined "$ / %" cell is gone).
     const row = within(table).getByTestId('position-row');

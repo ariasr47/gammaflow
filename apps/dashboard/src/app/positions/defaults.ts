@@ -34,6 +34,17 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
   stop: 'Stop', target: 'Target', entry_time: 'Entry time', opened: 'Opened (age)',
 };
 
+/**
+ * REVISION 2 — terse table-HEADER labels matching the Figma frame. A thin override on top of
+ * `COLUMN_LABELS`: only the two columns whose header copy differs from the (shared) menu/tooltip copy
+ * appear here (`entry` → "Entry", `delta_entry` → "Δ entry"). The table reads `TABLE_HEADER_LABELS[c]
+ * ?? COLUMN_LABELS[c]` so the menu/tooltip consumers of `COLUMN_LABELS` are undisturbed.
+ */
+export const TABLE_HEADER_LABELS: Partial<Record<ColumnKey, string>> = {
+  entry: 'Entry',
+  delta_entry: 'Δ entry',
+};
+
 export const DEFAULT_VIEW_NAME = 'All positions';
 export const DEFAULT_VIEW_ID = 'view-all-positions';
 

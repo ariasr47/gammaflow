@@ -1,6 +1,6 @@
 # convexa-redesign — pipeline manifest
 Entry:        restart 2026-06-29 — implement-from-Figma (v1 slice attempt reset; archived `convexa-redesign-v1-archive`)
-Stage:        SURFACE: Positions ✅ DONE — baseline (9336856) + mock-column REVISION 1 (ab52759), verified (preview MCP, 370 tests). Next surface: Ticker.
+Stage:        SURFACE: Positions — REVISION 2 (owner: toolbar must match figma — remove Sort/Filters/Columns, fixed columns, compact segments) → spawning delivery-frontend. (baseline 9336856 + REV1 ab52759 shipped.)
 Branch:       convexa-redesign (off main @ 2828bfa) — DS bridge (tokens.ts + cssVariables + sync script) kept; merge to main at GATE S
 Repos:        frontend  (NO_BACKEND_CHANGE — apps/api untouched)
 Brief:        n/a (restart) — README §5 + figma_frames/08-scanner-soon.html + FIGMA_COMPONENT_MAP.md are the brief

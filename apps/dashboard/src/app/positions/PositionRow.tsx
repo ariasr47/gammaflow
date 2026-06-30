@@ -23,6 +23,19 @@ import { typographyTokens } from '../tokens';
 const OFFLINE = '⏸ offline';
 const MONO = { fontFamily: typographyTokens.monoFontFamily, fontVariantNumeric: 'tabular-nums' } as const;
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Frame "Expiry" format: `Mon DD · {dte}d` (e.g. `Jul 18 · 19d`). Parses the YYYY-MM-DD parts
+ *  directly (no timezone drift) and computes days-to-expiry as pure calendar arithmetic, so it always
+ *  shows even when live metrics are unavailable. Display-only — never feeds scoring/math. */
+function formatExpiry(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const md = `${MONTHS[m - 1]} ${d}`;
+  const now = new Date();
+  const dte = Math.max(0, Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000));
+  return `${md} · ${dte}d`;
+}
+
 export interface RowContext {
   row: DerivedRow;
   markRes: { mark: number | null; basis: string; frozen: boolean } | null;
@@ -160,16 +173,18 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       return <Tooltip arrow title={TREND_TIP}><span><PlSparkline samples={ctx.trend} offline={streamOffline} /></span></Tooltip>;
     }
     case 'entry': {
+      // Frame "Entry" = just the price (e.g. `$8.40`). The entry-basis provenance is preserved as a
+      // hover tooltip (honesty kept) rather than an inline chip the frame doesn't show.
       const basisMeta = ENTRY_BASIS_META[p.entry_basis];
-      return (
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" color="text.secondary" sx={MONO}>${p.entry_mark.toFixed(2)}</Typography>
-          {basisMeta && <Chip size="small" variant="outlined" label={basisMeta.label} />}
-        </Stack>
+      const price = (
+        <Typography component="span" variant="body2" color="text.secondary" sx={MONO} data-testid="cell-entry">
+          ${p.entry_mark.toFixed(2)}
+        </Typography>
       );
+      return basisMeta ? <Tooltip arrow title={basisMeta.tip}>{price}</Tooltip> : price;
     }
     case 'qty': return <Typography variant="body2" sx={MONO}>{p.qty} ×</Typography>;
-    case 'expiry': return <Typography variant="body2">{p.expiration}</Typography>;
+    case 'expiry': return <Typography variant="body2" data-testid="cell-expiry">{formatExpiry(p.expiration)}</Typography>;
     case 'strike': return <Typography variant="body2">${p.strike}</Typography>;
     case 'right': return <Typography variant="body2">{p.right === 'call' ? 'Call' : 'Put'}</Typography>;
     case 'strategy': return <Typography variant="body2">{strategyLabel(row.strategy)}</Typography>;
