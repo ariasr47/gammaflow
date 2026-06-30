@@ -1,9 +1,10 @@
 # convexa-redesign — pipeline manifest
 Entry:        restart 2026-06-29 — implement-from-Figma (v1 slice attempt reset; archived `convexa-redesign-v1-archive`)
-Stage:        SURFACE: Landing — FE contract authored → spawning delivery-frontend (GATE V, agents-from-Figma)
+Stage:        SURFACE: Scanner — BUILT (348/348 tests) + pixel-verified (preview MCP vs Figma 4:2519) + committed. Next surface: Positions.
 Branch:       convexa-redesign (off main @ 2828bfa) — DS bridge (tokens.ts + cssVariables + sync script) kept; merge to main at GATE S
 Repos:        frontend  (NO_BACKEND_CHANGE — apps/api untouched)
-Brief:        n/a (restart) — README §2 + FIGMA_COMPONENT_MAP.md are the brief
+Brief:        n/a (restart) — README §5 + figma_frames/08-scanner-soon.html + FIGMA_COMPONENT_MAP.md are the brief
+Surfaces:     Landing ✅ committed (0353758) · Settings/Auth ✅ committed (0353758) · Scanner ✅ committed · Positions ◀ NEXT · Ticker ⬜ · /auth (full page) ⬜
 Contracts:
   - ARCHITECTURE_CONTRACT.md   n/a (presentation-only)
   - PRODUCT_CONTRACT.md        n/a (README is product/UX spec)
@@ -11,10 +12,10 @@ Contracts:
   - INTERFACE_CONTRACT.md      n/a (NO_INTERFACE_CHANGE — consumes existing endpoints/SSE unchanged)
   - FIGMA_COMPONENT_MAP.md     locked  (Pro-plan Code-Connect substitute: node-id ⇄ code/props for 17 components)
   - BACKEND_EXECUTION_CONTRACT.md   NO_BACKEND_CHANGE
-  - FRONTEND_EXECUTION_CONTRACT.md  draft — SURFACE Landing (re-skin landing/Landing.tsx; restore+verify ui/ primitives)
+  - FRONTEND_EXECUTION_CONTRACT.md  draft — SURFACE Scanner (re-skin scanner/Scanner.tsx to the Figma frame; +scanner.spec.tsx)
 Open amendments: none
-QA (GATE Q):  n/a (pending build)
-Last gateway:  GATE V (Landing) @ 2026-06-29 — implement-from-Figma
+QA (GATE Q):  n/a (single fresh QA pass after ALL surfaces, before GATE S merge to main)
+Last gateway:  GATE V (Scanner) @ 2026-06-29 — implement-from-Figma
 
-## Surface order (one at a time): Landing → Scanner → Positions → Ticker → Settings/Auth
+## Surface order (one at a time): Landing ✅ → Settings/Auth ✅ → Scanner ◀ → Positions → Ticker → /auth (full page)
 ## Workflow: conductor authors per-surface FE contract from README + map → delivery-frontend builds (no live Figma; conductor carries detail) → conductor renders/verifies (preview MCP) → commit on branch.
