@@ -1,10 +1,10 @@
 # convexa-redesign — pipeline manifest
 Entry:        restart 2026-06-29 — implement-from-Figma (v1 slice attempt reset; archived `convexa-redesign-v1-archive`)
-Stage:        SURFACE: Positions — baseline re-write BUILT+verified+committed (9336856). REVISION 1 (owner: match-mock columns) → spawning delivery-frontend.
+Stage:        SURFACE: Positions ✅ DONE — baseline (9336856) + mock-column REVISION 1 (ab52759), verified (preview MCP, 370 tests). Next surface: Ticker.
 Branch:       convexa-redesign (off main @ 2828bfa) — DS bridge (tokens.ts + cssVariables + sync script) kept; merge to main at GATE S
 Repos:        frontend  (NO_BACKEND_CHANGE — apps/api untouched)
 Brief:        n/a (restart) — README §5 + figma_frames/08-scanner-soon.html + FIGMA_COMPONENT_MAP.md are the brief
-Surfaces:     Landing ✅ committed (0353758) · Settings/Auth ✅ committed (0353758) · Scanner ✅ committed (fbb1e2d) · Positions ◀ IN PROGRESS · Ticker ⬜ · /auth (full page) ⬜
+Surfaces:     Landing ✅ committed (0353758) · Settings/Auth ✅ committed (0353758) · Scanner ✅ committed (fbb1e2d) · Positions ✅ committed (9336856 + ab52759) · Ticker ◀ NEXT · /auth (full page) ⬜
 Contracts:
   - ARCHITECTURE_CONTRACT.md   n/a (presentation-only)
   - PRODUCT_CONTRACT.md        n/a (README is product/UX spec)
