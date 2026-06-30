@@ -42,6 +42,7 @@ import { TermStructureCard } from './sections/TermStructure';
 import { FreshPositioning } from './sections/FreshPositioning';
 import { OffExchangeBlocks } from './sections/OffExchangeBlocks';
 import { Setups } from './sections/Setups';
+import { FreshnessLine } from './sections/FreshnessLine';
 import { humanAge } from './sections/copy';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
@@ -250,6 +251,15 @@ export function TickerDashboard() {
           <TickerHeader
             m={m} sig={sig} live={live} isLive={isLive} streamOffline={streamOffline} selected={selected}
             onOpenTrade={() => openEntry()}
+          />
+
+          {/* REST-bundle freshness caption (static path, NOT live/SSE) — builds trust in the snapshot
+              age between polls; shows a quiet "· refreshing…" only while a background poll is in flight.
+              It does not own stale / poll-error messaging (those keep their existing treatments). */}
+          <FreshnessLine
+            snapshotIso={fresh?.snapshot_iso ?? null}
+            dataAgeSeconds={fresh?.data_age_seconds ?? null}
+            refreshing={loading}
           />
 
           {/* LIVE-DERIVED tiles — dim on an SSE drop. */}

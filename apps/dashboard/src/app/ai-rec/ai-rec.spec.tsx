@@ -496,7 +496,7 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
     const user = renderApp();
     await settle();
     const oppBefore = screen.getByText(/^42 · /).textContent;
-    const gexBefore = screen.getByText('$1200.0M').textContent;
+    const gexBefore = screen.getByText('$1.2B').textContent;
     const tickerBefore = be.calls.ticker;
 
     await user.click(within(panel()).getByRole('button', { name: 'Get AI recommendation' }));
@@ -504,7 +504,7 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
 
     // After a produced rec: the bundle-derived tiles are observably identical, and no bundle re-fetch.
     expect(screen.getByText(/^42 · /).textContent).toBe(oppBefore);
-    expect(screen.getByText('$1200.0M').textContent).toBe(gexBefore);
+    expect(screen.getByText('$1.2B').textContent).toBe(gexBefore);
     expect(be.calls.ticker).toBe(tickerBefore);
   });
 });

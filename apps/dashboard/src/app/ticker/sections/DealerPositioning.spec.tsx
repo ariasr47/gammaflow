@@ -49,8 +49,8 @@ describe('DealerPositioning (static tile grid)', () => {
     expect(screen.getByText('Call wall')).toBeInTheDocument();
     expect(screen.getByText('$260')).toBeInTheDocument();
     expect(screen.getByText('$240')).toBeInTheDocument();
-    expect(screen.getByText('$1200.0M')).toBeInTheDocument(); // Net GEX
-    expect(screen.getByText('$500.0M')).toBeInTheDocument();  // Net DEX
+    expect(screen.getByText('$1.2B')).toBeInTheDocument();   // Net GEX (1.2e9, compact)
+    expect(screen.getByText('$500.0M')).toBeInTheDocument(); // Net DEX (5.0e8, compact)
     expect(screen.getByText('1.12')).toBeInTheDocument();      // IV/HV
     expect(screen.getByText('73 · Actionable')).toBeInTheDocument();
     // "snapshot, never live" caption present.

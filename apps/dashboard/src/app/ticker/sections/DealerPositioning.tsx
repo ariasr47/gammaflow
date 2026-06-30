@@ -8,7 +8,7 @@
 import { Box, Stack, Typography } from '@mui/material';
 import type { OffExchange, Signals, MarketState } from '@org/api';
 import { StatTile } from './StatTile';
-import { netDexTip, skewState, skewTip, termTip, volOiTip } from './copy';
+import { fmtUsdCompact, netDexTip, skewState, skewTip, termTip, volOiTip } from './copy';
 import { OPPORTUNITY_TIER_INFO } from '../../ghost-trade/OpportunityTier';
 
 const GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 } as const;
@@ -43,10 +43,10 @@ export function DealerPositioning({
           info="Strike with the most positive dealer gamma — tends to act as resistance (dealers sell into rallies here)." />
         <StatTile label="Put wall" value={`$${m.put_wall}`} accent="down"
           info="Strike with the most negative dealer gamma — tends to act as support (dealers buy dips here)." />
-        <StatTile label="Net GEX" value={`$${(m.net_gex / 1e6).toFixed(1)}M`} accent={m.net_gex >= 0 ? 'up' : 'down'}
+        <StatTile label="Net GEX" value={fmtUsdCompact(m.net_gex)} accent={m.net_gex >= 0 ? 'up' : 'down'}
           info="Total dealer gamma across the chain. Positive = dealers dampen moves (range-bound); negative = they amplify moves (trending)." />
         <StatTile label="Net DEX"
-          value={m.net_dex == null ? 'unavailable' : `$${(m.net_dex / 1e6).toFixed(1)}M`} accent="neutral"
+          value={m.net_dex == null ? 'unavailable' : fmtUsdCompact(m.net_dex)} accent="neutral"
           info={netDexTip(m.call_dex, m.put_dex)} />
         <StatTile label="Max pain" value={`$${m.max_pain ?? '—'}`} accent="neutral"
           info="Price at the nearest monthly expiration where the most option value expires worthless — a mild magnet into expiry." />

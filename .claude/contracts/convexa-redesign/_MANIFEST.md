@@ -13,7 +13,7 @@ Contracts:
   - INTERFACE_CONTRACT.md      n/a (NO_INTERFACE_CHANGE — consumes existing endpoints/SSE unchanged)
   - FIGMA_COMPONENT_MAP.md     locked  (Pro-plan Code-Connect substitute: node-id ⇄ code/props for 17 components)
   - BACKEND_EXECUTION_CONTRACT.md   NO_BACKEND_CHANGE
-  - FRONTEND_EXECUTION_CONTRACT.md  draft — GATE V Ticker VISUAL FIXES (2026-06-30, owner-reported): (1) relocate the "Snapshot, never live" caption beside the DEALER POSITIONING header (was a trailing block below the grid); (2) de-collide the GEX chart reference-line labels (spot/flip/live overlapped into "lispot $421" when spot & live snap to adjacent strikes). Presentation-only. → dispatched to delivery-frontend 2026-06-30. (Prior GATE V cleanup pass SHIPPED: 82f63ee.)
+  - FRONTEND_EXECUTION_CONTRACT.md  ✅ DONE — GATE V Ticker QUICK UX WINS (2026-06-30, owner-approved): (A) compact big-number formatting `fmtUsdCompact` (B/M/K, sign-first) on Net GEX/Net DEX + DEX tooltip; (B) `FreshnessLine` near the header (REST-bundle age, live-counts, "· refreshing…" while polling; never wired to live/SSE). Display-only. Conductor render-verified live on TSLA: Net DEX $36.0B, Net GEX $704.5M, "Updated 53s ago". nx test dashboard 425/425 (+13). Deferred quick wins logged to BACKLOG §B. (Prior GATE V passes: visual fixes e23ffcb, cleanup 82f63ee, Ticker re-skin e4a8eff/32d4027.)
 Open amendments: none
 QA (GATE Q):  n/a (single fresh QA pass after ALL surfaces, before GATE S merge to main)
 Last gateway:  GATE V (cleanup pass) @ 2026-06-30 — token de-drift + dead-code removal + theme.h6 QA

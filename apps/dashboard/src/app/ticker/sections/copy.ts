@@ -29,7 +29,21 @@ export const LAST_TRADE_TOOLTIP =
   'Empty between trades, overnight, and before the session’s first print — it never shows a ' +
   'stale number as current. Pauses with the live stream if it drops.';
 
-export const fmtDexM = (v: number | null) => (v == null ? '—' : `$${(v / 1e6).toFixed(1)}M`);
+/**
+ * Compact big-dollar formatter — sign-FIRST (figure minus U+2212), `$` after the sign, magnitude
+ * scaled B/M/K (1 decimal) or a bare integer below 1e3. `−$12.3M`, `$793.2M`, `$36.6B`, `$420`.
+ * Display-only; never touches values. `null → '—'`.
+ */
+export const fmtUsdCompact = (v: number | null): string => {
+  if (v == null) return '—';
+  const sign = v < 0 ? '−' : '';
+  const a = Math.abs(v);
+  if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `${sign}$${(a / 1e3).toFixed(1)}K`;
+  return `${sign}$${Math.round(a)}`;
+};
+export const fmtDexM = (v: number | null) => fmtUsdCompact(v);
 export const fmtThresh = (t: number) => (Number.isInteger(t) ? t.toFixed(1) : String(t)); // 1 -> "1.0"
 export const TERM_BUCKETS = [7, 14, 30, 60, 90]; // nominal display tenors, each mapped to nearest point
 

@@ -389,6 +389,22 @@ Cull verdicts (so the next discovery doesn't re-litigate):
     horizontal Figma `149:172`) — owner UX call (wider/shorter); the AI-rec **hand-off viewer** + the ticker's
     **portfolio/ghost-trade panels** were **removed** per owner. *Value H (ship the redesign) · Effort M.*
     Decision-impact cull **N/A** (FE redesign program; judged on design-conformance + ship-readiness).
+- **Ticker UX quick wins (deferred set)** — `RAISED 2026-06-30 (owner; "any quick ux improvements?")`. Small,
+  FE-only, display-only usability touches on the Ticker page. **Big-number formatting + a freshness indicator
+  were BUILT this session** (GATE V on `convexa-redesign`); the owner deferred the rest here:
+  - **Distance-to-spot on the key levels** *(highest value)* — Call wall / Put wall / Gamma flip / Max pain each
+    show how far price is from them (`+$13 · 3.1% above`), turning each level into an instant "how close am I"
+    read. Derive from `gex_spot`/`price` + the strike (display-only; `additive-keeps-score-byte-identical`).
+    Likely a `StatTile` secondary-line affordance. *Value H · Effort S.*
+  - **Recent / quick-pick ticker chips** — a row of recent (or common: SPY/QQQ/NVDA) symbols under the ticker
+    input for one-click switching instead of retyping. Durable recents = a small localStorage list (reuse the
+    `resolveDurable` pattern). *Value M · Effort S.*
+  - **Sticky condensed header on scroll** — pin a slim ticker + price + live-status bar once the user scrolls
+    into the chart/tables, so the anchor context isn't lost on a long page. *Value M · Effort S–M.*
+  - **Ticker input ergonomics** — auto-uppercase, Enter-to-load (already wired via `onSubmitSymbol`?), focus
+    state, maybe `/`-to-focus. *Value M-low · Effort S.*
+  Decision-impact cull **N/A** (UX-polish class; judged on daily-use friction). All honor display-only +
+  `[live-vs-static-isolation]` (live values still freeze/dim on an SSE drop).
 - **Prerender public pages (SSG) + SEO hygiene** — `RAISED 2026-06-29 (post-launch optimization; SSR evaluated
   + rejected)`. Optimize first-paint + SEO for the PUBLIC pages WITHOUT full SSR (which was evaluated and
   rejected: a Vite-SPA→Next/Remix/Vite-SSR migration + a per-request render server would break the free
