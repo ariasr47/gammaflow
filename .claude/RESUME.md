@@ -1,85 +1,65 @@
-# RESUME — handoff snapshot (2026-06-29, late) — CONVEXA-REDESIGN: Landing + Settings/Auth SHIPPED
+# RESUME — handoff snapshot (2026-06-30) — CONVEXA-REDESIGN: Ticker surface re-skinned (code) + committed
 
 > For a fresh Delivery Conductor (`/conductor`). Overlay on the canon — WINS on current status.
-> **Supersedes** the earlier "RESTARTED / implement-from-Figma" RESUME: that restart is done and the
-> first two surfaces are built, verified, and committed. Self-contained against PROJECT_CONTEXT.md.
+> **Supersedes** the 2026-06-29 RESUME (Landing/Settings/Auth handoff): those + Scanner + Positions are
+> shipped/committed; the **Ticker** surface is now re-skinned in code on `convexa-redesign` (this session).
+> Self-contained against `PROJECT_CONTEXT.md` + `BACKLOG.md` §B.
 
 ## Where we are
-`convexa-redesign` is mid-pipeline — a full FE re-skin to the Figma dark-fintech system, done
-**implement-from-Figma** (build agents implement each surface from the Figma DS via the component map).
-**Landing ✅ and Settings/Auth ✅ are built, verified (preview MCP), and committed.** Remaining surfaces:
-**Scanner · Positions · Ticker**, plus the new full-page **`/auth`** route. `NO_BACKEND_CHANGE` throughout.
+`convexa-redesign` is mid-pipeline — the full FE re-skin to the Figma dark-fintech DS (implement-from-Figma).
+**Surfaces:** Landing ✅ · Settings/Auth ✅ · Scanner ✅ · Positions ✅ · **Ticker ✅ (this session, code re-skin)** ·
+full-page **`/auth`** route ⬜ (not started). After `/auth`: a fresh QA pass, then merge to `main` (GATE S).
 
-## Branch / git state
-- Branch **`convexa-redesign`** (off `main` @ `2828bfa`). Two commits, **NOT pushed**:
-  - `1862ee1` — MUI theme/token bridge + DS infra (tokens.ts, theme.ts cssVariables, sync script, FIGMA_COMPONENT_MAP).
-  - `0353758` — Landing + Settings/Auth surfaces, global nav, Figma auth modal.
-- First (slice-by-slice) attempt is archived at branch **`convexa-redesign-v1-archive`** (`3ecc432`) — recoverable.
-- Working tree clean. Merge to `main` at GATE S (after all surfaces + a fresh QA pass).
+## This session (2026-06-30) — Ticker surface re-skin (committed on `convexa-redesign`)
+- **`e4a8eff`** — Ticker re-skin: `TickerDashboard` → `ticker/sections/*` (Toolbar, Header, LiveTape,
+  DealerPositioning, GexStrikeProfile, TermStructure, FreshPositioning, OffExchangeBlocks, Setups, StatTile,
+  TintChip) + AI-rec panel re-skin (signed-in + signed-out states).
+- **`32d4027`** — layout/UX: Fresh ∥ Off-exchange side-by-side equal-height row; "+ Open simulated trade"
+  moved to a persistent right-aligned **header** CTA (out of the analysis flow).
+- **Design facts to KEEP (don't "fix" as Figma drift):** section titles use DS **Inter Semi Bold 16** via a
+  global `theme.h6`; **GEX is a VERTICAL diverging bar chart** (owner UX call — NOT the horizontal Figma
+  `149:172`); Term ↔ AI-rec side-by-side equal height; **connection status + regime chips live in the header**
+  (not the toolbar); the AI-rec **hand-off viewer** and the ticker **portfolio/ghost-trade panels were removed**
+  (owner). `nx test dashboard` **412/412**, lint clean.
 
-## Done + committed (this redesign so far)
-- **Theme/token bridge:** `apps/dashboard/src/app/tokens.ts` is the single token source → `theme.ts`
-  consumes it with **`cssVariables: true`** (emits `--mui-palette-*`). Aligned to the Figma DS: `info`
-  (cyan), `warning` (amber), text greys `#8b949e`/`#5b6675`, off-white primary `#e6edf3`. Figma variable
-  code-syntax re-pointed to `--mui-palette-*`. `scripts/sync-figma-tokens.mjs` regenerates tokens (REST
-  needs Enterprise; `--from <json>` works on Pro).
-- **Global nav:** Landing now renders INSIDE `AppShell` (nav on every surface; `/_ops/metrics` the only
-  nav-less route — operator separation). Owner GATE-Z override of the README "Landing outside shell"
-  line; recorded in `app.tsx` docstring.
-- **`shell/TopNav.tsx`** — the nav bar extracted as its own component (AppShell = layout only): frosted/
-  translucent sticky bar, 1240 content column, active-item glow.
-- **`auth/AccountControl.tsx`** — signed-out = custom **Log in (ghost) + Sign up (gradient pill)** opening
-  the auth modal; signed-in = email + **32px gradient avatar → `/settings`** (no dropdown; logout moved to
-  Settings). Shared `auth/avatar.ts` helper.
-- **Auth modal (`auth/AuthDialog.tsx` + `GoogleButton.tsx`)** re-skinned to the Figma: uppercase EMAIL/
-  PASSWORD labels, elevated card (`#1c2330`), white multicolor "Continue with Google", "Welcome back".
-  Security floor + testids preserved; modal is email+password (display-name lives on the future `/auth`).
-- **Settings/Auth surface (`auth/SettingsPage.tsx` + `AiKeySection.tsx`)** per Figma `4:2572`: ~640 column,
-  Account / AI key / Preferences panels, **spaced segmented theme control**, mono masked key.
-- **Landing (`landing/Landing.tsx`)** re-skinned + composed from reusable `ui/` components:
-  `ConvexityMotif`, `ValueCard` (hover polish), `ComingSoonCard` (Lock/Radar icons), `Jargon`.
-- **Cleanup:** removed dead `AUTH_COPY.account.settings`/`logOut`. `nx test dashboard` **344/344**, lint+build clean.
+## Theme / design system (this session)
+- **Foundations (design file `4Njtm8QGWIgm4rA0UESg8n`) expanded to the FULL MUI palette** (76 color vars,
+  Dark/Light: each channel main/dark/light/contrastText/_states + secondary(violet) + action + common;
+  off-white `color/text/primary`=#E6EDF3). The **MUI kit (`eJ9qzhA6rNxwk2KVQA9AvU`) `palette/*` now ALIASES
+  Foundations** (single source of truth). ~113 junk `localhost/*` text styles deleted. Recipes/IDs in
+  `.claude/contracts/convexa-redesign/THEME_TOKENS.md` (NOTE: that doc still describes the pre-expansion state
+  — updating it is a pending follow-up).
+- Code theme (`apps/dashboard/src/app/theme.ts` + `tokens.ts`) is MUI-native and matches the DS.
 
-## The Figma design system (built earlier this session)
-File **"Convexa — Web App (Design Reference)"**, fileKey **`4Njtm8QGWIgm4rA0UESg8n`**. 70 variables
-(Dark+Light), 13 styles, **17 components / 50 variants**. See [[figma-design-system]].
-**Code Connect is unavailable (account is Figma Professional → needs Org/Enterprise).** The substitute is
-**`.claude/contracts/convexa-redesign/FIGMA_COMPONENT_MAP.md`** — node-id ⇄ code component/file/props for
-every DS component. Two Figma MCP servers are connected: `mcp__35016a31-…__*` (used so far) and a
-first-party `mcp__Figma__*`.
+## Branch / git
+- Branch **`convexa-redesign`** (off `main`). Latest commit **`32d4027`**. **NOT pushed.** Working tree clean.
+- Earlier surfaces committed: Landing/Settings/Auth `0353758`, Scanner `fbb1e2d`, Positions `9336856`(+`ab52759`).
 
-## Per-surface workflow (the established loop)
-1. Conductor **inspects the Figma frame** via the MCP (`get_screenshot`/`get_design_context`/`get_variable_defs`)
-   and authors `.claude/contracts/convexa-redesign/FRONTEND_EXECUTION_CONTRACT.md` (OVERWRITE per surface)
-   from `design_handoff_convexa_redesign/README.md` + the FIGMA_COMPONENT_MAP. Run `contract_lint.py` (green).
-2. Spawn **`delivery-frontend`** (Agent, `run_in_background`) bound to it. **The lane has NO live Figma
-   access** — the conductor must carry the visual/structural detail into the contract. Lane builds, writes
-   tests, runs `nx test dashboard`, does NOT commit.
-3. **Conductor renders/verifies** via the **Claude_Preview MCP** (build agents can't render), then commits.
-4. After ALL surfaces: fresh `qa-verify` (de-correlated) vs README ACs + the 8 invariants, then merge to main.
-
-## NEXT
-- Suggested order: **Scanner** (smallest — honest coming-soon, zero network; reuse `ComingSoonCard`) →
-  **Positions** → **Ticker** (largest, most invariant-dense) → full-page **`/auth`** (reuse the AuthDialog form).
-- **Flagged decision:** masked-key format — shipped `Key set ···· 4f9c` vs the Figma mock `sk-ant-···· 4f9c`.
-  Changing it touches the byo-ai-key AC copy (`maskedKeyLabel`) + its tests. Owner to decide; not done.
-- Optional: push the branch / open a PR.
-
-## Invariants (HARD — PROJECT_CONTEXT §5)
-backend/scoring byte-identical (`NO_BACKEND_CHANGE`); live/stale/offline stream-driven (no "Connection
-demo" toggle); `no-real-order-path` (coming-soon inert, SIMULATED, Live tab zero-import lock);
-`server-side-gate-enforcement` (gate wiring verbatim); `/_ops/metrics` off-shell; durable keys unchanged;
-tooltips/honesty copy verbatim. Tokens via `tokens.ts`/MUI — never hardcode a hex (avatar gradient + the
-hatch/glow `sx` literals are the documented exceptions). See [[convexa-redesign-spec-authority]].
+## NEXT — pending follow-ups (full detail: `BACKLOG.md` §B "Convexa-redesign — finish the FE re-skin program")
+1. **OWNER UI (can't be scripted):** in the design file **Publish** the MUI kit → **Update** the kit library in
+   the design file → set the `Screens - *` frames to the kit's **dark** mode. (Until then MUI-kit instances on
+   the screens don't inherit the brand theme.)
+2. **Token-binding retrofit + cleanup (code):** bind the remaining ticker/shell components to Foundations
+   `color/*` + `Type/*` per `THEME_TOKENS.md` (Toolbar is the done template); **remove the now-dead
+   `HandoffDialog`** in `apps/dashboard/src/app/personas/components.tsx`; **update `THEME_TOKENS.md`** to record
+   the expanded Foundations + kit aliasing; **QA the global `theme.h6` 16/600** change for section-title
+   regressions on Positions/Settings/Landing.
+3. **Remaining surface + ship:** the full-page **`/auth`** route (reuse the `AuthDialog` form); a fresh **QA
+   pass** vs `design_handoff_convexa_redesign/README.md` ACs + the 8 invariants; **merge `convexa-redesign` →
+   `main`** (GATE S). Optionally push the branch / open a PR.
 
 ## Gotchas
-- **Preview:** `.claude/launch.json` has a `dashboard` config on **:4300** (`nx serve dashboard --port 4300`)
-  — :4200 was already occupied by another dev server. Drive it via the Claude_Preview MCP (`preview_start
-  dashboard`). Screenshots work for Landing/Settings (static); the Ticker page may time out (SSE+recharts) —
-  use `preview_snapshot`/`preview_eval` there.
-- A backend is running (`/api/auth/session` 200); the dev session is signed in as **razorstick@gmail.com**
-  (no display name, no AI key) — so Settings shows the signed-in/no-key state.
-- `gh` at `C:\Users\rodri\tools\gh\bin\gh.exe`; node via nvm — Bash needs `export PATH="/c/nvm4w/nodejs:$PATH"`;
-  venv python `apps/api/.venv/Scripts/python.exe`; `contract_lint.py convexa-redesign` before each dispatch.
-- The imported Figma **`Screens`** page uses Windows system fonts this env can't load → **don't reorder that
-  page** via the plugin API (throws). Untracked-on-disk (gitignored, intentional): `design_handoff_convexa_redesign/`, `figma_frames/`.
+- **Preview:** `.claude/launch.json` `dashboard` on **:4300** (drive via the Claude_Preview MCP —
+  `preview_start dashboard`). **Ticker-page screenshots can hang** (SSE+charts) → prefer `preview_eval` /
+  `preview_snapshot`; if a screenshot times out, **stop + start** the preview server. Dev session is signed in
+  (razorstick@gmail.com) — to see the AI-rec **signed-out** state, rely on `gated-ai-rec.spec` (signing out in
+  the dev session isn't straightforward).
+- **Bash:** `export PATH="/c/nvm4w/nodejs:$PATH"` before npx/nx; `gh` at `C:\Users\rodri\tools\gh\bin\gh.exe`;
+  venv python `apps/api/.venv/Scripts/python.exe`. **git commit messages:** use Bash `git commit -F - <<'EOF'`
+  — do NOT use a PowerShell here-string (`@'…'@`) in the Bash tool (it leaks a literal `@` into the message).
+- **Figma:** MCP server `mcp__35016a31-…__*` (`use_figma` / `get_screenshot` / `get_metadata`); load the
+  `figma-use` skill before `use_figma`. Ticker screen = node `135:3`; section components on `Ticker · …` pages.
+- **Invariants (HARD):** backend/score `state_fingerprint` byte-identical (NO_BACKEND_CHANGE); connection is
+  **stream-driven** (no "Connection (demo)" toggle — built as a read-only status indicator);
+  `[no-real-order-path]`; `[live-vs-static-isolation]`; tokens via `tokens.ts`/MUI (no hardcoded hex). See
+  [[convexa-redesign-spec-authority]].
