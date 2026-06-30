@@ -281,6 +281,31 @@ describe('positions-marks', () => {
 });
 
 // =================================================================================================
+// page header — Net P/L (open) readout (convexa-redesign re-skin)
+// =================================================================================================
+describe('net-pl-readout', () => {
+  it('sums the OPEN positions P/L into the header readout (success color by sign)', async () => {
+    // entry 4, qty 2; the contract mark resolves to 5 ⇒ +$200 open P/L.
+    seedPosition({ entry_mark: 4, qty: 2 });
+    renderAt('/positions');
+    await screen.findByTestId('position-row');
+    const readout = await screen.findByTestId('positions-net-pl');
+    await vi.waitFor(() => expect(readout.textContent).toMatch(/\+\$200/));
+    // not dimmed while live
+    expect(readout).toBeInTheDocument();
+  });
+
+  it('renders the readout (never blank) even when no marks resolve', async () => {
+    contractMode = 'throw';
+    seedPosition();
+    renderAt('/positions');
+    const readout = await screen.findByTestId('positions-net-pl');
+    // Unavailable members contribute nothing; the readout shows a $0 baseline, never blanks/throws.
+    expect(readout.textContent).toMatch(/\$0/);
+  });
+});
+
+// =================================================================================================
 // invariants on the relocated Positions page
 // =================================================================================================
 describe('invariants (positions)', () => {

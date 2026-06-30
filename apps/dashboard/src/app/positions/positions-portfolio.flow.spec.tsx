@@ -242,16 +242,18 @@ describe('per-ticker filter (no refetch) + grouping subtotals (AC-4, AC-10)', ()
     await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(2));
 
     const fetchCallsBefore = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
-    // Filter to TSLA (the only ticker) — derived, no refetch. (MUI Select opens on the combobox node.)
+    // Filter to TSLA (the only ticker) — derived, no refetch. Filters live behind the toolbar
+    // `filters-button` menu in the convexa-redesign; the MUI Select inside opens on its combobox node.
+    await user.click(screen.getByTestId('filters-button'));
     await user.click(screen.getByTestId('filter-ticker').querySelector('[role="combobox"]') as HTMLElement);
     await user.click(await screen.findByRole('option', { name: 'TSLA' }));
+    await user.keyboard('{Escape}'); // close the filters menu
     await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(2));
     const fetchCallsAfter = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
     expect(fetchCallsAfter).toBe(fetchCallsBefore); // pure re-derivation, no extra fetch
 
-    // Group by ticker → a subtotal header appears.
-    await user.click(screen.getByTestId('group-select').querySelector('[role="combobox"]') as HTMLElement);
-    await user.click(await screen.findByRole('option', { name: 'Ticker' }));
+    // Group by ticker (segmented pill control) → a subtotal header appears.
+    await user.click(screen.getByTestId('group-select-ticker'));
     await waitFor(() => expect(screen.getByTestId('group-header')).toBeInTheDocument());
     expect(screen.getByTestId('subtotal').textContent).toMatch(/Subtotal/);
   }, 20000);

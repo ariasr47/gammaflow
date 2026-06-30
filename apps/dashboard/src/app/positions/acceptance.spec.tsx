@@ -112,6 +112,17 @@ async function openManual(user: ReturnType<typeof userEvent.setup>, price: strin
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 }
 const comboOf = (testid: string) => screen.getByTestId(testid).querySelector('[role="combobox"]') as HTMLElement;
+// Group is now a segmented pill control (convexa-redesign): pick by `group-select-{axis}`.
+async function pickGroup(user: ReturnType<typeof userEvent.setup>, axis: 'none' | 'ticker' | 'strategy' | 'expiry') {
+  await user.click(screen.getByTestId(`group-select-${axis}`));
+}
+// Filters (ticker/strategy/expiry) now live behind the toolbar `filters-button` menu.
+async function pickFilter(user: ReturnType<typeof userEvent.setup>, testid: string, optionName: string) {
+  await user.click(screen.getByTestId('filters-button'));
+  await user.click(comboOf(testid));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+  await user.keyboard('{Escape}'); // close the filters menu
+}
 
 beforeEach(() => { localStorage.clear(); __resetMemory(); vi.restoreAllMocks(); });
 afterEach(() => cleanup());
@@ -148,8 +159,7 @@ describe('A. central & per-ticker', () => {
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
     const before = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
-    await user.click(comboOf('filter-ticker'));
-    await user.click(await screen.findByRole('option', { name: 'TSLA' }));
+    await pickFilter(user, 'filter-ticker', 'TSLA');
     await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(1));
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
   });
@@ -209,8 +219,7 @@ describe('B. P/L + change', () => {
     await openManual(user, '4');
     await openManual(user, '3', 255);
     pushLive({ mid: 250 });
-    await user.click(comboOf('group-select'));
-    await user.click(await screen.findByRole('option', { name: 'Ticker' }));
+    await pickGroup(user, 'ticker');
     await waitFor(() => expect(screen.getByTestId('subtotal')).toBeInTheDocument());
     expect(screen.getByTestId('subtotal').textContent).toMatch(/Subtotal/);
   });
@@ -221,8 +230,7 @@ describe('B. P/L + change', () => {
     await openManual(user, '4');
     await openManual(user, '3', 255);   // this one 404s ⇒ unavailable
     pushLive({ mid: 250 });
-    await user.click(comboOf('group-select'));
-    await user.click(await screen.findByRole('option', { name: 'Ticker' }));
+    await pickGroup(user, 'ticker');
     await waitFor(() => expect(screen.getByTestId('subtotal').textContent).toMatch(/excluded \(unavailable\)/));
   });
 });
@@ -340,13 +348,11 @@ describe('D. customization', () => {
   it('group_by_ticker_strategy_expiry_and_off', async () => {
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
-    for (const axis of ['Ticker', 'Strategy', 'Expiry']) {
-      await user.click(comboOf('group-select'));
-      await user.click(await screen.findByRole('option', { name: axis }));
+    for (const axis of ['ticker', 'strategy', 'expiry'] as const) {
+      await pickGroup(user, axis);
       await waitFor(() => expect(screen.getByTestId('group-header')).toBeInTheDocument());
     }
-    await user.click(comboOf('group-select'));
-    await user.click(await screen.findByRole('option', { name: 'None' }));
+    await pickGroup(user, 'none');
     await waitFor(() => expect(screen.queryByTestId('group-header')).toBeNull());
   });
 
@@ -359,8 +365,7 @@ describe('D. customization', () => {
     await user.type(within(dlg).getByLabelText('Manual price'), '3');
     await user.click(within(dlg).getByRole('button', { name: 'Open simulated position' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await user.click(comboOf('group-select'));
-    await user.click(await screen.findByRole('option', { name: 'Strategy' }));
+    await pickGroup(user, 'strategy');
     await waitFor(() => {
       const headers = screen.getAllByTestId('group-header').map((h) => h.textContent);
       expect(headers.some((t) => /Long call/.test(t ?? ''))).toBe(true);
@@ -387,8 +392,7 @@ describe('D. customization', () => {
     const user = userEvent.setup(); installBackend(); renderH();
     await openManual(user, '5');
     // Strategy filter to Long put → the single long-call position drops out (filtered empty).
-    await user.click(comboOf('filter-strategy'));
-    await user.click(await screen.findByRole('option', { name: 'Long put' }));
+    await pickFilter(user, 'filter-strategy', 'Long put');
     await waitFor(() => expect(screen.getByTestId('empty-filtered')).toBeInTheDocument());
   });
 

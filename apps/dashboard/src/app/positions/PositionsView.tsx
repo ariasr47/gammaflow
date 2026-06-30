@@ -3,18 +3,23 @@
  * table (default) or cards, with per-group P/L subtotals. Empty/filtered-empty states render copy,
  * never an error/blank. Closed/cancelled (history) rows render their static realized facts. Live
  * cells degrade via PositionRow; static cells keep rendering.
+ *
+ * Re-skin (convexa-redesign · Positions): the framed table (uppercase 0.7rem headers, panel-bordered
+ * outer, panel-raised group-subtotal rows) + the 2-col cards grid per the frame. The view is still
+ * driven by `working.columns` (column selection/order/persistence + the toggle wiring are unchanged) —
+ * only the chrome/styling changed; `cellContent` (incl. the offline-dim live cells) is reused as-is.
  */
-import {
-  Box, Stack, Typography, Table, TableHead, TableRow, TableCell, TableBody, Card, CardContent,
-  Button, Tooltip,
-} from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import type { DerivedGroup, DerivedRow } from './derive';
 import type { ColumnKey, Density, LayoutMode } from './types';
 import { COLUMN_LABELS } from './defaults';
 import { cellContent, PendingAffordance, ClosedSummary, RowContext } from './PositionRow';
-// PendingAffordance is rendered inline in both layouts for a pending row.
 import type { PlSample } from './useTrends';
-import { money, EMPTY_NO_POSITIONS, EMPTY_FILTERED, SUBTOTAL_TIP, HISTORY_CAPTION } from './labels';
+import { money, EMPTY_NO_POSITIONS, EMPTY_FILTERED, HISTORY_CAPTION } from './labels';
+import { extras, typographyTokens } from '../tokens';
+
+const monoSx = typographyTokens.monoFontFamily;
+const pctStr = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
 
 export interface ViewProps {
   groups: DerivedGroup[];
@@ -34,6 +39,15 @@ export interface ViewProps {
   onCancel: (id: string) => void;
 }
 
+const openCtaSx = {
+  mt: '12px', bgcolor: 'primary.main', color: 'primary.contrastText', border: 'none', font: 'inherit',
+  padding: '8px 15px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+};
+const clearLinkSx = {
+  mt: '10px', background: 'none', border: 'none', font: 'inherit', color: 'primary.main',
+  fontSize: '0.82rem', cursor: 'pointer', display: 'block',
+};
+
 export function PositionsView(props: ViewProps) {
   const { groups, totalCount, isHistory } = props;
   const visibleRowCount = groups.reduce((n, g) => n + g.rows.length, 0);
@@ -46,20 +60,20 @@ export function PositionsView(props: ViewProps) {
       return (
         <Box sx={{ mt: 2 }} data-testid="empty-no-positions">
           <Typography variant="body2" color="text.secondary">{EMPTY_NO_POSITIONS}</Typography>
-          <Button variant="outlined" sx={{ mt: 1 }} onClick={props.onOpenEntry}>Open simulated position</Button>
+          <Box component="button" type="button" onClick={props.onOpenEntry} sx={openCtaSx}>+ Open simulated position</Box>
         </Box>
       );
     }
     return (
       <Box sx={{ mt: 2 }} data-testid="empty-filtered">
         <Typography variant="body2" color="text.secondary">{EMPTY_FILTERED}</Typography>
-        <Button variant="text" sx={{ mt: 1 }} onClick={props.onClearFilter}>Clear filter</Button>
+        <Box component="button" type="button" onClick={props.onClearFilter} sx={clearLinkSx}>Clear filter</Box>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ mt: 1 }}>
+    <Box>
       {isHistory && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }} data-testid="history-caption">
           {HISTORY_CAPTION}
@@ -83,111 +97,186 @@ function ctxFor(props: ViewProps, row: DerivedRow): RowContext {
   };
 }
 
-function Subtotal({ group }: { group: DerivedGroup }) {
+/** The mono group subtotal, success/error by sign (the static derived sum). */
+function subtotalNode(group: DerivedGroup) {
   const excl = group.excludedCount > 0
     ? ` · ${group.excludedCount} position${group.excludedCount > 1 ? 's' : ''} excluded (unavailable)` : '';
   return (
-    <Tooltip arrow title={SUBTOTAL_TIP}>
-      <Typography component="span" variant="caption" color="text.secondary" data-testid="subtotal">
-        Subtotal {money(group.subtotal)}{excl}
-      </Typography>
-    </Tooltip>
+    <Typography
+      component="span"
+      data-testid="subtotal"
+      sx={{ fontSize: '0.78rem', color: 'text.secondary', fontWeight: 400 }}
+    >
+      Subtotal{' '}
+      <Box component="span" sx={{ fontWeight: 600, color: group.subtotal >= 0 ? 'success.main' : 'error.main', fontVariantNumeric: 'tabular-nums' }}>
+        {money(group.subtotal)}
+      </Box>
+      {excl}
+    </Typography>
   );
 }
+
+// ---- Table layout ------------------------------------------------------------------------------
+
+const thSx = {
+  textAlign: 'left' as const, padding: '11px 12px', fontSize: '0.7rem', fontWeight: 600,
+  letterSpacing: '.03em', textTransform: 'uppercase' as const, color: 'text.secondary',
+  borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' as const,
+};
 
 function TableLayout(props: ViewProps) {
   const { columns, density } = props;
-  const size = density === 'compact' ? 'small' : 'medium';
   const isGrouped = props.groups.length > 1 || props.groups[0]?.key !== '__all__';
+  const tdPad = density === 'compact' ? '7px 12px' : '12px';
   return (
-    <Table size={size} data-testid="positions-table" data-density={density}>
-      <TableHead>
-        <TableRow>
-          {columns.map((c) => <TableCell key={c}>{c === 'simulated' ? '' : COLUMN_LABELS[c]}</TableCell>)}
-          <TableCell />
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {props.groups.map((g) => (
-          <GroupRows key={g.key} group={g} props={props} columns={columns} showHeader={isGrouped} />
-        ))}
-      </TableBody>
-    </Table>
+    <Box
+      sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '10px', overflow: 'hidden' }}
+    >
+      <Box component="table" data-testid="positions-table" data-density={density} sx={{ width: '100%', borderCollapse: 'collapse' }}>
+        <Box component="thead">
+          <Box component="tr">
+            {columns.map((c) => (
+              <Box component="th" key={c} sx={thSx}>{c === 'simulated' ? '' : COLUMN_LABELS[c]}</Box>
+            ))}
+            <Box component="th" sx={thSx} />
+          </Box>
+        </Box>
+        <Box component="tbody">
+          {props.groups.map((g) => (
+            <GroupRows key={g.key} group={g} props={props} columns={columns} showHeader={isGrouped} tdPad={tdPad} />
+          ))}
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
-function GroupRows({ group, props, columns, showHeader }: { group: DerivedGroup; props: ViewProps; columns: ColumnKey[]; showHeader: boolean }) {
+function GroupRows({ group, props, columns, showHeader, tdPad }: { group: DerivedGroup; props: ViewProps; columns: ColumnKey[]; showHeader: boolean; tdPad: string }) {
+  const tdSx = {
+    padding: tdPad, fontSize: '0.86rem', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' as const,
+  };
   return (
     <>
       {showHeader && (
-        <TableRow data-testid="group-header" data-group={group.key}>
-          <TableCell colSpan={columns.length + 1} sx={{ bgcolor: 'action.hover' }}>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', opacity: props.streamOffline ? 0.7 : 1 }}>
-              <Typography variant="subtitle2">{group.label} ({group.rows.length})</Typography>
-              <Subtotal group={group} />
-              {props.streamOffline && <Typography variant="caption" color="text.disabled">⏸</Typography>}
-            </Stack>
-          </TableCell>
-        </TableRow>
+        <Box component="tr" data-testid="group-header" data-group={group.key}>
+          <Box
+            component="td"
+            colSpan={columns.length + 1}
+            sx={{ bgcolor: extras.panelRaised, padding: '8px 12px', fontSize: '0.78rem', fontWeight: 600 }}
+          >
+            <Box component="span" sx={{ opacity: props.streamOffline ? 0.85 : 1 }}>
+              {group.label} ({group.rows.length}){'  '}
+            </Box>
+            {subtotalNode(group)}
+            {props.streamOffline && <Box component="span" sx={{ color: 'text.disabled', ml: '6px' }}>⏸</Box>}
+          </Box>
+        </Box>
       )}
       {group.rows.map((row) => {
         const ctx = ctxFor(props, row);
         const isTerminal = row.position.status === 'closed' || row.position.status === 'cancelled';
         return (
-          <TableRow key={row.position.id} data-testid="position-row" data-id={row.position.id} data-status={row.position.status}>
-            {columns.map((c) => <TableCell key={c}>{cellContent(c, ctx)}</TableCell>)}
-            <TableCell>
-              {row.position.status === 'open' && <Button size="small" onClick={() => props.onClose(row.position.id)}>Close</Button>}
+          <Box component="tr" key={row.position.id} data-testid="position-row" data-id={row.position.id} data-status={row.position.status}>
+            {columns.map((c) => <Box component="td" key={c} sx={tdSx}>{cellContent(c, ctx)}</Box>)}
+            <Box component="td" sx={tdSx}>
+              {row.position.status === 'open' && (
+                <Box component="button" type="button" onClick={() => props.onClose(row.position.id)} sx={rowActionSx}>Close</Box>
+              )}
               {row.position.status === 'pending' && <PendingAffordance ctx={ctx} />}
               {isTerminal && <ClosedSummary row={row} />}
-            </TableCell>
-          </TableRow>
+            </Box>
+          </Box>
         );
       })}
     </>
   );
 }
 
+const rowActionSx = {
+  cursor: 'pointer', border: '1px solid', borderColor: 'divider', background: 'transparent',
+  font: 'inherit', fontSize: '0.76rem', color: 'text.secondary', borderRadius: '6px', padding: '3px 9px',
+};
+
+// ---- Cards layout ------------------------------------------------------------------------------
+
 function CardLayout(props: ViewProps) {
-  const { columns, density } = props;
+  const { density } = props;
   const isGrouped = props.groups.length > 1 || props.groups[0]?.key !== '__all__';
   return (
-    <Stack spacing={density === 'compact' ? 1 : 2} data-testid="positions-cards" data-density={density}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: isGrouped ? '18px' : '12px' }} data-testid="positions-cards" data-density={density}>
       {props.groups.map((g) => (
         <Box key={g.key}>
           {isGrouped && (
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }} data-testid="group-header" data-group={g.key}>
-              <Typography variant="subtitle2">{g.label} ({g.rows.length})</Typography>
-              <Subtotal group={g} />
-            </Stack>
+            <Box sx={{ mb: '8px', fontSize: '0.82rem', fontWeight: 600 }} data-testid="group-header" data-group={g.key}>
+              {g.label} ({g.rows.length}) · {subtotalNode(g)}
+            </Box>
           )}
-          <Stack spacing={density === 'compact' ? 1 : 1.5}>
-            {g.rows.map((row) => {
-              const ctx = ctxFor(props, row);
-              const isTerminal = row.position.status === 'closed' || row.position.status === 'cancelled';
-              return (
-                <Card key={row.position.id} variant="outlined" data-testid="position-card" data-id={row.position.id} data-status={row.position.status}>
-                  <CardContent sx={{ py: density === 'compact' ? 1 : 1.5 }}>
-                    <Stack spacing={0.5}>
-                      {columns.filter((c) => c !== 'simulated').map((c) => (
-                        <Stack key={c} direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Typography variant="caption" color="text.secondary">{COLUMN_LABELS[c]}</Typography>
-                          <Box>{cellContent(c, ctx)}</Box>
-                        </Stack>
-                      ))}
-                      {isTerminal && <ClosedSummary row={row} />}
-                      <PendingAffordance ctx={ctx} />
-                      {row.position.status === 'open' && (
-                        <Box><Button size="small" onClick={() => props.onClose(row.position.id)}>Close</Button></Box>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </Stack>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            {g.rows.map((row) => (
+              <PositionCard key={row.position.id} props={props} row={row} />
+            ))}
+          </Box>
         </Box>
       ))}
-    </Stack>
+    </Box>
+  );
+}
+
+function PositionCard({ props, row }: { props: ViewProps; row: DerivedRow }) {
+  const ctx = ctxFor(props, row);
+  const p = row.position;
+  const mtr = row.metrics;
+  const isTerminal = p.status === 'closed' || p.status === 'cancelled';
+  const liveDim = props.streamOffline ? 0.5 : 1;
+  const plColor = mtr.plDollar == null ? 'text.primary' : mtr.plDollar >= 0 ? 'success.main' : 'error.main';
+  const strikeLeg = `$${p.strike} ${p.right === 'call' ? 'Call' : 'Put'}`;
+  const strategyName = row.strategy === 'long_call' ? 'Long call' : 'Long put';
+  return (
+    <Box
+      data-testid="position-card"
+      data-id={p.id}
+      data-status={p.status}
+      sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '10px', padding: '15px' }}
+    >
+      {/* Top row: symbol + leg / strategy chip. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: '12px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Box component="span" sx={{ fontFamily: monoSx, fontWeight: 700, fontSize: '1rem' }}>{p.ticker}</Box>
+          <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>{strikeLeg}</Box>
+        </Box>
+        <Box component="span" sx={{ fontSize: '0.7rem', color: 'text.disabled', border: '1px solid', borderColor: 'divider', borderRadius: '5px', padding: '2px 7px' }}>
+          {strategyName}
+        </Box>
+      </Box>
+
+      {/* Middle row: big P/L + % / sparkline (the live block — dims offline). */}
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', opacity: liveDim }} data-testid="card-pl">
+        <Box>
+          <Box component="div" sx={{ fontFamily: monoSx, fontWeight: 700, fontSize: '1.5rem', color: plColor, fontVariantNumeric: 'tabular-nums' }}>
+            {p.status === 'open' && mtr.plDollar != null ? money(mtr.plDollar) : '—'}
+          </Box>
+          <Box component="div" sx={{ fontFamily: monoSx, fontSize: '0.85rem', color: plColor }}>
+            {p.status === 'open' && mtr.plPct != null ? pctStr(mtr.plPct) : ''}
+          </Box>
+        </Box>
+        <Box>{cellContent('trend', ctx)}</Box>
+      </Box>
+
+      {/* Footer: Qty · Entry · Mark · expiry. */}
+      <Box sx={{ display: 'flex', gap: '16px', mt: '12px', pt: '12px', borderTop: '1px solid', borderColor: 'divider', fontSize: '0.76rem', color: 'text.secondary', alignItems: 'center' }}>
+        <Box component="span">Qty <Box component="span" sx={{ fontFamily: monoSx, color: 'text.primary' }}>{p.qty}</Box></Box>
+        <Box component="span">Entry <Box component="span" sx={{ fontFamily: monoSx }}>${p.entry_mark.toFixed(2)}</Box></Box>
+        <Box component="span" sx={{ display: 'inline-flex', gap: '4px', alignItems: 'center', opacity: liveDim }} data-testid="card-mark">Mark {cellContent('mark', ctx)}</Box>
+        <Box component="span" sx={{ ml: 'auto' }}>{p.expiration}{mtr.dte != null ? ` · ${mtr.dte}d` : ''}</Box>
+      </Box>
+
+      {isTerminal && <Box sx={{ mt: '10px' }}><ClosedSummary row={row} /></Box>}
+      {p.status === 'pending' && <PendingAffordance ctx={ctx} />}
+      {p.status === 'open' && (
+        <Box sx={{ mt: '10px' }}>
+          <Box component="button" type="button" onClick={() => props.onClose(p.id)} sx={rowActionSx}>Close</Box>
+        </Box>
+      )}
+    </Box>
   );
 }

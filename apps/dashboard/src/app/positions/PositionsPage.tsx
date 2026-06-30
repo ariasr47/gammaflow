@@ -14,13 +14,19 @@
  *
  * The durable store + `usePortfolio` durability logic are UNCHANGED — this file adds no durable
  * page/shell state. The LOCKED Live tab and SIMULATED posture are untouched (`[no-real-order-path]`).
+ *
+ * Re-skin (convexa-redesign · Positions): the page header is now a flex row — the title/subtitle on the
+ * left, a live **Net P/L (open)** readout on the right (sum of the OPEN positions' P/L, dimmed on a
+ * stream drop; `[live-vs-static-isolation]`). The 1240px centered content column replaces the MUI
+ * `Container maxWidth="lg"`. No data path / handler changes.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Container, Stack, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { getTicker, streamTicker, TickerBundle, LiveUpdate } from '@org/api';
 import { usePortfolio } from './usePortfolio';
 import { PortfolioPanel } from './PortfolioPanel';
 import { allPositions } from './store';
+import { typographyTokens } from '../tokens';
 
 const POLL_MS = 60_000; // matches the backend cache TTL (same cadence as the Ticker viewer)
 const STREAM_OFFLINE_MS = 15_000; // payload-gap watchdog → live-mark degrade (mirrors the Ticker page)
@@ -41,6 +47,11 @@ function focusedTicker(): string {
     if (n > bestN) { best = tk; bestN = n; }
   }
   return best ?? DEFAULT_TICKER;
+}
+
+/** Net P/L (open): `(+$|−$){abs.toLocaleString()}` with a real minus sign. */
+function formatNetPl(v: number): string {
+  return `${v >= 0 ? '+$' : '−$'}${Math.abs(Math.round(v)).toLocaleString()}`;
 }
 
 export function PositionsPage() {
@@ -86,19 +97,55 @@ export function PositionsPage() {
   const pf = usePortfolio(ticker, data, live, isLive, streamOffline);
   const [entryOpen, setEntryOpen] = useState(false);
 
+  // Net P/L (open): the sum of the OPEN positions' $ P/L — reusing the SAME derived P/L the rows show
+  // (`pf.rows[*].metrics.plDollar`), NOT a new compute path. A row whose live P/L is unavailable this
+  // cycle contributes nothing (null is skipped), exactly as the per-group subtotal does.
+  const netPl = useMemo(
+    () => pf.rows.reduce((sum, r) => (
+      r.position.status === 'open' && r.metrics.plDollar != null ? sum + r.metrics.plDollar : sum
+    ), 0),
+    [pf.rows],
+  );
+
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
-      <Stack sx={{ mb: 1 }}>
-        <Typography variant="h1">Positions</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Your simulated book — paper-only, persisted in this browser. Live marks degrade gracefully; records never drop.
-        </Typography>
-      </Stack>
+    <Box sx={{ maxWidth: 1240, mx: 'auto', p: 3 }}>
+      <Box
+        sx={{
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: '12px', mb: '6px',
+        }}
+      >
+        <Box>
+          <Typography component="h1" sx={{ fontSize: '1.7rem', fontWeight: 700, m: '0 0 4px' }}>
+            Positions
+          </Typography>
+          <Typography component="p" sx={{ fontSize: '0.88rem', color: 'text.secondary', m: 0 }}>
+            Your simulated book — paper-only, persisted in this browser. Live marks degrade gracefully; records never drop.
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography component="div" sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>
+            Net P/L (open)
+          </Typography>
+          <Typography
+            component="div"
+            data-testid="positions-net-pl"
+            sx={{
+              fontFamily: typographyTokens.monoFontFamily, fontVariantNumeric: 'tabular-nums',
+              fontSize: '1.5rem', fontWeight: 700,
+              color: netPl >= 0 ? 'success.main' : 'error.main',
+              opacity: streamOffline ? 0.5 : 1,
+            }}
+          >
+            {formatNetPl(netPl)}
+          </Typography>
+        </Box>
+      </Box>
       <PortfolioPanel
         pf={pf} data={data} live={live} isLive={isLive} streamOffline={streamOffline}
         ticker={ticker} entryOpen={entryOpen} onEntryOpen={setEntryOpen}
       />
-    </Container>
+    </Box>
   );
 }
 

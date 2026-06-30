@@ -18,8 +18,10 @@ import {
 } from './labels';
 import { PlSparkline } from './PlSparkline';
 import type { PlSample } from './useTrends';
+import { typographyTokens } from '../tokens';
 
 const OFFLINE = '⏸ offline';
+const MONO = { fontFamily: typographyTokens.monoFontFamily, fontVariantNumeric: 'tabular-nums' } as const;
 
 export interface RowContext {
   row: DerivedRow;
@@ -47,7 +49,9 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
     case 'simulated':
       return <Tooltip arrow title={SIMULATED_TIP}><Chip size="small" variant="outlined" label="SIMULATED" /></Tooltip>;
     case 'contract':
-      return <Typography variant="body2">{contractLine(p)}</Typography>;
+      // Keep the canonical one-line contract string (matchable + persisted-state stable); the mono
+      // ticker prefix gives the framed look without splitting the line.
+      return <Typography variant="body2" sx={{ ...MONO, fontWeight: 600 }}>{contractLine(p)}</Typography>;
     case 'status':
       return <Chip size="small" variant="outlined" color={statusChipColor(p.status)}
         sx={{ opacity: p.status === 'cancelled' ? 0.6 : 1 }} label={STATUS_LABEL[p.status]} />;
@@ -75,7 +79,7 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       const basisMeta = markRes ? MARK_BASIS_META[markRes.basis as keyof typeof MARK_BASIS_META] : null;
       return (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', opacity: liveDim }} data-testid="cell-mark">
-          <Typography variant="body2">
+          <Typography variant="body2" sx={MONO}>
             {markRes?.mark == null ? '—' : `${markRes.basis === 'modeled' ? '≈ ' : ''}$${markRes.mark.toFixed(2)}`}
           </Typography>
           {basisMeta && <Tooltip arrow title={basisMeta.tip}><Chip size="small" variant="outlined" label={basisMeta.label} /></Tooltip>}
@@ -94,7 +98,7 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       return (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', opacity: liveDim }} data-testid="cell-pl">
           <Tooltip arrow title={PL_TIP}>
-            <Typography variant="body2" sx={{ color }}>
+            <Typography variant="body2" sx={{ color, fontWeight: 600, ...MONO }}>
               {mtr.plDollar == null ? '—' : `${money(mtr.plDollar)} (${mtr.plPct == null ? '' : pct(mtr.plPct)})`}
             </Typography>
           </Tooltip>
@@ -106,7 +110,7 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       if (p.status !== 'open') return <Typography variant="body2" color="text.disabled">—</Typography>;
       return (
         <Tooltip arrow title={DELTA_ENTRY_TIP}>
-          <Typography variant="body2" sx={{ opacity: liveDim }} data-testid="cell-delta-entry">
+          <Typography variant="body2" color="text.secondary" sx={{ opacity: liveDim, ...MONO }} data-testid="cell-delta-entry">
             {mtr.deltaEntry == null ? '—' : money(mtr.deltaEntry)}{streamOffline ? ' ⏸' : ''}
           </Typography>
         </Tooltip>
@@ -130,12 +134,12 @@ export function cellContent(col: ColumnKey, ctx: RowContext): React.ReactNode {
       const basisMeta = ENTRY_BASIS_META[p.entry_basis];
       return (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2">${p.entry_mark.toFixed(2)}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={MONO}>${p.entry_mark.toFixed(2)}</Typography>
           {basisMeta && <Chip size="small" variant="outlined" label={basisMeta.label} />}
         </Stack>
       );
     }
-    case 'qty': return <Typography variant="body2">{p.qty}</Typography>;
+    case 'qty': return <Typography variant="body2" sx={MONO}>{p.qty} ×</Typography>;
     case 'expiry': return <Typography variant="body2">{p.expiration}</Typography>;
     case 'strike': return <Typography variant="body2">${p.strike}</Typography>;
     case 'right': return <Typography variant="body2">{p.right === 'call' ? 'Call' : 'Put'}</Typography>;
