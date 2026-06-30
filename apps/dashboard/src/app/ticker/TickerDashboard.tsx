@@ -245,8 +245,12 @@ export function TickerDashboard() {
             <PrimeBanner onSimulate={() => openEntry()} onDismiss={() => setShowPrimeBanner(false)} />
           )}
 
-          {/* Headline ANCHOR + secondary last-trade readout. */}
-          <TickerHeader m={m} sig={sig} live={live} isLive={isLive} streamOffline={streamOffline} selected={selected} />
+          {/* Headline ANCHOR + secondary last-trade readout + the persistent "+ Open simulated trade"
+              CTA (right-aligned in the header, so it stays out of the analysis flow). */}
+          <TickerHeader
+            m={m} sig={sig} live={live} isLive={isLive} streamOffline={streamOffline} selected={selected}
+            onOpenTrade={() => openEntry()}
+          />
 
           {/* LIVE-DERIVED tiles — dim on an SSE drop. */}
           <LiveTape m={m} live={live} isLive={isLive} streamOffline={streamOffline} />
@@ -257,14 +261,6 @@ export function TickerDashboard() {
             volOiThreshold={volOiThreshold} unusualCount={unusualStrikes.length}
             tierWord={tm.word} tierColor={tm.color} opportunityScore={sig?.opportunity_score ?? 0}
           />
-
-          {/* Open a simulated (paper) trade → the shipped entry dialog (the Figma ticker shows only this
-              affordance — no portfolio/ghost-trade panel on the ticker; the book lives on /positions). */}
-          <Box sx={{ mb: 2 }}>
-            <Button variant="outlined" size="small" onClick={() => openEntry()} data-testid="open-sim-trade">
-              + Open simulated trade
-            </Button>
-          </Box>
 
           {data?.strike_profile && (
             <GexStrikeProfile
@@ -292,14 +288,17 @@ export function TickerDashboard() {
             />
           </Box>
 
-          {/* Fresh positioning (Vol/OI) — full-chain unusual strikes (static). */}
-          <FreshPositioning
-            chainVolOiRatio={m.chain_vol_oi_ratio}
-            volOiThreshold={volOiThreshold} unusualStrikes={unusualStrikes}
-          />
-
-          {/* Off-exchange blocks — REST-bundle only; hidden when Dark pool is off. */}
-          {darkPool && <OffExchangeBlocks offExchange={data?.off_exchange} />}
+          {/* Fresh positioning + Off-exchange blocks side-by-side (equal-height row, like Term/AI):
+              two compact static list sections. Off-exchange is REST-bundle only; with Dark pool off
+              the row collapses to a single full-width Fresh-positioning column. */}
+          <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', md: darkPool ? '1fr 1fr' : '1fr' }, gap: 2, alignItems: 'stretch' }}>
+            <FreshPositioning
+              chainVolOiRatio={m.chain_vol_oi_ratio}
+              volOiThreshold={volOiThreshold} unusualStrikes={unusualStrikes}
+              fillHeight
+            />
+            {darkPool && <OffExchangeBlocks offExchange={data?.off_exchange} fillHeight />}
+          </Box>
 
           <Setups setups={sig?.setups} />
         </>

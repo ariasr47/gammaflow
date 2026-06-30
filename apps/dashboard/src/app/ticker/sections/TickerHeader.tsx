@@ -13,7 +13,7 @@
  * (`[live-vs-static-isolation]`). The last-trade readout (`data-testid="last-trade"`, its 4 states) is
  * preserved byte-for-byte.
  */
-import { Box, Typography, Tooltip, Skeleton, Stack } from '@mui/material';
+import { Box, Typography, Tooltip, Skeleton, Stack, Button } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { LiveUpdate, MarketState, Signals } from '@org/api';
 import { LAST_TRADE_TOOLTIP, OFFLINE_CHIP_TOOLTIP } from './copy';
@@ -111,9 +111,11 @@ interface TickerHeaderProps {
   isLive: boolean;
   streamOffline: boolean;
   selected: string[] | null;
+  /** Persistent "+ Open simulated trade" CTA, right-aligned in the header (kept out of the analysis flow). */
+  onOpenTrade?: () => void;
 }
 
-export function TickerHeader({ m, sig, live, isLive, streamOffline, selected }: TickerHeaderProps) {
+export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, onOpenTrade }: TickerHeaderProps) {
   const ls = liveStatus(live);
   // Exactly one connection chip — the offline warning supersedes the session chip.
   const connTone: 'info' | 'warning' | 'neutral' = streamOffline ? 'warning'
@@ -123,7 +125,8 @@ export function TickerHeader({ m, sig, live, isLive, streamOffline, selected }: 
 
   return (
     <Box sx={{ mb: 2 }}>
-      <Stack spacing={1}>
+      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Stack spacing={1} sx={{ minWidth: 0 }}>
         {/* Status row — regime + the stream-driven connection chip (Figma 149:96). */}
         {(sig?.regime || connLabel) && (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
@@ -149,6 +152,18 @@ export function TickerHeader({ m, sig, live, isLive, streamOffline, selected }: 
         {/* SECONDARY last-trade line (AC-LastTrade-4) — subordinate to the h1 anchor; degrades WITH the
             live tiles on a stream drop. */}
         <LastTradeReadout live={live} streamOffline={streamOffline} />
+        </Stack>
+
+        {/* Persistent trade CTA (right-aligned) — primary action kept in the header, out of the
+            analysis flow. Opens the shipped simulated-trade entry dialog. */}
+        {onOpenTrade && (
+          <Button
+            variant="outlined" size="small" onClick={onOpenTrade} data-testid="open-sim-trade"
+            sx={{ flexShrink: 0, whiteSpace: 'nowrap', mt: 0.5 }}
+          >
+            + Open simulated trade
+          </Button>
+        )}
       </Stack>
     </Box>
   );

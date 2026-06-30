@@ -16,11 +16,13 @@ interface Props {
   chainVolOiRatio: number | null;
   volOiThreshold: number;
   unusualStrikes: StrikeRow[];
+  /** Fill the parent's height (for the side-by-side row) instead of the default top margin. */
+  fillHeight?: boolean;
 }
 
-export function FreshPositioning({ chainVolOiRatio, volOiThreshold, unusualStrikes }: Props) {
+export function FreshPositioning({ chainVolOiRatio, volOiThreshold, unusualStrikes, fillHeight }: Props) {
   return (
-    <Card variant="outlined" sx={{ mt: 3, borderRadius: 3 }}>
+    <Card variant="outlined" sx={{ ...(fillHeight ? { height: '100%' } : { mt: 3 }), borderRadius: 3 }}>
       <CardContent>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Typography variant="h6">Fresh positioning (Vol/OI)</Typography>

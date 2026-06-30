@@ -16,11 +16,13 @@ const MONO = typographyTokens.monoFontFamily;
 
 interface Props {
   offExchange: OffExchange | null | undefined;
+  /** Fill the parent's height (for the side-by-side row) instead of the default top margin. */
+  fillHeight?: boolean;
 }
 
-export function OffExchangeBlocks({ offExchange }: Props) {
+export function OffExchangeBlocks({ offExchange, fillHeight }: Props) {
   return (
-    <Card variant="outlined" sx={{ mt: 3, borderRadius: 3 }}>
+    <Card variant="outlined" sx={{ ...(fillHeight ? { height: '100%' } : { mt: 3 }), borderRadius: 3 }}>
       <CardContent>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Typography variant="h6">Off-exchange blocks</Typography>
