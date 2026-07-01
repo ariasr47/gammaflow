@@ -1,11 +1,42 @@
-import { createTheme, type Theme } from '@mui/material/styles';
+import { createTheme, darken, type Theme } from '@mui/material/styles';
 import type { ThemePref } from '@org/api';
+import { extras, palette, shape, typographyTokens } from './tokens';
 
 const COMMON = {
-  shape: { borderRadius: 10 },
+  // Emit MUI CSS theme variables (`--mui-palette-*`, …) so the Figma design system's variable
+  // code-syntax maps 1:1 to the real CSS custom properties the app ships (owner-directed). The
+  // palette/shape/type values are single-sourced from `tokens.ts` (kept in sync with the Figma
+  // variables via `scripts/sync-figma-tokens.mjs`). Presentation-only: no bundle/score path change.
+  cssVariables: true,
+  shape,
   typography: {
-    fontFamily: 'Inter, system-ui, Segoe UI, Roboto, sans-serif',
+    fontFamily: typographyTokens.fontFamily,
     h1: { fontSize: '1.6rem', fontWeight: 700 },
+    // Section/card titles — the Figma DS "Type/Section" idiom (Inter Semi Bold 16), not MUI's 20/500.
+    h6: { fontSize: '1rem', fontWeight: 600, lineHeight: 1.25 },
+  },
+  components: {
+    // Buttons read in sentence case across the redesign (Figma Button labels are sentence-case),
+    // not MUI's default UPPERCASE. Presentation-only default; no behavior/score path change.
+    MuiButton: {
+      styleOverrides: {
+        // Filled primary buttons only: dark mode's bright `#4f9cff` primary would auto-pick black
+        // text (washed look). Use the deep brand blue + white for white-legible contrast. Light mode
+        // (primary is already `#1d6fe0` + auto-white) keeps the theme default. Targeted via `ownerState`
+        // on `root` because MUI (v6+) dropped the combined `containedPrimary` styleOverrides slot —
+        // variant + color are now separate classes, so that slot never applied.
+        root: ({ ownerState, theme }: { ownerState: { variant?: string; color?: string }; theme: Theme }) => ({
+          textTransform: 'none' as const,
+          ...(ownerState.variant === 'contained' && ownerState.color === 'primary' && theme.palette.mode === 'dark'
+            ? {
+                backgroundColor: extras.buttonPrimaryBg,
+                color: '#fff',
+                '&:hover': { backgroundColor: darken(extras.buttonPrimaryBg, 0.12) },
+              }
+            : {}),
+        }),
+      },
+    },
   },
 } as const;
 
@@ -14,10 +45,13 @@ const COMMON = {
 export const theme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: '#4f9cff' },
-    success: { main: '#2ecc71' }, // positive gamma / calls
-    error: { main: '#ff5c5c' },   // negative gamma / puts
-    background: { default: '#0e1117', paper: '#161b22' },
+    primary: { main: palette.dark.primary },
+    success: { main: palette.dark.success }, // positive gamma / calls
+    error: { main: palette.dark.error },     // negative gamma / puts
+    warning: { main: palette.dark.warning },
+    info: { main: palette.dark.info },
+    text: { primary: palette.dark.text.primary, secondary: palette.dark.text.secondary, disabled: palette.dark.text.disabled },
+    background: { default: palette.dark.background.default, paper: palette.dark.background.paper },
   },
   ...COMMON,
 });
@@ -26,10 +60,13 @@ export const theme = createTheme({
 export const lightTheme = createTheme({
   palette: {
     mode: 'light',
-    primary: { main: '#1d6fe0' },
-    success: { main: '#1e9e57' },
-    error: { main: '#d23b3b' },
-    background: { default: '#f5f6f8', paper: '#ffffff' },
+    primary: { main: palette.light.primary },
+    success: { main: palette.light.success },
+    error: { main: palette.light.error },
+    warning: { main: palette.light.warning },
+    info: { main: palette.light.info },
+    text: { secondary: palette.light.text.secondary, disabled: palette.light.text.disabled },
+    background: { default: palette.light.background.default, paper: palette.light.background.paper },
   },
   ...COMMON,
 });

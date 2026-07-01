@@ -364,6 +364,47 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   (`OPEN_THREADS` §7)
 
 ### B. Ready candidates (feasible, small, unscheduled)
+- **Convexa-redesign — full FE re-skin program** — `✓ SHIPPED + ARCHIVED (2026-06-30)` → `_archive/convexa-redesign/`; merged to `main` (GATE S). All surfaces re-skinned to the Figma DS + theme/token bridge + app-wide contained-button treatment; `NO_BACKEND_CHANGE`; QA PASS (nx test 425/425, `nx build` green, invariants hold). Owner-dropped the `/auth` full-page route. Deferred quick wins → §B "Ticker UX quick wins". Owner Figma follow-up (publish/update the MUI kit + dark-mode frames) is design-file work, not code. Seams → OPEN_THREADS §7l. *(historical scope notes below, retained:)*
+  The `convexa-redesign` branch now re-skins the **Ticker** surface to the Figma DS in code: `TickerDashboard`
+  componentized into `ticker/sections/*` (Toolbar, Header, LiveTape, DealerPositioning, GexStrikeProfile,
+  TermStructure, FreshPositioning, OffExchangeBlocks, Setups, StatTile, TintChip) + the AI-rec panel re-skin
+  (signed-in + signed-out states). GEX is a **vertical** diverging bar chart; Term-structure sits **side-by-side
+  with AI-rec** (equal-height row); section titles use the DS size via `theme.h6` (Inter Semi Bold 16).
+  `nx test dashboard` 412/412, lint clean. **Pending follow-ups:**
+  - **MUI-kit publish/update (OWNER UI — can't be scripted):** Foundations is now the full MUI palette (76 vars,
+    Dark/Light) and the kit's `palette/*` aliases it. Owner must **Publish** the MUI kit (file `eJ9qzhA6rNxwk2KVQA9AvU`)
+    → **Update** the library in the design file → then set the `Screens - *` frames to the kit's **dark** mode.
+    Until then, MUI-kit instances on the screens don't inherit the brand theme.
+  - **Token-binding retrofit + cleanup:** bind the remaining ticker/shell components to Foundations `color/*` +
+    `Type/*` per `THEME_TOKENS.md` (Toolbar is the done template); **remove the now-dead `HandoffDialog`** in
+    `personas/components.tsx` (AI-rec no longer opens it — the hand-off viewer was removed per owner); **update
+    `THEME_TOKENS.md`** to record the expanded Foundations + kit aliasing; **QA the global `theme.h6` 16/600 change**
+    for regressions on Positions/Settings/Landing section titles.
+  - **Ship:** a fresh **QA pass** vs `design_handoff_convexa_redesign/README.md` ACs + the 8 invariants;
+    **merge `convexa-redesign` → main** (GATE S). *(Full-page `/auth` route DROPPED by owner 2026-06-30 —
+    the existing `AuthDialog` modal stays the sign-in/signup surface; never built, nothing lost.)*
+    *(GATE V cleanup pass committed `82f63ee` 2026-06-30: token de-drift ×4 + removed dead HandoffDialog;
+    `nx test dashboard` 412/412. All code surfaces now done.)*
+  - **Intentional Figma deviations (record, don't "fix"):** GEX is a **vertical** diverging bar chart (not the
+    horizontal Figma `149:172`) — owner UX call (wider/shorter); the AI-rec **hand-off viewer** + the ticker's
+    **portfolio/ghost-trade panels** were **removed** per owner. *Value H (ship the redesign) · Effort M.*
+    Decision-impact cull **N/A** (FE redesign program; judged on design-conformance + ship-readiness).
+- **Ticker UX quick wins (deferred set)** — `RAISED 2026-06-30 (owner; "any quick ux improvements?")`. Small,
+  FE-only, display-only usability touches on the Ticker page. **Big-number formatting + a freshness indicator
+  were BUILT this session** (GATE V on `convexa-redesign`); the owner deferred the rest here:
+  - **Distance-to-spot on the key levels** *(highest value)* — Call wall / Put wall / Gamma flip / Max pain each
+    show how far price is from them (`+$13 · 3.1% above`), turning each level into an instant "how close am I"
+    read. Derive from `gex_spot`/`price` + the strike (display-only; `additive-keeps-score-byte-identical`).
+    Likely a `StatTile` secondary-line affordance. *Value H · Effort S.*
+  - **Recent / quick-pick ticker chips** — a row of recent (or common: SPY/QQQ/NVDA) symbols under the ticker
+    input for one-click switching instead of retyping. Durable recents = a small localStorage list (reuse the
+    `resolveDurable` pattern). *Value M · Effort S.*
+  - **Sticky condensed header on scroll** — pin a slim ticker + price + live-status bar once the user scrolls
+    into the chart/tables, so the anchor context isn't lost on a long page. *Value M · Effort S–M.*
+  - **Ticker input ergonomics** — auto-uppercase, Enter-to-load (already wired via `onSubmitSymbol`?), focus
+    state, maybe `/`-to-focus. *Value M-low · Effort S.*
+  Decision-impact cull **N/A** (UX-polish class; judged on daily-use friction). All honor display-only +
+  `[live-vs-static-isolation]` (live values still freeze/dim on an SSE drop).
 - **Prerender public pages (SSG) + SEO hygiene** — `RAISED 2026-06-29 (post-launch optimization; SSR evaluated
   + rejected)`. Optimize first-paint + SEO for the PUBLIC pages WITHOUT full SSR (which was evaluated and
   rejected: a Vite-SPA→Next/Remix/Vite-SSR migration + a per-request render server would break the free

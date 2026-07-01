@@ -7,7 +7,7 @@
  * Traceability: every row of the FRONTEND_EXECUTION_CONTRACT "Tests to write" matrix (T1–T18 + the
  * promoted-invariant edges E1–E7) is a named test here. QA traces each AC → ≥1 passing test at GATE Q.
  */
-import { render, screen, within, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, within, act, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -233,18 +233,6 @@ async function settle() {
 function openReadPersona() {
   return panel().querySelector('.MuiSelect-select') as HTMLElement;
 }
-/** Read the score/tier/fingerprint invariance straight from the hand-off dialog DOM, then close it.
- *  That line reads `opportunity {score} · tier {tier} · … · fingerprint {fp}` — the single place the
- *  rendered DOM surfaces all three values E3 must hold byte-identical. */
-async function readScoreTierFingerprint(user: ReturnType<typeof renderApp>) {
-  await user.click(screen.getByRole('button', { name: 'View AI hand-off' }));
-  const line = await screen.findByText(/opportunity \d+ · tier .+ fingerprint/);
-  const text = line.textContent ?? '';
-  await user.click(screen.getByRole('button', { name: 'Close' }));
-  await waitFor(() => expect(screen.queryByText(/AI hand-off prompt/)).toBeNull());
-  return text;
-}
-
 // The ghost-trade store keeps a module-level memory cache on top of a single localStorage key, so
 // reset BOTH between tests (clearTrade rewrites the cache empty for the ticker we exercise).
 beforeEach(() => { localStorage.clear(); clearTrade('TSLA'); });
@@ -386,7 +374,7 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
     expect(screen.getByText('Call wall')).toBeInTheDocument();
     expect(screen.getByText('Put wall')).toBeInTheDocument();
     expect(screen.getByText('Net GEX')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open simulated trade' })).toBeInTheDocument();
+    expect(screen.getByTestId('open-sim-trade')).toBeInTheDocument();
     expect(screen.queryByText(/No option-chain data/)).toBeNull();
   });
 
@@ -427,11 +415,13 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
     expect(getTrade('TSLA')).toBeNull();
 
-    // Re-open and confirm → exactly one trade is created.
+    // Re-open and confirm → exactly one trade is created. Use Market mode to fill at the auto-resolved
+    // snapshot mid (the reskin defaults to Manual price, which needs a typed price).
     await user.click(await within(panel()).findByRole('button', { name: 'Accept into ghost trade' }));
     const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Market' }));
     await within(dialog).findByText(/Fill: mid/);
-    await user.click(within(dialog).getByRole('button', { name: 'Open simulated trade' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Open simulated position' }));
     await flush();
     expect(getTrade('TSLA')).not.toBeNull();
   });
@@ -444,8 +434,10 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
     await within(panel()).findByText('1.5% of account ($300)');
     await user.click(within(panel()).getByRole('button', { name: 'Accept into ghost trade' }));
     const dialog = await screen.findByRole('dialog');
+    // Market mode fills at the auto-resolved snapshot mid (reskin default is Manual price).
+    await user.click(within(dialog).getByRole('button', { name: 'Market' }));
     await within(dialog).findByText(/Fill: mid/);
-    await user.click(within(dialog).getByRole('button', { name: 'Open simulated trade' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Open simulated position' }));
     await flush();
 
     // The resulting ghost trade is SIMULATED + the same store/kind as a manual one; no order path.
@@ -508,7 +500,7 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
     const user = renderApp();
     await settle();
     const oppBefore = screen.getByText(/^42 · /).textContent;
-    const gexBefore = screen.getByText('$1200.0M').textContent;
+    const gexBefore = screen.getByText('$1.2B').textContent;
     const tickerBefore = be.calls.ticker;
 
     await user.click(within(panel()).getByRole('button', { name: 'Get AI recommendation' }));
@@ -516,7 +508,7 @@ describe('AI recommendations — required matrix (T1–T18)', () => {
 
     // After a produced rec: the bundle-derived tiles are observably identical, and no bundle re-fetch.
     expect(screen.getByText(/^42 · /).textContent).toBe(oppBefore);
-    expect(screen.getByText('$1200.0M').textContent).toBe(gexBefore);
+    expect(screen.getByText('$1.2B').textContent).toBe(gexBefore);
     expect(be.calls.ticker).toBe(tickerBefore);
   });
 });
@@ -533,40 +525,38 @@ describe('AI recommendations — promoted invariants (E1–E7)', () => {
     // No HTTP error reached the bundle/page: all other surfaces still live, no extra bundle fetch.
     expect(screen.getByText('Call wall')).toBeInTheDocument();
     expect(screen.getByText('Off-exchange blocks')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open simulated trade' })).toBeInTheDocument();
+    expect(screen.getByTestId('open-sim-trade')).toBeInTheDocument();
     expect(be.calls.ticker).toBe(tickerBefore);
   });
 
-  it('E3 score/fingerprint unchanged with and without a rec, and across persona override', async () => {
+  it('E3 score/tier/fingerprint unchanged with and without a rec, and across persona override', async () => {
+    // The dedicated hand-off DOM surface for the fingerprint was removed (the toolbar now matches the
+    // Figma). Eval invariance is therefore asserted from STORED STATE: the always-visible opportunity
+    // tile (score · tier) stays byte-identical AND the no-recompute guards hold (no extra bundle fetch
+    // / SSE), which together mean the underlying ai_eval — including its fingerprint — never changed.
     const be = installBackend({ rec: (body) => producedRec({}, body) });
     const user = renderApp();
     await settle();
 
-    // Baseline — NO rec has ever been requested. Capture the always-visible opportunity tile
-    // (score · tier) AND the hand-off invariance line (score · tier · fingerprint).
-    const oppBaseline = screen.getByText(/^42 · /).textContent;
-    const invBaseline = await readScoreTierFingerprint(user);
-    expect(invBaseline).toMatch(/opportunity 42 · tier watch .* fingerprint fp-A/);
+    const oppBaseline = screen.getByText(/^42 · /).textContent; // opportunity tile: "42 · <tier>"
     const tickerBaseline = be.calls.ticker;
     const esBaseline = be.esCount();
 
-    // (a) Request a rec → score/tier/fingerprint are byte-identical with vs. without it, and the
-    // rec pulled NO extra getTicker/streamTicker bundle fetch (the rec is purely additive).
+    // (a) Request a rec → opportunity tile byte-identical, and NO extra getTicker/streamTicker bundle
+    // fetch (the rec is purely additive — it cannot have recomputed the eval/fingerprint).
     await user.click(within(panel()).getByRole('button', { name: 'Get AI recommendation' }));
     await within(panel()).findByText('1.5% of account ($300)');
     expect(screen.getByText(/^42 · /).textContent).toBe(oppBaseline);
-    expect(await readScoreTierFingerprint(user)).toBe(invBaseline);
     expect(be.calls.ticker).toBe(tickerBaseline);
     expect(be.esCount()).toBe(esBaseline);
 
     // (b) Per-query persona override (as exercised in T16) → those same values are STILL unchanged;
-    // the override is pure prompt-framing and recomputes nothing, fetches nothing.
+    // the override is pure prompt-framing — recomputes nothing, fetches nothing.
     await user.click(openReadPersona());
     await user.click(await screen.findByRole('option', { name: 'Income Keeper' }));
     await user.click(within(panel()).getByRole('button', { name: 'Get AI recommendation' }));
     await within(panel()).findByText('Persona · Income Keeper');
     expect(screen.getByText(/^42 · /).textContent).toBe(oppBaseline);
-    expect(await readScoreTierFingerprint(user)).toBe(invBaseline);
     expect(be.calls.ticker).toBe(tickerBaseline);
     expect(be.esCount()).toBe(esBaseline);
   });

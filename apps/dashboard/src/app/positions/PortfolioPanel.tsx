@@ -5,24 +5,21 @@
  *
  * The Live tab renders the LOCKED placeholder (zero data source, zero network) — when Live is active
  * NO position data, entry affordance, or feed is wired.
+ *
+ * Re-skin (convexa-redesign · Positions): the outer `Card`/"Positions portfolio" heading/`SIMULATED`
+ * chip chrome is removed — underline tabs (Simulated + green PAPER badge ‖ 🔒 Live) render directly
+ * under the page header. The gated "Open simulated position" CTA moves onto the toolbar's blue pill
+ * (`data-testid="open-entry"`). The mandatory `positions-disclosure` (D6d) + the in-context sign-in
+ * prompt + the server-gate wiring are all preserved verbatim. No data/handler changes.
  */
-import { useMemo, useState } from 'react';
-import {
-  Box, Tabs, Tab, Card, CardContent, Stack, Typography, Chip, Button, Tooltip, Snackbar, Alert,
-} from '@mui/material';
+import { useState } from 'react';
+import { Box, Snackbar, Alert } from '@mui/material';
 import type { TickerBundle, LiveUpdate } from '@org/api';
 import { usePortfolio, OpenPositionInput } from './usePortfolio';
-import { deriveGroups } from './derive';
-import type { DerivedRow } from './derive';
-import type { PositionStatus } from './types';
-import { PositionsView } from './PositionsView';
-import { CustomizationToolbar } from './CustomizationToolbar';
+import { PositionsPanel } from './PositionsPanel';
 import { LiveTabPanel } from './LiveTabPanel';
-import { PositionEntryDialog, EntryPrefill } from './PositionEntryDialog';
-import { SIMULATED_TIP } from './labels';
-import type { RowContext } from './PositionRow';
+import { EntryPrefill } from './PositionEntryDialog';
 import { useGate } from '../auth/useGate';
-import { SignInPrompt } from '../auth/SignInPrompt';
 import { AUTH_COPY } from '../auth/copy';
 
 type Portfolio = ReturnType<typeof usePortfolio>;
@@ -40,32 +37,13 @@ interface Props {
   onEntryOpen: (open: boolean) => void;
 }
 
-function isHistoryFilter(status: PositionStatus[]): boolean {
-  return status.length > 0 && status.every((s) => s === 'closed' || s === 'cancelled');
-}
-
 export function PortfolioPanel({ pf, data, streamOffline, ticker, entryPrefill, entryOpen, onEntryOpen }: Props) {
   const [tab, setTab] = useState<'simulated' | 'live'>('simulated');
   const [toast, setToast] = useState<string | null>(null);
-  const m = data?.market_state;
 
   // Gated WRITE actions (UX_BLUEPRINT §2.6, AC-E1/E2/E3/E7). The route stays viewable anonymously;
   // ONLY the write actions gate. Logged-out ⇒ an in-context sign-in prompt, no execute.
   const gate = useGate();
-
-  // Build a markRes for a row by re-running the existing engine off the row's tracked stats.
-  const markResFor = (row: DerivedRow): RowContext['markRes'] => {
-    if (row.position.status !== 'open' && row.position.status !== 'pending') return null;
-    return pf.markFor(row.position);
-  };
-
-  const { working } = pf;
-  const groups = useMemo(
-    () => deriveGroups(pf.rows, {
-      filter: working.filter, sortKey: working.sortKey, sortDir: working.sortDir, group: working.group,
-    }),
-    [pf.rows, working.filter, working.sortKey, working.sortDir, working.group],
-  );
 
   // Opening the entry dialog is itself a write intent: gate it logged-out (prompt, no dialog).
   const requestOpenEntry = () => {
@@ -93,80 +71,77 @@ export function PortfolioPanel({ pf, data, streamOffline, ticker, entryPrefill, 
     void gate.guard(AUTH_COPY.positions.gateSaveView, run, { serverGate: gate.simTradeGate });
   };
 
-  const strikeList = Array.from(new Set((data?.strike_profile.strikes ?? []).map((s) => s.strike))).sort((a, b) => a - b);
-  const expirations = data?.expirations.map((e) => e.date) ?? [];
+  const tabSx = (active: boolean, activeColor: string, inactiveColor: string) => ({
+    cursor: 'pointer',
+    border: 'none',
+    background: 'none',
+    font: 'inherit',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    padding: '10px 4px',
+    color: active ? activeColor : inactiveColor,
+    borderBottom: '2px solid',
+    borderColor: active ? 'primary.main' : 'transparent',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+  });
 
   return (
-    <Card variant="outlined" sx={{ mt: 3 }} data-testid="portfolio-panel">
-      <CardContent>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>Positions portfolio</Typography>
-          <Tooltip arrow title={SIMULATED_TIP}><Chip size="small" variant="outlined" label="SIMULATED" /></Tooltip>
-        </Stack>
-
-        {/* Honest browser-local disclosure (D6d, mandatory) — shown whether signed in or out; it is a
-            property of data residency, not of auth state. Must NOT imply sync/privacy/account-scoping. */}
-        <Alert severity="info" icon={false} sx={{ mb: 1 }} data-testid="positions-disclosure">
-          {AUTH_COPY.positions.disclosure}
-        </Alert>
-
-        {/* In-context sign-in prompt for a gated write (never silent; never a misleading error). */}
-        <SignInPrompt
-          text={gate.promptText}
-          onSignIn={() => gate.signIn(gate.promptText ?? AUTH_COPY.positions.gateTrack)}
-          testid="positions-signin-prompt"
-        />
-
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1 }}>
-          <Tab value="simulated" label="Simulated" data-testid="tab-simulated" />
-          <Tab value="live" label="Live" data-testid="tab-live" />
-        </Tabs>
-
-        {tab === 'live' ? (
-          <LiveTabPanel />
-        ) : (
-          <Box data-testid="simulated-surface">
-            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-              <Button variant="outlined" size="small" onClick={requestOpenEntry} disabled={!data} data-testid="open-entry">
-                Open simulated position
-              </Button>
-            </Stack>
-
-            <CustomizationToolbar pf={pf} positions={pf.positions} guardSaveView={guardSaveView} />
-
-            <PositionsView
-              groups={groups}
-              columns={working.columns}
-              layout={working.layout}
-              density={working.density}
-              streamOffline={streamOffline}
-              totalCount={pf.positions.length}
-              isHistory={isHistoryFilter(working.filter.status)}
-              markResFor={markResFor}
-              trendFor={pf.trendFor}
-              onOpenEntry={requestOpenEntry}
-              onClearFilter={() => pf.setFilter({ ticker: null, strategy: null, expiry: null, status: ['open'] })}
-              onClose={pf.closePosition}
-              onCancel={pf.cancelLimit}
-            />
-
-            <PositionEntryDialog
-              open={entryOpen}
-              ticker={ticker}
-              expirations={expirations}
-              strikes={strikeList}
-              spot={m?.price ?? 0}
-              prefill={entryPrefill}
-              onClose={() => onEntryOpen(false)}
-              onConfirm={handleConfirm}
-            />
+    <Box data-testid="portfolio-panel">
+      {/* Underline tabs — directly under the page header (no outer Card chrome). */}
+      <Box sx={{ display: 'flex', borderBottom: '1px solid', borderColor: 'divider', mt: '20px' }}>
+        <Box
+          component="button"
+          type="button"
+          onClick={() => setTab('simulated')}
+          data-testid="tab-simulated"
+          sx={tabSx(tab === 'simulated', 'primary.main', 'text.secondary')}
+        >
+          Simulated
+          <Box
+            component="span"
+            sx={{
+              fontSize: '0.62rem', fontWeight: 700, color: 'success.main',
+              border: '1px solid', borderColor: (t) => `${t.palette.success.main}66`,
+              borderRadius: '4px', padding: '1px 5px',
+            }}
+          >
+            PAPER
           </Box>
-        )}
+        </Box>
+        <Box
+          component="button"
+          type="button"
+          onClick={() => setTab('live')}
+          data-testid="tab-live"
+          sx={{ ...tabSx(tab === 'live', 'text.primary', 'text.disabled'), ml: '18px' }}
+        >
+          🔒 Live
+        </Box>
+      </Box>
 
-        <Snackbar open={!!toast} autoHideDuration={6000} onClose={() => setToast(null)}>
-          <Alert severity="warning" onClose={() => setToast(null)} data-testid="entry-failure-toast">{toast}</Alert>
-        </Snackbar>
-      </CardContent>
-    </Card>
+      {tab === 'live' ? (
+        <LiveTabPanel />
+      ) : (
+        <PositionsPanel
+          pf={pf}
+          data={data}
+          streamOffline={streamOffline}
+          ticker={ticker}
+          gate={{ promptText: gate.promptText, signIn: gate.signIn }}
+          onRequestOpenEntry={requestOpenEntry}
+          guardSaveView={guardSaveView}
+          onConfirm={handleConfirm}
+          entryPrefill={entryPrefill}
+          entryOpen={entryOpen}
+          onEntryOpen={onEntryOpen}
+        />
+      )}
+
+      <Snackbar open={!!toast} autoHideDuration={6000} onClose={() => setToast(null)}>
+        <Alert severity="warning" onClose={() => setToast(null)} data-testid="entry-failure-toast">{toast}</Alert>
+      </Snackbar>
+    </Box>
   );
 }

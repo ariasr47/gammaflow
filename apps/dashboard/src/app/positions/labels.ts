@@ -51,11 +51,11 @@ export const HISTORY_CAPTION = 'Closed and cancelled positions are kept here —
 export const HISTORY_EMPTY = 'No closed or cancelled positions yet.';
 
 // ---- Live tab (locked) copy (UX_BLUEPRINT §6 S10) ---------------------------------------------
-export const LIVE_HEADING = 'Live · coming soon';
+export const LIVE_HEADING = 'Live positions — coming soon';
 export const LIVE_BODY =
-  "This is where your live, real-broker portfolio will live. It's not connected yet — no broker, " +
-  'no real positions, no orders. Everything you can act on today is in the Simulated tab.';
-export const LIVE_LOCK_CHIP = 'Not connected';
+  "Connecting a real brokerage to track the risk you're actually carrying is on the roadmap. " +
+  'For now, everything in Convexa is simulated (paper).';
+export const LIVE_LOCK_CHIP = 'coming soon';
 
 export function contractLine(p: { ticker: string; strike: number; right: 'call' | 'put'; expiration: string; qty: number }): string {
   return `${p.ticker} $${p.strike}${p.right === 'call' ? 'C' : 'P'} · exp ${p.expiration} · Long ×${p.qty}`;

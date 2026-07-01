@@ -1,21 +1,19 @@
 /**
- * Persona UI — PersonaPicker (toolbar), HandoffDialog (view/copy + FIXED/PERSONA badges +
- * invariance readout), PersonaCustomizeForm. All presentation-only: switching persona never
- * recomputes or fetches. Copy is verbatim from UX_BLUEPRINT.
+ * Persona UI — PersonaPicker (toolbar), PersonaCustomizeForm. All presentation-only: switching
+ * persona never recomputes or fetches. Copy is verbatim from UX_BLUEPRINT.
  */
 import { useEffect, useState } from 'react';
 import {
   Select, MenuItem, ListSubheader, FormControl, InputLabel, Tooltip, Box, Dialog, DialogTitle,
-  DialogContent, DialogActions, Tabs, Tab, Chip, Button, Typography, Stack, TextField, Snackbar,
+  DialogContent, DialogActions, Button, Typography, Stack, TextField,
   ToggleButton, ToggleButtonGroup, Alert,
 } from '@mui/material';
-import type { TickerBundle, Handoff, PersonaRisk, PersonaDefinition } from '@org/api';
+import type { PersonaRisk, PersonaDefinition } from '@org/api';
 import { usePersona, CustomDraft } from './usePersona';
 
 const PICKER_TOOLTIP =
   'Pick how the AI is briefed about your style. Persona changes only the hand-off prompt — never the ' +
   'score, tier, gate, or fingerprint, and it never recomputes anything.';
-const INVARIANCE_LABEL = 'Unchanged by persona — changes how the AI is briefed, not what Convexa scored.';
 const CAVEAT =
   "Customizations only add framing emphasis. They can't change the AI's risk-first floor, the verdict " +
   'schema (Hold / Trim / Add / Exit / Roll), the Add cap, the no-auto-apply rule, the Roll constraint, ' +
@@ -25,15 +23,18 @@ const CUSTOMIZE_VALUE = '__customize__';
 type Persona = ReturnType<typeof usePersona>;
 
 // ---- Toolbar picker ---------------------------------------------------------------------------
-export function PersonaPicker({ persona, onOpenCustomize }:
-  { persona: Persona; onOpenCustomize: () => void }) {
+export function PersonaPicker({ persona, onOpenCustomize, externalLabel }:
+  { persona: Persona; onOpenCustomize: () => void; externalLabel?: boolean }) {
   const { presets, customs, activeId, setActive, active } = persona;
   return (
     <Tooltip arrow title={PICKER_TOOLTIP}>
       <FormControl size="small" sx={{ minWidth: 190 }}>
-        <InputLabel>Persona</InputLabel>
+        {/* `externalLabel` (toolbar): the caption sits ABOVE the field per the Figma; suppress the
+            built-in floating label but keep an accessible name. */}
+        {!externalLabel && <InputLabel>Persona</InputLabel>}
         <Select
-          label="Persona"
+          label={externalLabel ? undefined : 'Persona'}
+          inputProps={externalLabel ? { 'aria-label': 'Persona' } : undefined}
           value={activeId}
           onChange={(e) => { const v = String(e.target.value); if (v === CUSTOMIZE_VALUE) onOpenCustomize(); else setActive(v); }}
           renderValue={() => active.name}
@@ -49,84 +50,6 @@ export function PersonaPicker({ persona, onOpenCustomize }:
         </Select>
       </FormControl>
     </Tooltip>
-  );
-}
-
-// ---- Hand-off dialog --------------------------------------------------------------------------
-function SectionBadges({ handoff, tab }: { handoff: Handoff; tab: 'entry' | 'reassessment' }) {
-  const personaName = handoff.persona.name;
-  const prompt = tab === 'entry' ? handoff.entry : handoff.reassessment;
-  return (
-    <Stack spacing={0.5} sx={{ mb: 1 }}>
-      {prompt.sections.map((s, i) => (
-        <Stack key={`${s.id}-${i}`} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          {s.kind === 'fixed' ? (
-            <Tooltip arrow title="This section is identical no matter which persona is active.">
-              <Chip size="small" variant="outlined" label="FIXED · same under every persona" />
-            </Tooltip>
-          ) : (
-            <Chip size="small" color="primary" variant="outlined" label={`PERSONA · ${personaName}`} />
-          )}
-          <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-        </Stack>
-      ))}
-    </Stack>
-  );
-}
-
-export function HandoffDialog({ open, onClose, handoff, data, stale, dataAge, onViewExport }:
-  { open: boolean; onClose: () => void; handoff: Handoff; data: TickerBundle | null; stale: boolean; dataAge: string | null; onViewExport?: () => void }) {
-  const [tab, setTab] = useState<'entry' | 'reassessment'>('entry');
-  const [toast, setToast] = useState(false);
-  const prompt = tab === 'entry' ? handoff.entry : handoff.reassessment;
-
-  const sig = data?.signals;
-  const ai = data?.ai_eval;
-  const invariance = sig && ai
-    ? `opportunity ${sig.opportunity_score} · tier ${sig.opportunity_tier} · gate ${ai.ready ? 'ready' : 'not-ready'}/${ai.changed ? 'changed' : 'same'} · fingerprint ${ai.state_fingerprint.slice(0, 8)}`
-    : null;
-
-  const copy = () => { navigator.clipboard?.writeText(prompt.text); setToast(true); };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>AI hand-off prompt — {handoff.persona.name}</DialogTitle>
-      <DialogContent dividers>
-        {handoff.fallback && (
-          <Alert severity="info" sx={{ mb: 1 }}>Persona couldn't be applied — using the standard briefing.</Alert>
-        )}
-        {/* Invariance reassurance — identical before/after a switch; persona never recomputes. */}
-        <Box sx={{ p: 1, mb: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{invariance ?? '—'}</Typography>
-          <Typography variant="caption" color="text.secondary">{INVARIANCE_LABEL}</Typography>
-        </Box>
-        {stale && data && (
-          <Alert severity="warning" sx={{ mb: 1, py: 0 }}>data is {dataAge} old — levels may be unreliable</Alert>
-        )}
-
-        {!data ? (
-          <Typography variant="body2" color="text.disabled">Load a ticker to preview the hand-off prompt.</Typography>
-        ) : (
-          <>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1 }}>
-              <Tab value="entry" label="Entry" />
-              <Tab value="reassessment" label="Reassessment" />
-            </Tabs>
-            <SectionBadges handoff={handoff} tab={tab} />
-            <TextField
-              multiline fullWidth minRows={10} maxRows={22} value={prompt.text}
-              slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 12 } } }}
-            />
-          </>
-        )}
-      </DialogContent>
-      <DialogActions>
-        {onViewExport && <Button onClick={onViewExport} sx={{ mr: 'auto' }}>View what's sent</Button>}
-        <Button onClick={copy} disabled={!data}>Copy</Button>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-      <Snackbar open={toast} autoHideDuration={2000} onClose={() => setToast(false)} message="Hand-off prompt copied." />
-    </Dialog>
   );
 }
 
@@ -175,7 +98,7 @@ export function PersonaCustomizeForm({ open, onClose, persona }:
             </Select>
           </FormControl>
           <Box>
-            <Typography variant="caption" color="text.secondary">Risk level</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Risk level</Typography>
             <Tooltip arrow title="Calibrates sizing, invalidation, and how open the framing is to adding — always within the fixed Add cap.">
               <ToggleButtonGroup exclusive size="small" fullWidth value={risk} onChange={(_, v) => v && setRisk(v)}>
                 <ToggleButton value="conservative">Conservative</ToggleButton>
@@ -185,7 +108,7 @@ export function PersonaCustomizeForm({ open, onClose, persona }:
             </Tooltip>
           </Box>
           <Box>
-            <Typography variant="caption" color="text.secondary">Reassessment lean</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Reassessment lean</Typography>
             <Tooltip arrow title="Tunes how the AI weighs Hold/Trim/Add/Exit/Roll — within the same fixed verdict schema and Add cap. It can't enable auto-apply or change the Roll rule.">
               <ToggleButtonGroup exclusive size="small" fullWidth value={lean} onChange={(_, v) => v && setLean(v)}>
                 {LEANS.map((l) => <ToggleButton key={l} value={l} sx={{ fontSize: 11 }}>{l}</ToggleButton>)}

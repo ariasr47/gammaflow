@@ -194,21 +194,20 @@ describe('store', () => {
     expect(screen.getByTestId('view-picker').textContent).toMatch(/Tech swings/);
   });
 
-  it('Ticker-page entry already present on /positions', async () => {
+  it('a seeded position persists on /positions across navigation (singleton store)', async () => {
+    // The Ticker no longer hosts the portfolio panel (Figma re-skin) — positions are opened on
+    // /positions. This verifies the durable module-singleton store survives navigation.
     const user = userEvent.setup();
-    renderAt('/ticker/TSLA');
-    await screen.findByText('Call wall');
-    await screen.findByTestId('portfolio-panel');
-    await vi.waitFor(() => expect(screen.getByTestId('open-entry')).toBeEnabled());
-    await user.click(screen.getByTestId('open-entry'));
-    const dlg = await screen.findByRole('dialog');
-    await user.type(within(dlg).getByLabelText('Manual price'), '5');
-    await user.click(within(dlg).getByRole('button', { name: 'Open simulated position' }));
-    await vi.waitFor(() => expect(allPositions().length).toBe(1));
-
-    await user.click(screen.getByTestId('nav-positions'));
+    seedPosition();
+    renderAt('/positions');
     const pos = await screen.findByTestId('portfolio-panel');
     expect(await within(pos).findByTestId('position-row')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('nav-ticker'));
+    await screen.findByText('Call wall');
+    await user.click(screen.getByTestId('nav-positions'));
+    const pos2 = await screen.findByTestId('portfolio-panel');
+    expect(await within(pos2).findByTestId('position-row')).toBeInTheDocument();
   }, 20000);
 
   it('ephemeral trends/session-delta re-derive; durable facts persist', async () => {
@@ -217,14 +216,14 @@ describe('store', () => {
     seedPosition();
     renderAt('/positions');
     const row = await screen.findByTestId('position-row');
-    expect(within(row).getByText(/TSLA \$250C/)).toBeInTheDocument(); // durable contract line
+    expect(within(within(row).getByTestId('cell-contract')).getByText('TSLA')).toBeInTheDocument(); // durable contract
 
     cleanup();
     __resetMemory();
     renderAt('/positions');
     const row2 = await screen.findByTestId('position-row');
     // Durable fact persists; the session-delta cell exists (re-derived fresh, not a thrown error).
-    expect(within(row2).getByText(/TSLA \$250C/)).toBeInTheDocument();
+    expect(within(within(row2).getByTestId('cell-contract')).getByText('TSLA')).toBeInTheDocument();
     expect(allPositions()[0].entry_mark).toBe(5);
   });
 });
@@ -249,7 +248,7 @@ describe('positions-marks', () => {
     renderAt('/positions');
     // The row is still present (never dropped) even though the mark could not refresh.
     expect(await screen.findByTestId('position-row')).toBeInTheDocument();
-    expect(within(screen.getByTestId('position-row')).getByText(/TSLA \$250C/)).toBeInTheDocument();
+    expect(within(within(screen.getByTestId('position-row')).getByTestId('cell-contract')).getByText('TSLA')).toBeInTheDocument();
     // The page did not error; the durable record persists.
     expect(allPositions().length).toBe(1);
   });
@@ -260,7 +259,7 @@ describe('positions-marks', () => {
     renderAt('/positions');
     const row = await screen.findByTestId('position-row');
     // The row stays with its durable facts; the mark cell degrades to the unavailable state.
-    expect(within(row).getByText(/TSLA \$250C/)).toBeInTheDocument();
+    expect(within(within(row).getByTestId('cell-contract')).getByText('TSLA')).toBeInTheDocument();
     // The 404 resolves to `unavailable` after the contract fetch lands (row never dropped).
     expect((await screen.findAllByTestId('cell-unavailable')).length).toBeGreaterThan(0);
     // Page did not error / blank.
@@ -274,9 +273,34 @@ describe('positions-marks', () => {
     const row = await screen.findByTestId('position-row');
     // Contract exists but no NBBO quote: the row falls back to an honest (theoretical/last-known)
     // mark and does NOT throw into the page. Row + durable facts stay.
-    expect(within(row).getByText(/TSLA \$250C/)).toBeInTheDocument();
+    expect(within(within(row).getByTestId('cell-contract')).getByText('TSLA')).toBeInTheDocument();
     expect(screen.getByTestId('portfolio-panel')).toBeInTheDocument();
     expect(allPositions().length).toBe(1);
+  });
+});
+
+// =================================================================================================
+// page header — Net P/L (open) readout (convexa-redesign re-skin)
+// =================================================================================================
+describe('net-pl-readout', () => {
+  it('sums the OPEN positions P/L into the header readout (success color by sign)', async () => {
+    // entry 4, qty 2; the contract mark resolves to 5 ⇒ +$200 open P/L.
+    seedPosition({ entry_mark: 4, qty: 2 });
+    renderAt('/positions');
+    await screen.findByTestId('position-row');
+    const readout = await screen.findByTestId('positions-net-pl');
+    await vi.waitFor(() => expect(readout.textContent).toMatch(/\+\$200/));
+    // not dimmed while live
+    expect(readout).toBeInTheDocument();
+  });
+
+  it('renders the readout (never blank) even when no marks resolve', async () => {
+    contractMode = 'throw';
+    seedPosition();
+    renderAt('/positions');
+    const readout = await screen.findByTestId('positions-net-pl');
+    // Unavailable members contribute nothing; the readout shows a $0 baseline, never blanks/throws.
+    expect(readout.textContent).toMatch(/\$0/);
   });
 });
 
@@ -301,8 +325,11 @@ describe('invariants (positions)', () => {
     seedPosition();
     renderAt('/positions');
     await screen.findByTestId('portfolio-panel');
-    // The SIMULATED chip is present; no real-order affordance exists.
-    expect(screen.getAllByText('SIMULATED').length).toBeGreaterThan(0);
+    // REVISION 1 — paper/simulated honesty now carried by the tab PAPER badge + the mandatory
+    // browser-local disclosure (the per-row SIMULATED column moved to optional, still re-addable).
+    expect(within(screen.getByTestId('tab-simulated')).getByText('PAPER')).toBeInTheDocument();
+    expect(screen.getByTestId('positions-disclosure')).toBeInTheDocument();
+    // No real-order affordance exists.
     expect(screen.queryByText(/place real order/i)).toBeNull();
   });
 

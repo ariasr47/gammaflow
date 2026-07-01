@@ -1,17 +1,19 @@
 /**
  * StateExportDrawer — the always-available export floor (UX_BLUEPRINT §4 + egress honesty).
- * Opened from `View what's sent` in the rec panel AND from the persona `HandoffDialog` (the SAME
- * export feeds both the in-app call and the manual hand-off). It triggers NO in-app LLM call and
+ * Opened from `View what's sent` in the rec panel (the SAME export feeds both the in-app call and
+ * the manual hand-off). It triggers NO in-app LLM call and
  * costs nothing — it works in EVERY rec-panel state (key_not_configured / daily_cap_reached /
  * unavailable). Egress invariant: it shows ONLY {context, persona prompt, glossary} for the current
  * ticker — no key, no other ticker, no identity, no order data.
  */
 import { useEffect, useState } from 'react';
 import {
-  Drawer, Box, Stack, Typography, Button, IconButton, Alert, Divider, Snackbar, CircularProgress,
+  Drawer, Box, Stack, Typography, Button, IconButton, Alert, Snackbar, CircularProgress,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import { fetchRecExport, RecExport } from '@org/api';
+import { typographyTokens } from '../tokens';
 import { COPY, EXPORT_HEADER } from './copy';
 
 function sectionText(value: unknown): string {
@@ -55,40 +57,51 @@ export function StateExportDrawer({ open, ticker, personaId, onClose }: {
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose}
-      slotProps={{ paper: { sx: { width: { xs: '100%', sm: 520 }, p: 2 } } }}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Typography variant="h6">{EXPORT_HEADER(ticker)}</Typography>
-        <IconButton size="small" onClick={onClose} aria-label="Close export"><CloseIcon fontSize="small" /></IconButton>
+      slotProps={{ paper: { sx: {
+        width: { xs: '100%', sm: 420 }, p: 2.5,
+        borderLeft: '1px solid', borderColor: 'divider',
+      } } }}>
+      <Stack spacing={2}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography sx={{ fontWeight: 600, fontSize: 15, color: 'text.primary' }}>
+            {EXPORT_HEADER(ticker)}
+          </Typography>
+          <IconButton size="small" onClick={onClose} aria-label="Close export"
+            sx={{ color: 'text.secondary' }}><CloseIcon fontSize="small" /></IconButton>
+        </Stack>
+
+        {/* Egress-honesty banner (binding copy) — the complete, reviewable list of what leaves. */}
+        <Box role="status" sx={{
+          bgcolor: (theme) => alpha(theme.palette.info.main, 0.14),
+          color: (theme) => theme.palette.info.light ?? theme.palette.info.main,
+          borderRadius: '8px',
+          px: 1.5, py: 1.25, fontSize: 12, lineHeight: 1.45,
+        }}>
+          {data?.egress_note ?? COPY.export.egress.replace('{TICKER}', ticker)}
+        </Box>
+
+        {state === 'loading' && (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <CircularProgress size={18} /><Typography variant="body2" sx={{ color: 'text.secondary' }}>Loading the export…</Typography>
+          </Stack>
+        )}
+        {state === 'error' && (
+          <Alert severity="warning">Couldn't load the export right now — try reopening.</Alert>
+        )}
+
+        {data && state === 'idle' && (
+          <>
+            <Button variant="contained" size="small" sx={{ alignSelf: 'flex-start' }}
+              onClick={() => copy(allText)}>{COPY.export.copyAll}</Button>
+
+            <ExportSection title="Computed snapshot (context)"
+              caption="A serialization of what Convexa already computed — no recompute, no new fetch. Null stays null."
+              text={sectionText(data.context)} onCopy={copy} />
+            <ExportSection title="Persona prompt" text={sectionText(data.persona_prompt)} onCopy={copy} />
+            <ExportSection title="Field glossary" text={sectionText(data.glossary)} onCopy={copy} />
+          </>
+        )}
       </Stack>
-
-      {/* Egress-honesty banner (binding copy) — the complete, reviewable list of what leaves. */}
-      <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-        {data?.egress_note ?? COPY.export.egress.replace('{TICKER}', ticker)}
-      </Alert>
-
-      {state === 'loading' && (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <CircularProgress size={18} /><Typography variant="body2" color="text.secondary">Loading the export…</Typography>
-        </Stack>
-      )}
-      {state === 'error' && (
-        <Alert severity="warning">Couldn't load the export right now — try reopening.</Alert>
-      )}
-
-      {data && state === 'idle' && (
-        <Stack spacing={2}>
-          <Button variant="contained" size="small" sx={{ alignSelf: 'flex-start' }}
-            onClick={() => copy(allText)}>{COPY.export.copyAll}</Button>
-
-          <ExportSection title="Computed snapshot (context)"
-            caption="A serialization of what Convexa already computed — no recompute, no new fetch. Null stays null."
-            text={sectionText(data.context)} onCopy={copy} />
-          <Divider />
-          <ExportSection title="Persona prompt" text={sectionText(data.persona_prompt)} onCopy={copy} />
-          <Divider />
-          <ExportSection title="Field glossary" text={sectionText(data.glossary)} onCopy={copy} />
-        </Stack>
-      )}
 
       <Snackbar open={toast} autoHideDuration={2000} onClose={() => setToast(false)} message={COPY.export.copied} />
     </Drawer>
@@ -101,12 +114,20 @@ function ExportSection({ title, caption, text, onCopy }: {
   return (
     <Box>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="subtitle2">{title}</Typography>
-        <Button size="small" onClick={() => onCopy(text)}>Copy</Button>
+        <Typography sx={{ fontWeight: 600, fontSize: 13, color: 'text.primary' }}>{title}</Typography>
+        <Button onClick={() => onCopy(text)}
+          sx={{ minWidth: 0, p: 0.25, fontSize: 10, color: 'primary.main' }}>COPY</Button>
       </Stack>
-      {caption && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{caption}</Typography>}
+      {caption && (
+        <Typography sx={{ fontSize: 11, color: 'text.disabled', lineHeight: 1.4, display: 'block', mb: 0.75 }}>
+          {caption}
+        </Typography>
+      )}
       <Box component="pre" sx={{
-        m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', fontSize: 11, fontFamily: 'monospace',
+        m: 0, mt: caption ? 0 : 0.75, px: 1.5, py: 1.25, borderRadius: '8px',
+        bgcolor: 'background.default', border: '1px solid', borderColor: 'divider',
+        color: 'text.secondary',
+        fontFamily: typographyTokens.monoFontFamily, fontSize: 10, lineHeight: 1.6,
         whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 220, overflow: 'auto',
       }}>{text || '—'}</Box>
     </Box>

@@ -220,8 +220,10 @@ describe('multi-position book + entry modes (AC-1, AC-2, AC-3, AC-12, AC-14)', (
     renderHarness({ forceOffline: true });
     await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBeGreaterThan(0));
     expect(screen.getAllByText(/⏸ offline/).length).toBeGreaterThan(0);
-    // static contract line still renders
-    expect(screen.getAllByText(/TSLA \$250C/).length).toBeGreaterThan(0);
+    // static contract still renders (REVISION 1 slim Ticker — symbol + `$250 Call` leg)
+    const contract = screen.getAllByTestId('cell-contract')[0];
+    expect(within(contract).getByText('TSLA')).toBeInTheDocument();
+    expect(within(contract).getByText(/\$250 Call/)).toBeInTheDocument();
     // customization toolbar still works under a drop (AC-29)
     expect(screen.getByTestId('customization-toolbar')).toBeInTheDocument();
   }, 20000);
@@ -241,19 +243,16 @@ describe('per-ticker filter (no refetch) + grouping subtotals (AC-4, AC-10)', ()
     await user.click(within(dlg2).getByRole('button', { name: 'Open simulated position' }));
     await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(2));
 
+    // REVISION 2 — the ticker filter UI is removed (one-row toolbar); the per-ticker filter remains a
+    // pure derivation in `derive` and is covered in acceptance.spec. Here the centerpiece flow asserts
+    // the no-refetch invariant on a customization re-derivation that DOES still have UI: grouping.
     const fetchCallsBefore = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
-    // Filter to TSLA (the only ticker) — derived, no refetch. (MUI Select opens on the combobox node.)
-    await user.click(screen.getByTestId('filter-ticker').querySelector('[role="combobox"]') as HTMLElement);
-    await user.click(await screen.findByRole('option', { name: 'TSLA' }));
-    await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(2));
-    const fetchCallsAfter = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
-    expect(fetchCallsAfter).toBe(fetchCallsBefore); // pure re-derivation, no extra fetch
 
-    // Group by ticker → a subtotal header appears.
-    await user.click(screen.getByTestId('group-select').querySelector('[role="combobox"]') as HTMLElement);
-    await user.click(await screen.findByRole('option', { name: 'Ticker' }));
+    // Group by ticker (segmented pill control) → a subtotal header appears, with no extra fetch.
+    await user.click(screen.getByTestId('group-select-ticker'));
     await waitFor(() => expect(screen.getByTestId('group-header')).toBeInTheDocument());
     expect(screen.getByTestId('subtotal').textContent).toMatch(/Subtotal/);
+    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetchCallsBefore); // pure re-derivation
   }, 20000);
 });
 
@@ -297,7 +296,10 @@ describe('migration carry-over (AC-31)', () => {
     installBackend();
     renderHarness();
     await waitFor(() => expect(screen.getAllByTestId('position-row').length).toBe(1));
-    expect(screen.getByText(/TSLA \$250C · exp 2026-07-17 · Long ×2/)).toBeInTheDocument();
+    // REVISION 1 slim Ticker — the migrated v1 record renders symbol + `$250 Call` leg.
+    const migrated = screen.getByTestId('cell-contract');
+    expect(within(migrated).getByText('TSLA')).toBeInTheDocument();
+    expect(within(migrated).getByText(/\$250 Call/)).toBeInTheDocument();
     expect(allPositions()[0].id).toBe('legacy-1');
     expect(localStorage.getItem(PORTFOLIO_V2_KEY)).toBeTruthy();
 

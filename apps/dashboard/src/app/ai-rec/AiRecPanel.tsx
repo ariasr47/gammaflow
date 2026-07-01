@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, CardContent, Stack, Typography, Button, Chip, Tooltip, Alert, Box, Divider,
-  FormControl, InputLabel, Select, MenuItem, CircularProgress,
+  FormControl, Select, MenuItem, CircularProgress,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { PersonaDefinition, RecResponse, RecStrategy, TickerBundle } from '@org/api';
@@ -24,8 +24,10 @@ import {
   BYO_KEY, adminExhaustedTitle, freeUsesChip, OWN_KEY_CHIP, FREE_USES_TOTAL_FALLBACK,
 } from './copy';
 import { useGate } from '../auth/useGate';
-import { SignInPrompt } from '../auth/SignInPrompt';
 import { AUTH_COPY } from '../auth/copy';
+import { typographyTokens } from '../tokens';
+
+const MONO = typographyTokens.monoFontFamily; // verdict labels render in Roboto Mono (Figma 149:598)
 
 /** Map an `unavailable` rec's `unavailable_reason` to one of the three key-resolution CTA states
  *  (a/c/e). Returns null when it's NOT a byo-ai-key reason (so the shipped `unavailable` block shows).
@@ -65,11 +67,13 @@ interface Props {
   onViewExport: (personaId: string | null) => void;
   readPersonaId: string;
   onChangeReadPersona: (id: string) => void;
+  /** Fill the parent's height (for the side-by-side Term/AI row) instead of the default top margin. */
+  fillHeight?: boolean;
 }
 
 export function AiRecPanel({
   ticker, bundle, ai, personas, activePersonaId, dataAge, onAccept, onViewExport,
-  readPersonaId, onChangeReadPersona,
+  readPersonaId, onChangeReadPersona, fillHeight,
 }: Props) {
   const { rec, loading, stale, inAppEnabled, cap, effectiveGateState, cooldownRemaining, gate } = ai;
   const navigate = useNavigate();
@@ -78,6 +82,9 @@ export function AiRecPanel({
   // shows a sign-in prompt and the LLM is NOT invoked; ai-rec's cooldown/cap/no_key are NOT shown. The
   // manual export floor stays anonymous-usable (AC-E6) — that control lives in the header, ungated.
   const authGate = useGate();
+  // Signed-in = auth allowed AND no server-set sign-in prompt pending (a 403 sets promptText). When
+  // signed out we show ONLY the sign-in gate (no persona/snapshot) — the Figma signed-out state.
+  const signedIn = authGate.allowed && !authGate.promptText;
 
   // The "Add your key in Settings" CTA navigates to the Settings route + deep-links the AI-key section.
   const goToSettings = () => navigate('/settings#ai-key');
@@ -111,31 +118,46 @@ export function AiRecPanel({
   const hasRec = phase === 'produced' || phase === 'no_trade';
 
   return (
-    <Card variant="outlined" sx={{ mt: 3 }} data-testid="ai-rec-panel">
+    <Card variant="outlined" sx={{ ...(fillHeight ? { height: '100%' } : { mt: 3 }), borderRadius: 3 }} data-testid="ai-rec-panel">
       <CardContent>
-        {/* Header — title + per-query persona override + the always-available export control. */}
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 1, mb: 1 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>AI recommendation · {ticker}</Typography>
-          <Box>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Persona for this read</InputLabel>
-              <Select label="Persona for this read" value={readPersonaId}
-                onChange={(e) => onChangeReadPersona(String(e.target.value))}>
+        {/* Header (Figma 149:621) — title + the always-available export link, the advisory intro,
+            then the per-query persona override with a label ABOVE the (recessed) select. */}
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h6">AI recommendation · {ticker}</Typography>
+          <Button
+            size="small" onClick={() => onViewExport(readPersonaIdForRequest)}
+            sx={{ p: 0, minWidth: 0, textTransform: 'none', fontWeight: 500, color: 'primary.main', whiteSpace: 'nowrap', '&:hover': { bgcolor: 'transparent' } }}
+          >
+            {COPY.action.viewExport}
+            {/* arrow is aria-hidden so the accessible name stays exactly "View what's sent" (tests). */}
+            <Box component="span" aria-hidden sx={{ ml: 0.5 }}>→</Box>
+          </Button>
+        </Stack>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>{COPY.intro}</Typography>
+        {/* Persona override — signed-in only (you can't ask a read while logged out, so the Figma
+            signed-out state omits it). */}
+        {signedIn && (
+          <Box sx={{ mb: 1.5 }}>
+            <Typography
+              component="label" htmlFor="read-persona-select" variant="caption"
+              sx={{ display: 'block', color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, fontWeight: 500, mb: 0.5 }}
+            >
+              Persona for this read
+            </Typography>
+            <FormControl size="small" fullWidth>
+              <Select
+                id="read-persona-select" value={readPersonaId} inputProps={{ 'aria-label': 'Persona for this read' }}
+                onChange={(e) => onChangeReadPersona(String(e.target.value))}
+              >
                 {personas.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
               </Select>
             </FormControl>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 320, mt: 0.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
               Defaults to your active persona ({activeName}). Changing it here frames this one read only —
               it doesn't change your active persona and never recomputes any number.
             </Typography>
           </Box>
-          <Box>
-            <Button size="small" onClick={() => onViewExport(readPersonaIdForRequest)}>{COPY.action.viewExport}</Button>
-            <Typography variant="caption" color="text.disabled" sx={{ display: 'block' }}>
-              Costs nothing — opens the exact export.
-            </Typography>
-          </Box>
-        </Stack>
+        )}
 
         {/* Body */}
         {phase === 'loading' && <LoadingBlock ticker={ticker} readName={readName} />}
@@ -165,27 +187,16 @@ export function AiRecPanel({
         {/* The action region (primary action in idle; the NEXT-query control alongside a rendered
             rec). Hidden while loading, the byo CTA, and the unavailable block (each owns its action). */}
         {phase !== 'loading' && phase !== 'unavailable' && phase !== 'byo_cta' && (
-          <>
-            {!hasRec && <SnapshotHint bundle={bundle} />}
-            {/* Auth OUTERMOST: logged-out (or a server 403 on a stale cookie) ⇒ sign-in prompt ONLY —
-                no cooldown/cap/no_key (AC-E4/E7). The prompt also shows when a server rejection set
-                `promptText` even if the FE still believed it was signed-in. */}
-            {!authGate.allowed || authGate.promptText ? (
-              <Box sx={{ mt: hasRec ? 2 : 1 }} data-testid="ai-rec-auth-gate">
-                <Tooltip arrow describeChild title={AUTH_COPY.askAi.tooltip}>
-                  <span>
-                    <Button variant="contained" size="small" disabled data-testid="ai-rec-get-disabled">
-                      {COPY.action.get}
-                    </Button>
-                  </span>
-                </Tooltip>
-                <SignInPrompt
-                  text={authGate.promptText ?? AUTH_COPY.askAi.gate}
-                  onSignIn={() => authGate.signIn(AUTH_COPY.askAi.gate)}
-                  testid="ai-rec-signin-prompt"
-                />
-              </Box>
-            ) : (
+          // Auth OUTERMOST (AC-E4/E7): logged-out (or a server 403 on a stale cookie) ⇒ the sign-in
+          // gate ONLY — no persona/snapshot/cooldown/cap/no_key. Matches the Figma signed-out state.
+          !signedIn ? (
+            <SignedOutGate
+              hasRec={hasRec} promptText={authGate.promptText}
+              onSignIn={() => authGate.signIn(AUTH_COPY.askAi.gate)}
+            />
+          ) : (
+            <>
+              {!hasRec && <SnapshotHint bundle={bundle} />}
               <ActionRegion
                 inAppEnabled={inAppEnabled} cap={cap} effectiveGateState={effectiveGateState}
                 cooldownRemaining={cooldownRemaining} reasons={gate.reasons}
@@ -193,8 +204,8 @@ export function AiRecPanel({
                 onGet={() => doRequest({ override: false })}
                 onAskAnyway={() => doRequest({ override: true })}
               />
-            )}
-          </>
+            </>
+          )
         )}
       </CardContent>
     </Card>
@@ -209,7 +220,7 @@ function LoadingBlock({ ticker, readName }: { ticker: string; readName: string }
         <CircularProgress size={18} />
         <Typography variant="subtitle1">{COPY.loading.title}</Typography>
       </Stack>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
         Asking the AI for a risk-first read on {ticker} ({readName}). This can take a few seconds.
       </Typography>
     </Box>
@@ -219,9 +230,38 @@ function LoadingBlock({ ticker, readName }: { ticker: string; readName: string }
 // ---- Snapshot idle hint ----------------------------------------------------------------------
 function SnapshotHint({ bundle }: { bundle: TickerBundle | null }) {
   return (
-    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
       Reads the current snapshot{bundle?.meta.freshness.snapshot_iso ? `, as of ${bundle.meta.freshness.snapshot_iso}` : ''}.
     </Typography>
+  );
+}
+
+// ---- Signed-out gate (AC-E4/E7) — Figma 149:598 signed-out state -----------------------------
+// A centered prompt + a single enabled "Sign in to ask AI" CTA (no disabled Get button). When the
+// sign-in transport itself is degraded, show that warning copy with no button.
+function SignedOutGate({ hasRec, promptText, onSignIn }: {
+  hasRec: boolean; promptText: string | null; onSignIn: () => void;
+}) {
+  const degraded = promptText === AUTH_COPY.gate.unavailable;
+  return (
+    <Box
+      data-testid="ai-rec-auth-gate"
+      sx={{ mt: hasRec ? 2 : 1, p: 3, borderRadius: 3, bgcolor: 'action.hover', textAlign: 'center' }}
+    >
+      <Typography
+        data-testid="ai-rec-signin-prompt" variant="body2"
+        sx={{ color: degraded ? 'warning.main' : 'text.secondary', mb: degraded ? 0 : 1.5 }}
+      >
+        {degraded ? promptText : AUTH_COPY.askAi.signedOut}
+      </Typography>
+      {!degraded && (
+        <Tooltip arrow describeChild title={AUTH_COPY.askAi.tooltip}>
+          <Button variant="contained" onClick={onSignIn} data-testid="ai-rec-signin-button">
+            {AUTH_COPY.askAi.cta}
+          </Button>
+        </Tooltip>
+      )}
+    </Box>
   );
 }
 
@@ -249,7 +289,7 @@ function ActionRegion({
           <Button variant="contained" size="small" disabled>{COPY.action.get}</Button>
           <Chip size="small" variant="outlined" label={COPY.noKey.chip} />
         </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{COPY.noKey.caption}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>{COPY.noKey.caption}</Typography>
       </Box>
     );
   }
@@ -259,7 +299,7 @@ function ActionRegion({
     return (
       <Box sx={box}>
         <Button variant="contained" size="small" disabled>{capTitle(friendlyResetTime(cap.resets_at))}</Button>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{CAP_CAPTION}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>{CAP_CAPTION}</Typography>
       </Box>
     );
   }
@@ -269,24 +309,24 @@ function ActionRegion({
     return (
       <Box sx={box}>
         <Button variant="contained" size="small" disabled>{cooldownLabel(cooldownRemaining)}</Button>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{cooldownCaption(cooldownRemaining)}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>{cooldownCaption(cooldownRemaining)}</Typography>
       </Box>
     );
   }
 
-  // no_fresh_edge (AC8) — de-emphasized + explicit one-tap override.
+  // no_fresh_edge (AC8) — the guardrails' stance is no_trade; de-emphasized + explicit one-tap
+  // override. Matches the Figma (149:598): mono verdict label · bold headline · Ask anyway · caption.
   if (effectiveGateState === 'no_fresh_edge') {
     return (
       <Box sx={box}>
-        <Typography variant="body2">
+        <Typography sx={{ fontFamily: MONO, fontSize: 12, color: 'text.disabled', mb: 0.5 }}>no_trade</Typography>
+        <Typography sx={{ fontWeight: 500, fontSize: 14, color: 'text.primary', mb: 1.5 }}>
           {COPY.noEdge.title}{reasons.length ? ` — ${reasons[0]}` : ''}
         </Typography>
-        <Stack direction="row" spacing={1} sx={{ mt: 0.5, alignItems: 'center' }}>
-          <Tooltip arrow describeChild title={COPY.tooltip.askAnyway}>
-            <Button variant="outlined" size="small" color="inherit" onClick={onAskAnyway}>{COPY.action.askAnyway}</Button>
-          </Tooltip>
-        </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{COPY.noEdge.caption}</Typography>
+        <Tooltip arrow describeChild title={COPY.tooltip.askAnyway}>
+          <Button variant="outlined" size="small" color="inherit" onClick={onAskAnyway}>{COPY.action.askAnyway}</Button>
+        </Tooltip>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>{COPY.noEdge.caption}</Typography>
       </Box>
     );
   }
@@ -316,7 +356,7 @@ function UnavailableBlock({ cap, cooldownRemaining, onRetry }: {
       action={
         <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
           <Button color="inherit" size="small" disabled={retryDisabled} onClick={onRetry}>{COPY.action.retry}</Button>
-          {sub && <Typography variant="caption" color="text.secondary">{sub}</Typography>}
+          {sub && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{sub}</Typography>}
         </Stack>
       }>
       <Typography variant="subtitle2">{COPY.unavailable.title}</Typography>
@@ -343,9 +383,9 @@ function ByoKeyCta({
       ? { testid: 'ai-rec-state-admin-exhausted', title: adminExhaustedTitle(total), body: BYO_KEY.adminExhausted.body, cta: BYO_KEY.adminExhausted.cta }
       : { testid: 'ai-rec-state-shared-unconfigured', title: BYO_KEY.sharedUnconfigured.title, body: BYO_KEY.sharedUnconfigured.body, cta: BYO_KEY.sharedUnconfigured.cta };
   return (
-    <Box sx={{ mt: 1, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }} data-testid={cfg.testid}>
+    <Box sx={{ mt: 1, p: 1.5, borderRadius: 3, bgcolor: 'action.hover' }} data-testid={cfg.testid}>
       <Typography variant="subtitle1">{cfg.title}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{cfg.body}</Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>{cfg.body}</Typography>
       <Button
         variant="contained" size="small" sx={{ mt: 1.5 }}
         data-testid="ai-rec-add-key-cta" onClick={onAddKey}
@@ -389,11 +429,13 @@ function Provenance({ rec }: { rec: RecResponse }) {
   );
 }
 
+// Re-skinned to the upgraded tile idiom (label row + ⓘ, value below) — same DOM order + text the
+// ai-rec specs assert; only the surrounding chrome is restyled.
 function Field({ label, value, tip }: { label: string; value: React.ReactNode; tip?: string }) {
   return (
     <Box>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        <Typography variant="caption" color="text.secondary">{label}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}</Typography>
         {tip && <Tooltip arrow title={tip}><InfoOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled' }} /></Tooltip>}
       </Stack>
       <Typography variant="body2">{value}</Typography>
@@ -442,13 +484,18 @@ function RecResult({
             <InfoOutlinedIcon color="info" sx={{ fontSize: 18 }} />
             <Typography variant="subtitle1">{COPY.noTrade.title}</Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{s.rationale}</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{COPY.noTrade.caption}</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>{s.rationale}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>{COPY.noTrade.caption}</Typography>
         </Box>
       ) : (
         <Stack spacing={1.5}>
-          {/* 2. RISK FIRST (foremost). */}
-          <Box sx={{ p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
+          {/* 2. RISK FIRST (foremost). Upgraded-tile chrome: rounded surface + error-tinted LEFT
+              accent bar (risk = the most-important field), clipped to the radius. */}
+          <Box sx={{
+            position: 'relative', p: 1.25, pl: 2.25, borderRadius: 3, overflow: 'hidden',
+            bgcolor: 'action.hover',
+            '&::before': { content: '""', position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, bgcolor: 'error.main' },
+          }}>
             <Stack direction="row" spacing={4} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
               <Field label={COPY.risk.maxRisk} value={s.max_risk ?? '—'}
                 tip="The most this plan puts at risk. Judge this before anything else." />
@@ -464,7 +511,7 @@ function RecResult({
             <Field label="Strike(s)" value={s.strikes.length ? s.strikes.map((x) => `$${x}`).join(' / ') : '—'} />
             <Field label="Expiration"
               value={<>{s.expiration ?? '—'}{(dteMin != null || dteMax != null) && (
-                <Typography component="span" variant="caption" color="text.secondary"> · within your {dteMin ?? '?'}–{dteMax ?? '?'} DTE window</Typography>
+                <Typography component="span" variant="caption" sx={{ color: 'text.secondary' }}> · within your {dteMin ?? '?'}–{dteMax ?? '?'} DTE window</Typography>
               )}</>} />
             <Field label="Entry trigger" value={s.entry_trigger ?? '—'} />
           </Stack>
@@ -476,7 +523,7 @@ function RecResult({
           {/* 5. Sizing. */}
           <Box>
             <Field label="Suggested size" value={s.position_size ?? '—'} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               A suggestion. Your size is your risk decision — you'll be able to change it on Accept.
             </Typography>
           </Box>
@@ -484,7 +531,7 @@ function RecResult({
           <Stack direction="row" spacing={4} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
             <Field label="Time horizon" value={s.time_horizon ?? '—'} />
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Confidence</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Confidence</Typography>
               <Chip size="small" label={s.confidence ?? '—'} />
             </Box>
           </Stack>
