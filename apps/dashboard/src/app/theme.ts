@@ -1,6 +1,6 @@
-import { createTheme, type Theme } from '@mui/material/styles';
+import { createTheme, darken, type Theme } from '@mui/material/styles';
 import type { ThemePref } from '@org/api';
-import { palette, shape, typographyTokens } from './tokens';
+import { extras, palette, shape, typographyTokens } from './tokens';
 
 const COMMON = {
   // Emit MUI CSS theme variables (`--mui-palette-*`, …) so the Figma design system's variable
@@ -18,7 +18,25 @@ const COMMON = {
   components: {
     // Buttons read in sentence case across the redesign (Figma Button labels are sentence-case),
     // not MUI's default UPPERCASE. Presentation-only default; no behavior/score path change.
-    MuiButton: { styleOverrides: { root: { textTransform: 'none' as const } } },
+    MuiButton: {
+      styleOverrides: {
+        // Filled primary buttons only: dark mode's bright `#4f9cff` primary would auto-pick black
+        // text (washed look). Use the deep brand blue + white for white-legible contrast. Light mode
+        // (primary is already `#1d6fe0` + auto-white) keeps the theme default. Targeted via `ownerState`
+        // on `root` because MUI (v6+) dropped the combined `containedPrimary` styleOverrides slot —
+        // variant + color are now separate classes, so that slot never applied.
+        root: ({ ownerState, theme }: { ownerState: { variant?: string; color?: string }; theme: Theme }) => ({
+          textTransform: 'none' as const,
+          ...(ownerState.variant === 'contained' && ownerState.color === 'primary' && theme.palette.mode === 'dark'
+            ? {
+                backgroundColor: extras.buttonPrimaryBg,
+                color: '#fff',
+                '&:hover': { backgroundColor: darken(extras.buttonPrimaryBg, 0.12) },
+              }
+            : {}),
+        }),
+      },
+    },
   },
 } as const;
 

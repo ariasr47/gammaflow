@@ -1,74 +1,65 @@
-# convexa-redesign — FRONTEND_EXECUTION_CONTRACT (GATE V: StateExportDrawer → THEME-NATIVE, 2026-06-30)
+# convexa-redesign — FRONTEND_EXECUTION_CONTRACT (GATE V: contained-button treatment, 2026-06-30)
 
-> **Scope:** the StateExportDrawer reskin (committed `3aae8ce`) matched the Figma's layout but used
-> **bespoke hardcoded hex tokens** (`codeBg/codeBorder/codeText/egressBg/egressText`) that are NOT part of
-> the app's MUI theme — so the drawer stopped matching the rest of the app. **Owner directive
-> (2026-06-30): "make sure this component uses my theme."** Rebind the drawer to the existing MUI
-> theme/palette; remove the bespoke tokens. FE-only, **NO_BACKEND_CHANGE**. Keep the Figma layout/structure
-> from `3aae8ce` (420px tray, header, egress banner, Copy-all, 3 sections + code blocks) — only the COLOR
-> SOURCING changes: theme tokens instead of literals.
+> **Scope:** an **app-wide theme** fix (owner-approved) for **contained primary buttons**. Today the dark
+> theme's `primary.main` is `#4f9cff` (a bright accent) with no `contrastText`, so MUI auto-picks **black**
+> text on filled buttons — the washed look the owner flagged on the StateExportDrawer "Copy all". Make
+> contained-primary buttons a **deeper, white-legible blue** (matching the Figma's `~#1976d2` primary
+> button and passing contrast), WITHOUT changing the `#4f9cff` accent used everywhere else (links, active
+> nav, the section `COPY` links, chips, borders). FE-only, **NO_BACKEND_CHANGE**.
 >
-> Bound to `PROJECT_CONTEXT.md`. Supersedes the prior (literal-hex) reskin contract.
+> Bound to `PROJECT_CONTEXT.md` + `THEME_TOKENS.md`. This is the button pass promised after the
+> StateExportDrawer theme rebind (`56d77fd`).
 
-## The core change: theme-native color sourcing
-**Remove** the 5 bespoke entries added to `apps/dashboard/src/app/tokens.ts` `extras` in `3aae8ce`
-(`codeBg`, `codeBorder`, `codeText`, `egressBg`, `egressText`) — they were the "not my theme" part. Then
-rebind every surface in `StateExportDrawer.tsx` to the MUI theme via `sx` theme refs / `useTheme()` +
-`alpha()`:
+## Files
+- `apps/dashboard/src/app/tokens.ts` — add ONE token.
+- `apps/dashboard/src/app/theme.ts` — add a `MuiButton` `containedPrimary` style override.
 
-| Element | Was (bespoke hex) | Use (theme) |
-|---|---|---|
-| Drawer left border | `extras.codeBorder` #29303d | `theme.palette.divider` (`borderColor: 'divider'`) |
-| Drawer paper bg | (default) | leave = `background.paper` (already themed) ✓ |
-| Egress banner bg | `extras.egressBg` #172947 | `alpha(theme.palette.info.main, 0.14)` (theme info tint) |
-| Egress banner text | `extras.egressText` #b2d1ff | `theme.palette.info.light` (fallback `info.main`) |
-| Code block bg | `extras.codeBg` #0b0e14 | `background.default` (recessed vs the paper drawer) |
-| Code block border | `extras.codeBorder` #29303d | `divider` |
-| Code block text | `extras.codeText` #c7d1db | `text.secondary` |
-| Section title | `text.primary` (already themed) | keep `text.primary` ✓ |
-| Section COPY link | `primary.main` (already themed) | keep `primary.main` ✓ |
-| Caption | `text.disabled` (already themed) | keep ✓ |
+## The change
+1. **tokens.ts:** add to `extras` a dedicated contained-button color:
+   `buttonPrimaryBg: '#1d6fe0'` — the app's deep brand blue (same value as the light-scheme primary),
+   legible with white text (≈5.5:1) and ≈ the Figma primary-button blue. Comment: "contained-primary
+   button fill — deep enough for white text; the bright `#4f9cff` primary/accent is unchanged."
+2. **theme.ts:** in `COMMON.components.MuiButton.styleOverrides`, ADD a `containedPrimary` entry (keep the
+   existing `root: { textTransform: 'none' }`). Use a theme-callback so ONLY dark mode is darkened; light
+   mode (primary `#1d6fe0` already + auto-white) is left to the theme default:
+   ```ts
+   containedPrimary: ({ theme }) => (theme.palette.mode === 'dark' ? {
+     backgroundColor: extras.buttonPrimaryBg,
+     color: '#fff',
+     '&:hover': { backgroundColor: darken(extras.buttonPrimaryBg, 0.12) },
+   } : {}),
+   ```
+   Import `darken` from `@mui/material/styles` and `extras` from `./tokens`. (Keeping `primary.main`
+   `#4f9cff` untouched means text buttons, outlined buttons, links, `color="primary"` icons, chips, and the
+   `COPY` links all stay the bright accent — only the FILLED (`variant="contained" color="primary"`)
+   buttons get the deep blue + white text.)
 
-Result: **zero hardcoded color hex** in `StateExportDrawer.tsx` and **no bespoke color tokens** — every
-color comes from the app's theme, so the drawer is consistent with every other surface. The mono font may
-still come from `typographyTokens.monoFontFamily` (that's a theme-level token, fine).
+Do NOT change `primary.main`, `primary.contrastText` globally, or any other palette value. Do NOT touch the
+`#4f9cff` accent. This is scoped precisely to the contained-primary button surface.
 
-## Copy-all button — themed, no color overrides
-Keep `<Button variant="contained" size="small">` (Figma shows a filled primary button) with **no `sx`
-color/bg overrides** — it renders purely from the theme's primary. (Casing: owner has no preference —
-keep the app default sentence-case "Copy all".)
-> **Known theme note (do NOT fix here unless told):** the theme's `primary.main` (#4f9cff) has no explicit
-> `contrastText`, so MUI auto-picks **black** text on the button. That is a separate **app-wide** theme
-> decision the owner deferred — it is NOT in scope for this component pass. Leave the button to the theme;
-> the conductor will surface the contrastText option separately.
-
-## PRESERVE exactly (unchanged from `3aae8ce`)
-- The Figma layout: 420px right drawer (`{xs:'100%', sm:420}`), 20px padding, 16px-rhythm `Stack`, no
-  dividers, header (15px/600 title + muted close `aria-label="Close export"`), egress banner (8px radius,
-  px1.5/py1.25, 12px/1.45), Copy-all left-aligned, 3 sections (13px/600 title + small primary `COPY` +
-  first-section caption 11px), code blocks (8px radius, mono 10px, lineHeight 1.6, pre-wrap, maxHeight 220,
-  overflow auto).
-- ALL behavior/wiring: `fetchRecExport` useEffect + idle/loading/error, `RecExport` shape + `sectionText`,
-  `copy()` + `Snackbar`, `<Drawer anchor="right">` + open/onClose, `EXPORT_HEADER(ticker)` title text, the
-  egress-note copy source, per-section copy buttons, egress honesty.
-- **Invariants:** `NO_BACKEND_CHANGE`, `[additive-keeps-score-byte-identical]`, token discipline (now via
-  the THEME rather than bespoke literals).
+## Preserve / invariants
+- `NO_BACKEND_CHANGE`; `[additive-keeps-score-byte-identical]` (pure presentation theme change).
+- Sentence-case buttons stay (the existing `root: { textTransform: 'none' }` is untouched).
+- No other component files change — this is a theme-level fix that cascades to every contained button.
 
 ## Verification (the lane runs this)
-- `npx nx test dashboard` green (was 425/425). No behavioral change → no new tests required; update any
-  assertion only if it referenced a removed token (none should — tokens.ts extras are internal).
-- Grep `StateExportDrawer.tsx` for `#` hex → **zero**. Grep `tokens.ts` for the 5 removed keys → **zero**.
-- **Render-verify via preview MCP** (`preview_start dashboard` → :4300, desktop viewport, TSLA → AI-rec
-  panel → "View what's sent"): confirm the drawer now reads with the app's theme surfaces — info-tinted
-  egress banner, recessed `background.default` code blocks with a `divider` border, themed primary
-  Copy-all. It should feel consistent with the app's other cards/surfaces. Ticker screenshots can hang →
-  prefer computed-style `preview_eval` (report the resolved `background`/`borderColor`/`color` values) or
-  scope to `.MuiDrawer-paper`.
+- `npx nx test dashboard` green (was 425/425). Color-only theme change → no behavioral change; update a
+  test only if one asserts a button's exact color (none should).
+- **Render-verify via preview MCP** (`preview_start dashboard` → :4300, desktop, TSLA):
+  1. AI-rec panel → "View what's sent" → the **Copy all** button now reads as a **deep blue button with
+     white text** (report the resolved `background-color` + `color` — expect ≈ `rgb(29,111,224)` bg +
+     `rgb(255,255,255)` text).
+  2. Spot-check at least one OTHER contained button still looks right (e.g. the ghost-trade
+     `TradeEntryDialog` confirm, or the Prime banner "Simulate") — same deep-blue+white.
+  3. Confirm a NON-contained primary element is UNCHANGED (still `#4f9cff`) — e.g. a section `COPY` link or
+     an active nav item (report its resolved `color` ≈ `rgb(79,156,255)`).
+  Ticker screenshots can hang → prefer computed-style `preview_eval`.
 
 ## Definition of done
-- `StateExportDrawer.tsx` sources every color from the MUI theme; the 5 bespoke `extras` tokens are removed
-  from `tokens.ts`; zero color hex in the component. Layout/behavior unchanged from `3aae8ce`.
+- Contained-primary buttons render deep-blue (`#1d6fe0`) + white text in dark mode; the `#4f9cff` accent is
+  unchanged everywhere else (verified on a `COPY` link / nav). One token added; `theme.ts` override added;
+  no other files changed.
 - `npx nx test dashboard` green; lint clean; `git diff --stat -- apps/api` empty.
-- Hand back: files changed, test count, and the resolved computed-style values (egress bg = a themed info
-  tint, code bg = background.default, borders = divider) proving it's theme-driven.
-- **Do not commit** — the conductor verifies (render + computed styles) and commits.
+- Hand back: files changed, test count, and the resolved computed-style values for (a) the Copy-all button
+  bg+text, (b) one other contained button, (c) a `#4f9cff` accent element proving it's untouched.
+- **Do not commit** — the conductor verifies (render) and commits.

@@ -53,4 +53,7 @@ export const extras = {
   textSecondary: '#8b949e',
   textDisabled: '#5b6675',
   accentViolet: '#7b5cff',
+  // contained-primary button fill — deep enough for white text (≈5.5:1); the bright `#4f9cff`
+  // primary/accent (links, active nav, COPY links, chips, borders, icons) is unchanged.
+  buttonPrimaryBg: '#1d6fe0',
 } as const;
