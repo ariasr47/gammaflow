@@ -10,9 +10,10 @@ import { useEffect, useState } from 'react';
 import {
   Drawer, Box, Stack, Typography, Button, IconButton, Alert, Snackbar, CircularProgress,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import { fetchRecExport, RecExport } from '@org/api';
-import { extras, typographyTokens } from '../tokens';
+import { typographyTokens } from '../tokens';
 import { COPY, EXPORT_HEADER } from './copy';
 
 function sectionText(value: unknown): string {
@@ -58,7 +59,7 @@ export function StateExportDrawer({ open, ticker, personaId, onClose }: {
     <Drawer anchor="right" open={open} onClose={onClose}
       slotProps={{ paper: { sx: {
         width: { xs: '100%', sm: 420 }, p: 2.5,
-        borderLeft: `1px solid ${extras.codeBorder}`,
+        borderLeft: '1px solid', borderColor: 'divider',
       } } }}>
       <Stack spacing={2}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -71,7 +72,9 @@ export function StateExportDrawer({ open, ticker, personaId, onClose }: {
 
         {/* Egress-honesty banner (binding copy) — the complete, reviewable list of what leaves. */}
         <Box role="status" sx={{
-          bgcolor: extras.egressBg, color: extras.egressText, borderRadius: '8px',
+          bgcolor: (theme) => alpha(theme.palette.info.main, 0.14),
+          color: (theme) => theme.palette.info.light ?? theme.palette.info.main,
+          borderRadius: '8px',
           px: 1.5, py: 1.25, fontSize: 12, lineHeight: 1.45,
         }}>
           {data?.egress_note ?? COPY.export.egress.replace('{TICKER}', ticker)}
@@ -122,7 +125,8 @@ function ExportSection({ title, caption, text, onCopy }: {
       )}
       <Box component="pre" sx={{
         m: 0, mt: caption ? 0 : 0.75, px: 1.5, py: 1.25, borderRadius: '8px',
-        bgcolor: extras.codeBg, border: `1px solid ${extras.codeBorder}`, color: extras.codeText,
+        bgcolor: 'background.default', border: '1px solid', borderColor: 'divider',
+        color: 'text.secondary',
         fontFamily: typographyTokens.monoFontFamily, fontSize: 10, lineHeight: 1.6,
         whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 220, overflow: 'auto',
       }}>{text || '—'}</Box>

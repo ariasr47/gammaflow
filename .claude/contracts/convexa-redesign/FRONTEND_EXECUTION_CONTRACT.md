@@ -1,89 +1,74 @@
-# convexa-redesign — FRONTEND_EXECUTION_CONTRACT (GATE V: StateExportDrawer reskin, 2026-06-30)
+# convexa-redesign — FRONTEND_EXECUTION_CONTRACT (GATE V: StateExportDrawer → THEME-NATIVE, 2026-06-30)
 
-> **Scope:** reskin the AI-rec **"What's sent to the AI" drawer** (`StateExportDrawer`) to match Figma
-> node **`137:1639`** ("WhatsSentDrawer", file `4Njtm8QGWIgm4rA0UESg8n`). FE-only,
-> **NO_BACKEND_CHANGE / NO_INTERFACE_CHANGE** — re-skin only; the data wiring, states, copy, egress
-> invariant, and behavior are preserved byte-for-byte. Bound to `PROJECT_CONTEXT.md` + `THEME_TOKENS.md`.
-> Supersedes the prior Ticker-quick-wins contract (shipped: `2ca5f49`).
+> **Scope:** the StateExportDrawer reskin (committed `3aae8ce`) matched the Figma's layout but used
+> **bespoke hardcoded hex tokens** (`codeBg/codeBorder/codeText/egressBg/egressText`) that are NOT part of
+> the app's MUI theme — so the drawer stopped matching the rest of the app. **Owner directive
+> (2026-06-30): "make sure this component uses my theme."** Rebind the drawer to the existing MUI
+> theme/palette; remove the bespoke tokens. FE-only, **NO_BACKEND_CHANGE**. Keep the Figma layout/structure
+> from `3aae8ce` (420px tray, header, egress banner, Copy-all, 3 sections + code blocks) — only the COLOR
+> SOURCING changes: theme tokens instead of literals.
 >
-> Conductor pulled the Figma design context (the conductor carries the detail — the lane builds without
-> live Figma). The current component already has the right STRUCTURE (egress banner · Copy-all · three
-> sections with per-section copy · code blocks) — this is a visual re-skin to the Figma's surfaces,
-> colors, type, and spacing, not a rewrite.
+> Bound to `PROJECT_CONTEXT.md`. Supersedes the prior (literal-hex) reskin contract.
 
-## File
-`apps/dashboard/src/app/ai-rec/StateExportDrawer.tsx` (the only component file changed). Tokens added to
-`apps/dashboard/src/app/tokens.ts` (see below). Current code is the starting point — keep its logic.
+## The core change: theme-native color sourcing
+**Remove** the 5 bespoke entries added to `apps/dashboard/src/app/tokens.ts` `extras` in `3aae8ce`
+(`codeBg`, `codeBorder`, `codeText`, `egressBg`, `egressText`) — they were the "not my theme" part. Then
+rebind every surface in `StateExportDrawer.tsx` to the MUI theme via `sx` theme refs / `useTheme()` +
+`alpha()`:
 
-## PRESERVE exactly (do NOT change — these are behavior/contract, not skin)
-- The `fetchRecExport(ticker, { personaId })` fetch in the `useEffect` keyed on `[open, ticker, personaId]`;
-  the `idle | loading | error` state machine; the loading + error renderings (re-skin their look, keep them).
-- The `RecExport` shape consumed (`egress_note`, `context`, `persona_prompt`, `glossary`) and `sectionText()`.
-- The `copy()` clipboard handler + the `Snackbar` toast (`COPY.export.copied`); `allText` assembly.
-- The MUI **`<Drawer anchor="right">`** mechanism + the `open`/`onClose` props (the right-side tray is correct).
-- The title text **`EXPORT_HEADER(ticker)`** = `What's sent to the AI · {ticker}` (a test matches it verbatim —
-  `getByText("What's sent to the AI · TSLA")`). The close control keeps an accessible name (`aria-label="Close export"`).
-- The egress-note **copy** (`data?.egress_note ?? COPY.export.egress…`) and the first section's caption text.
-- The per-section **Copy** controls stay real buttons (accessible name preserved). Each code block keeps a
-  `maxHeight` + `overflow:auto` so long prompt/glossary text scrolls (Figma shows short previews; keep scroll).
-- **Invariants:** `[additive-keeps-score-byte-identical]` (no scoring path), `NO_BACKEND_CHANGE`, token
-  discipline (no hardcoded hex in the component — see token additions). Egress honesty unchanged.
+| Element | Was (bespoke hex) | Use (theme) |
+|---|---|---|
+| Drawer left border | `extras.codeBorder` #29303d | `theme.palette.divider` (`borderColor: 'divider'`) |
+| Drawer paper bg | (default) | leave = `background.paper` (already themed) ✓ |
+| Egress banner bg | `extras.egressBg` #172947 | `alpha(theme.palette.info.main, 0.14)` (theme info tint) |
+| Egress banner text | `extras.egressText` #b2d1ff | `theme.palette.info.light` (fallback `info.main`) |
+| Code block bg | `extras.codeBg` #0b0e14 | `background.default` (recessed vs the paper drawer) |
+| Code block border | `extras.codeBorder` #29303d | `divider` |
+| Code block text | `extras.codeText` #c7d1db | `text.secondary` |
+| Section title | `text.primary` (already themed) | keep `text.primary` ✓ |
+| Section COPY link | `primary.main` (already themed) | keep `primary.main` ✓ |
+| Caption | `text.disabled` (already themed) | keep ✓ |
 
-## Token additions (`apps/dashboard/src/app/tokens.ts`)
-These Figma values aren't in the palette yet. Add them to the `extras` block (single-sourced, comment that
-they're the WhatsSentDrawer Figma `137:1639` surfaces) and reference them from the component — no raw hex in
-the `.tsx`:
-- `codeBg: '#0b0e14'` — code-block background (recessed near-black, darker than `background.default`).
-- `codeBorder: '#29303d'` — hairline for code blocks + the drawer's left edge (a solid border, distinct
-  from the translucent MUI divider).
-- `codeText: '#c7d1db'` — mono code text (lighter than `text.secondary`).
-- `egressBg: '#172947'` — egress-note banner background (deep blue tint).
-- `egressText: '#b2d1ff'` — egress-note banner text (light blue).
+Result: **zero hardcoded color hex** in `StateExportDrawer.tsx` and **no bespoke color tokens** — every
+color comes from the app's theme, so the drawer is consistent with every other surface. The mono font may
+still come from `typographyTokens.monoFontFamily` (that's a theme-level token, fine).
 
-## Visual spec (match the Figma)
-**Drawer paper:** width **420** (`{ xs: '100%', sm: 420 }`), padding **20px** (`p: 2.5`), background
-`background.paper` (already `#161b22`), a **left hairline** `borderLeft: '1px solid ' + extras.codeBorder`.
-Vertical rhythm ≈ **16px** between blocks (`Stack spacing={2}` or `gap: 16px`).
+## Copy-all button — themed, no color overrides
+Keep `<Button variant="contained" size="small">` (Figma shows a filled primary button) with **no `sx`
+color/bg overrides** — it renders purely from the theme's primary. (Casing: owner has no preference —
+keep the app default sentence-case "Copy all".)
+> **Known theme note (do NOT fix here unless told):** the theme's `primary.main` (#4f9cff) has no explicit
+> `contrastText`, so MUI auto-picks **black** text on the button. That is a separate **app-wide** theme
+> decision the owner deferred — it is NOT in scope for this component pass. Leave the button to the theme;
+> the conductor will surface the contrastText option separately.
 
-1. **Header row** (space-between, center): title `What's sent to the AI · {ticker}` in **Inter Semi Bold
-   15px**, `text.primary` (white-ish). Close control on the right, muted (`text.secondary`) — keep the
-   `IconButton`+`CloseIcon` (accessible) styled muted, or a muted `✕`; keep `aria-label="Close export"`.
-2. **Egress banner** (replaces the MUI `<Alert>`): a `Box` with `bgcolor: extras.egressBg`,
-   `color: extras.egressText`, `borderRadius: '8px'`, `px: 1.5, py: 1.25`, text **12px**, `lineHeight: 1.45`.
-   Content = the egress note (same source as today). (If a test asserts `role="alert"` on this banner, give
-   the Box `role="status"` or update the test — don't drop the text.)
-3. **Copy all button:** MUI `<Button variant="contained" size="small">` (resolves to brand primary
-   `#4f9cff`), `alignSelf: 'flex-start'`, label `COPY.export.copyAll`. **Sentence case** ("Copy all") per the
-   app theme's global `MuiButton textTransform: none` — an INTENTIONAL deviation from the Figma's
-   kit-default uppercase "COPY ALL" (the kit isn't re-themed yet; the app convention wins — record, don't "fix").
-4. **Each of the 3 sections** (Computed snapshot (context) · Persona prompt · Field glossary):
-   - **Section header row** (space-between): title in **Inter Semi Bold 13px**, `text.primary`; a small
-     **`COPY`** action on the right — **10px**, `primary.main` (`#4f9cff`), minimal/text style (compact, no
-     contained bg). Keep it a real button (accessible name; reuse the existing per-section copy handler).
-   - **Caption** (FIRST section only — "Computed snapshot"): "A serialization of what Convexa already
-     computed — no recompute, no new fetch. Null stays null." in **11px**, `text.disabled` (≈ `#6b7585`),
-     `lineHeight: 1.4`.
-   - **Code block:** `Box component="pre"` — `bgcolor: extras.codeBg`, `border: '1px solid ' +
-     extras.codeBorder`, `borderRadius: '8px'`, `px: 1.5, py: 1.25`, font `typographyTokens.monoFontFamily`
-     (Roboto Mono), **10px**, `color: extras.codeText`, `lineHeight: 1.6`, `whiteSpace: 'pre-wrap'`,
-     `wordBreak: 'break-word'`, `maxHeight: ~220`, `overflow: 'auto'`, `m: 0`. Empty → `'—'`.
-   - **No `<Divider>` lines** between sections — the Figma uses gap-only spacing. Remove them.
+## PRESERVE exactly (unchanged from `3aae8ce`)
+- The Figma layout: 420px right drawer (`{xs:'100%', sm:420}`), 20px padding, 16px-rhythm `Stack`, no
+  dividers, header (15px/600 title + muted close `aria-label="Close export"`), egress banner (8px radius,
+  px1.5/py1.25, 12px/1.45), Copy-all left-aligned, 3 sections (13px/600 title + small primary `COPY` +
+  first-section caption 11px), code blocks (8px radius, mono 10px, lineHeight 1.6, pre-wrap, maxHeight 220,
+  overflow auto).
+- ALL behavior/wiring: `fetchRecExport` useEffect + idle/loading/error, `RecExport` shape + `sectionText`,
+  `copy()` + `Snackbar`, `<Drawer anchor="right">` + open/onClose, `EXPORT_HEADER(ticker)` title text, the
+  egress-note copy source, per-section copy buttons, egress honesty.
+- **Invariants:** `NO_BACKEND_CHANGE`, `[additive-keeps-score-byte-identical]`, token discipline (now via
+  the THEME rather than bespoke literals).
 
 ## Verification (the lane runs this)
-- `npx nx test dashboard` green (was 425/425). Update only assertions that break on the re-skin (e.g. if a
-  test queried the egress banner as `role="alert"`); never drop a text-presence/behavioral check. Add a
-  small test only if a section/structure needs locking; not required if coverage already holds.
-- **Render-verify via the preview MCP** (`preview_start dashboard` → :4300): on the Ticker page, open the
-  AI-rec panel's **"View what's sent"** → confirm the drawer matches the Figma — 420px right tray, blue
-  egress banner, Copy-all primary button, three sections with `COPY` links + near-black code blocks. (The
-  dev session is signed in; the drawer opens from the rec panel header in any state.) Use
-  `preview_snapshot`/`preview_screenshot`; if a Ticker screenshot hangs, scope to the drawer
-  (`.MuiDrawer-paper`) or stop+start the server.
+- `npx nx test dashboard` green (was 425/425). No behavioral change → no new tests required; update any
+  assertion only if it referenced a removed token (none should — tokens.ts extras are internal).
+- Grep `StateExportDrawer.tsx` for `#` hex → **zero**. Grep `tokens.ts` for the 5 removed keys → **zero**.
+- **Render-verify via preview MCP** (`preview_start dashboard` → :4300, desktop viewport, TSLA → AI-rec
+  panel → "View what's sent"): confirm the drawer now reads with the app's theme surfaces — info-tinted
+  egress banner, recessed `background.default` code blocks with a `divider` border, themed primary
+  Copy-all. It should feel consistent with the app's other cards/surfaces. Ticker screenshots can hang →
+  prefer computed-style `preview_eval` (report the resolved `background`/`borderColor`/`color` values) or
+  scope to `.MuiDrawer-paper`.
 
 ## Definition of done
-- `StateExportDrawer` matches Figma `137:1639` (surfaces/type/spacing/colors via the new tokens); structure
-  + behavior + egress copy preserved; dividers removed; width 420; sentence-case Copy-all (noted deviation).
-- New tokens in `tokens.ts`; **zero raw hex** in `StateExportDrawer.tsx`.
+- `StateExportDrawer.tsx` sources every color from the MUI theme; the 5 bespoke `extras` tokens are removed
+  from `tokens.ts`; zero color hex in the component. Layout/behavior unchanged from `3aae8ce`.
 - `npx nx test dashboard` green; lint clean; `git diff --stat -- apps/api` empty.
-- Hand back: files changed, test count, and a render-verification note (ideally a drawer screenshot) vs the Figma.
-- **Do not commit** — the conductor verifies (incl. a render check) and commits on the branch.
+- Hand back: files changed, test count, and the resolved computed-style values (egress bg = a themed info
+  tint, code bg = background.default, borders = divider) proving it's theme-driven.
+- **Do not commit** — the conductor verifies (render + computed styles) and commits.
