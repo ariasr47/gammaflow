@@ -53,4 +53,11 @@ export const extras = {
   textSecondary: '#8b949e',
   textDisabled: '#5b6675',
   accentViolet: '#7b5cff',
+  // WhatsSentDrawer surfaces (Figma `137:1639`) — recessed code blocks + the egress-note banner.
+  // Applied via `sx` literals in StateExportDrawer (no `--mui-*` var); single-sourced here.
+  codeBg: '#0b0e14', //      code-block background (recessed near-black, darker than background.default)
+  codeBorder: '#29303d', //  hairline for code blocks + the drawer's left edge (solid, not the MUI divider)
+  codeText: '#c7d1db', //    mono code text (lighter than text.secondary)
+  egressBg: '#172947', //    egress-note banner background (deep blue tint)
+  egressText: '#b2d1ff', //  egress-note banner text (light blue)
 } as const;

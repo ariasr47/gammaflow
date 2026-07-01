@@ -1,84 +1,89 @@
-# convexa-redesign — FRONTEND_EXECUTION_CONTRACT (GATE V Ticker quick UX wins, 2026-06-30)
+# convexa-redesign — FRONTEND_EXECUTION_CONTRACT (GATE V: StateExportDrawer reskin, 2026-06-30)
 
-> **Scope:** two owner-approved quick UX wins on the **Ticker** page. FE-only,
-> **NO_BACKEND_CHANGE / NO_INTERFACE_CHANGE** — display-only, consumes existing bundle fields. Bound to
-> `PROJECT_CONTEXT.md`. Supersedes the prior Ticker-visual-fixes contract (shipped: `e23ffcb`).
+> **Scope:** reskin the AI-rec **"What's sent to the AI" drawer** (`StateExportDrawer`) to match Figma
+> node **`137:1639`** ("WhatsSentDrawer", file `4Njtm8QGWIgm4rA0UESg8n`). FE-only,
+> **NO_BACKEND_CHANGE / NO_INTERFACE_CHANGE** — re-skin only; the data wiring, states, copy, egress
+> invariant, and behavior are preserved byte-for-byte. Bound to `PROJECT_CONTEXT.md` + `THEME_TOKENS.md`.
+> Supersedes the prior Ticker-quick-wins contract (shipped: `2ca5f49`).
 >
-> Two changes only: (A) compact big-number formatting for Net GEX / Net DEX; (B) a freshness indicator
-> near the header. Both display-only — no value, computation, scoring, or data-flow change. The other
-> quick-win ideas (distance-to-level, recent-ticker chips, sticky header, input ergonomics) are
-> **deferred to BACKLOG §B "Ticker UX quick wins"** — do NOT build them here.
+> Conductor pulled the Figma design context (the conductor carries the detail — the lane builds without
+> live Figma). The current component already has the right STRUCTURE (egress banner · Copy-all · three
+> sections with per-section copy · code blocks) — this is a visual re-skin to the Figma's surfaces,
+> colors, type, and spacing, not a rewrite.
 
-## Invariants (HARD — restate, do not touch)
-- **`NO_BACKEND_CHANGE`** — nothing under `apps/api/`.
-- **`[additive-keeps-score-byte-identical]`** — display formatting only; no scoring/bundle path touched.
-- **`[live-vs-static-isolation]`** — the freshness indicator reflects the **REST bundle** age (static
-  path); it is NOT a live/SSE element and must not be wired to `live`/`streamOffline`. It must not
-  contradict the existing stale treatment or the "Couldn't refresh …" poll-error warning.
-- **Token discipline** — no hardcoded hex; muted styling via theme (`text.secondary`/`text.disabled`).
-- Keep `npx nx test dashboard` green (was 412/412). Update only tests that assert the OLD literal
-  Net GEX/DEX format; add tests for the new formatter + the freshness line.
+## File
+`apps/dashboard/src/app/ai-rec/StateExportDrawer.tsx` (the only component file changed). Tokens added to
+`apps/dashboard/src/app/tokens.ts` (see below). Current code is the starting point — keep its logic.
 
-## Change A — compact big-number formatting (B/M/K, sign-first)
-Today large dollar magnitudes render M-only: `Net DEX $36607.0M` (that's $36.6B) is hard to parse.
+## PRESERVE exactly (do NOT change — these are behavior/contract, not skin)
+- The `fetchRecExport(ticker, { personaId })` fetch in the `useEffect` keyed on `[open, ticker, personaId]`;
+  the `idle | loading | error` state machine; the loading + error renderings (re-skin their look, keep them).
+- The `RecExport` shape consumed (`egress_note`, `context`, `persona_prompt`, `glossary`) and `sectionText()`.
+- The `copy()` clipboard handler + the `Snackbar` toast (`COPY.export.copied`); `allText` assembly.
+- The MUI **`<Drawer anchor="right">`** mechanism + the `open`/`onClose` props (the right-side tray is correct).
+- The title text **`EXPORT_HEADER(ticker)`** = `What's sent to the AI · {ticker}` (a test matches it verbatim —
+  `getByText("What's sent to the AI · TSLA")`). The close control keeps an accessible name (`aria-label="Close export"`).
+- The egress-note **copy** (`data?.egress_note ?? COPY.export.egress…`) and the first section's caption text.
+- The per-section **Copy** controls stay real buttons (accessible name preserved). Each code block keeps a
+  `maxHeight` + `overflow:auto` so long prompt/glossary text scrolls (Figma shows short previews; keep scroll).
+- **Invariants:** `[additive-keeps-score-byte-identical]` (no scoring path), `NO_BACKEND_CHANGE`, token
+  discipline (no hardcoded hex in the component — see token additions). Egress honesty unchanged.
 
-1. Add a shared formatter to `apps/dashboard/src/app/ticker/sections/copy.ts` — e.g.
-   `fmtUsdCompact(v: number | null): string`:
-   - `null` → `'—'` (or keep callers' own null handling; match existing behavior).
-   - Sign FIRST, then `$`: a negative is `−$12.3M`, never `$-12.3M`. Use the figure minus `−`
-     (U+2212, as the IV-skew copy already does), consistent across the app.
-   - Thresholds on the absolute value: `≥ 1e9 → $X.XB`, `≥ 1e6 → $X.XM`, `≥ 1e3 → $X.XK`, else `$X`
-     (round to 1 decimal for B/M/K; integers below 1e3). Examples: `36_607_000_000 → −/+$36.6B`,
-     `793_200_000 → $793.2M`, `-12_300_000 → −$12.3M`.
-2. Apply it to:
-   - `DealerPositioning.tsx:46` **Net GEX** value (replace `` `$${(m.net_gex / 1e6).toFixed(1)}M` ``).
-   - `DealerPositioning.tsx:49` **Net DEX** value (the `m.net_dex == null ? 'unavailable' : …` branch).
-   - `copy.ts:32` **`fmtDexM`** (the DEX tooltip breakdown for call/put dex via `netDexTip`) → route it
-     through `fmtUsdCompact` so the tooltip matches the tile. Keep its `null → '—'` behavior.
-3. The Net GEX tile's `accent` (up/down color) stays driven by the sign of `m.net_gex` — unchanged.
-4. **Out of scope:** `gex-profile-chart.tsx` `fmtM` (per-strike values are intentionally M-scaled and
-   small) and the Y-axis — leave them. Only the two tiles + the DEX tooltip helper change.
+## Token additions (`apps/dashboard/src/app/tokens.ts`)
+These Figma values aren't in the palette yet. Add them to the `extras` block (single-sourced, comment that
+they're the WhatsSentDrawer Figma `137:1639` surfaces) and reference them from the component — no raw hex in
+the `.tsx`:
+- `codeBg: '#0b0e14'` — code-block background (recessed near-black, darker than `background.default`).
+- `codeBorder: '#29303d'` — hairline for code blocks + the drawer's left edge (a solid border, distinct
+  from the translucent MUI divider).
+- `codeText: '#c7d1db'` — mono code text (lighter than `text.secondary`).
+- `egressBg: '#172947'` — egress-note banner background (deep blue tint).
+- `egressText: '#b2d1ff'` — egress-note banner text (light blue).
 
-## Change B — freshness indicator near the header
-The bundle carries `data.meta.freshness = { snapshot_iso, data_age_seconds, stale, stale_after_seconds }`
-(`fresh` in `TickerDashboard.tsx:142`). A background poll runs every `POLL_MS` (60s); `loading`
-(`TickerDashboard.tsx:66`) is `true` while a `getTicker` is in flight.
+## Visual spec (match the Figma)
+**Drawer paper:** width **420** (`{ xs: '100%', sm: 420 }`), padding **20px** (`p: 2.5`), background
+`background.paper` (already `#161b22`), a **left hairline** `borderLeft: '1px solid ' + extras.codeBorder`.
+Vertical rhythm ≈ **16px** between blocks (`Stack spacing={2}` or `gap: 16px`).
 
-Add a subtle, muted freshness line near the header that builds trust in the data age:
-- Show **"Updated {age} ago"** where `{age}` derives from the freshness (reuse `humanAge(...)` from
-  `copy.ts` — already imported in `TickerDashboard`). A live-counting age (a 1s tick so it counts up
-  between polls, keyed off `snapshot_iso`) is **preferred**; a static-per-poll `humanAge(data_age_seconds)`
-  is an acceptable floor. If you live-count, do it in a small self-contained component (own `setInterval`,
-  cleared on unmount) — keep `TickerHeader`'s existing props/behavior (last-trade byte-identical, the
-  connection chip) untouched.
-- When a background refresh is in flight (`loading === true` while `data` is present), append a quiet
-  **"· refreshing…"** affordance (text or a small spinner). It disappears when the poll resolves.
-- **Placement:** near the price/levels context — either a muted caption rendered in `TickerDashboard`
-  right after `<TickerHeader>`, or passed into `TickerHeader` as new optional props and rendered in the
-  status row / under the last-trade line. Muted styling (`text.disabled`/`text.secondary`, caption size).
-- **Honesty / no contradiction:** this reflects the last successfully-loaded bundle's age. Do NOT show
-  "updated 0s ago" while data is stale, and do NOT duplicate or contradict the existing
-  `fresh.stale` handling or the "Couldn't refresh — showing data from … ago" warning
-  (`TickerDashboard.tsx:218-222`). On a poll error the existing warning still owns that message; the
-  freshness line may simply keep showing the last good age (and may show "refreshing…" only while a
-  retry is actually in flight). It is the REST bundle's age — never wired to `live`/`streamOffline`.
+1. **Header row** (space-between, center): title `What's sent to the AI · {ticker}` in **Inter Semi Bold
+   15px**, `text.primary` (white-ish). Close control on the right, muted (`text.secondary`) — keep the
+   `IconButton`+`CloseIcon` (accessible) styled muted, or a muted `✕`; keep `aria-label="Close export"`.
+2. **Egress banner** (replaces the MUI `<Alert>`): a `Box` with `bgcolor: extras.egressBg`,
+   `color: extras.egressText`, `borderRadius: '8px'`, `px: 1.5, py: 1.25`, text **12px**, `lineHeight: 1.45`.
+   Content = the egress note (same source as today). (If a test asserts `role="alert"` on this banner, give
+   the Box `role="status"` or update the test — don't drop the text.)
+3. **Copy all button:** MUI `<Button variant="contained" size="small">` (resolves to brand primary
+   `#4f9cff`), `alignSelf: 'flex-start'`, label `COPY.export.copyAll`. **Sentence case** ("Copy all") per the
+   app theme's global `MuiButton textTransform: none` — an INTENTIONAL deviation from the Figma's
+   kit-default uppercase "COPY ALL" (the kit isn't re-themed yet; the app convention wins — record, don't "fix").
+4. **Each of the 3 sections** (Computed snapshot (context) · Persona prompt · Field glossary):
+   - **Section header row** (space-between): title in **Inter Semi Bold 13px**, `text.primary`; a small
+     **`COPY`** action on the right — **10px**, `primary.main` (`#4f9cff`), minimal/text style (compact, no
+     contained bg). Keep it a real button (accessible name; reuse the existing per-section copy handler).
+   - **Caption** (FIRST section only — "Computed snapshot"): "A serialization of what Convexa already
+     computed — no recompute, no new fetch. Null stays null." in **11px**, `text.disabled` (≈ `#6b7585`),
+     `lineHeight: 1.4`.
+   - **Code block:** `Box component="pre"` — `bgcolor: extras.codeBg`, `border: '1px solid ' +
+     extras.codeBorder`, `borderRadius: '8px'`, `px: 1.5, py: 1.25`, font `typographyTokens.monoFontFamily`
+     (Roboto Mono), **10px**, `color: extras.codeText`, `lineHeight: 1.6`, `whiteSpace: 'pre-wrap'`,
+     `wordBreak: 'break-word'`, `maxHeight: ~220`, `overflow: 'auto'`, `m: 0`. Empty → `'—'`.
+   - **No `<Divider>` lines** between sections — the Figma uses gap-only spacing. Remove them.
 
 ## Verification (the lane runs this)
-- `npx nx test dashboard` green. Add: formatter unit tests (B/M/K boundaries, sign placement, null) and
-  a test for the freshness line ("Updated …" present; "refreshing…" shows while a poll is in flight,
-  clears after). Update any existing assertion of the old Net GEX/DEX literal format.
-- **Render-verify via the preview MCP** (`preview_start dashboard` → :4300, TSLA): confirm Net DEX now
-  reads like `$36.6B` (not `$36607.0M`), Net GEX unchanged-but-via-the-formatter, and the "Updated Ns
-  ago" line shows near the header (and ticks/refreshes). Ticker full-page screenshots can hang — prefer
-  `preview_snapshot`/`preview_eval`; if the preview MCP isn't available in your lane, say so and verify
-  statically + via the suite.
+- `npx nx test dashboard` green (was 425/425). Update only assertions that break on the re-skin (e.g. if a
+  test queried the egress banner as `role="alert"`); never drop a text-presence/behavioral check. Add a
+  small test only if a section/structure needs locking; not required if coverage already holds.
+- **Render-verify via the preview MCP** (`preview_start dashboard` → :4300): on the Ticker page, open the
+  AI-rec panel's **"View what's sent"** → confirm the drawer matches the Figma — 420px right tray, blue
+  egress banner, Copy-all primary button, three sections with `COPY` links + near-black code blocks. (The
+  dev session is signed in; the drawer opens from the rec panel header in any state.) Use
+  `preview_snapshot`/`preview_screenshot`; if a Ticker screenshot hangs, scope to the drawer
+  (`.MuiDrawer-paper`) or stop+start the server.
 
 ## Definition of done
-- `fmtUsdCompact` added + applied to Net GEX, Net DEX, and the DEX tooltip helper; Net DEX reads in $B.
-- A muted "Updated {age} ago [· refreshing…]" freshness line near the header, driven by the REST
-  freshness + `loading`; honest, not contradicting the stale/poll-error treatments.
-- `npx nx test dashboard` green (new tests added; old-format assertions updated); lint clean; no
-  `apps/api` file touched (`git diff --stat -- apps/api` empty).
-- Hand back: files changed, test count, and the preview render-verification note (Net DEX in $B + the
-  freshness line behavior).
-- **Do not commit** — the conductor verifies and commits on the branch.
+- `StateExportDrawer` matches Figma `137:1639` (surfaces/type/spacing/colors via the new tokens); structure
+  + behavior + egress copy preserved; dividers removed; width 420; sentence-case Copy-all (noted deviation).
+- New tokens in `tokens.ts`; **zero raw hex** in `StateExportDrawer.tsx`.
+- `npx nx test dashboard` green; lint clean; `git diff --stat -- apps/api` empty.
+- Hand back: files changed, test count, and a render-verification note (ideally a drawer screenshot) vs the Figma.
+- **Do not commit** — the conductor verifies (incl. a render check) and commits on the branch.
