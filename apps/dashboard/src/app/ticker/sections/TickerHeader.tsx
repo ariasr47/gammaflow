@@ -17,19 +17,24 @@ import { Box, Typography, Tooltip, Skeleton, Stack, Button } from '@mui/material
 import { alpha } from '@mui/material/styles';
 import type { LiveUpdate, MarketState, Signals } from '@org/api';
 import { LAST_TRADE_TOOLTIP, OFFLINE_CHIP_TOOLTIP } from './copy';
+import { useFlashOnChange, flashColorSx } from './useFlashOnChange';
+import { useReducedMotion } from './useReducedMotion';
 
 const REGIME_TIP =
   'Positive gamma: dealers dampen moves → range-bound, fade extremes. Negative gamma: dealers ' +
   "amplify moves → trending, don't fade.";
 
-/** Tinted status chip (Figma: colored text on a subtle same-color tint). `neutral` = muted grey. */
-function TintChip({ tone, label, tip }:
-  { tone: 'success' | 'error' | 'info' | 'warning' | 'neutral'; label: string; tip?: string }) {
+/** Tinted status chip (Figma: colored text on a subtle same-color tint). `neutral` = muted grey.
+ *  Optional leading `dot` (the ●/○ split out of the label) that **pulses** when `pulse` — the live
+ *  breathing indicator (only in the genuine live state; static otherwise + under reduced motion). */
+function TintChip({ tone, label, tip, dot, pulse }:
+  { tone: 'success' | 'error' | 'info' | 'warning' | 'neutral'; label: string; tip?: string;
+    dot?: string; pulse?: boolean }) {
   const chip = (
     <Box
       component="span"
       sx={(t) => ({
-        display: 'inline-flex', alignItems: 'center', px: 1, py: '3px', borderRadius: '999px',
+        display: 'inline-flex', alignItems: 'center', gap: dot ? 0.5 : 0, px: 1, py: '3px', borderRadius: '999px',
         fontSize: 11, fontWeight: 500, lineHeight: 1.2, whiteSpace: 'nowrap',
         color: tone === 'neutral' ? t.palette.text.secondary : t.palette[tone].main,
         bgcolor: tone === 'neutral'
@@ -37,6 +42,22 @@ function TintChip({ tone, label, tip }:
           : alpha(t.palette[tone].main, 0.16),
       })}
     >
+      {dot && (
+        <Box
+          component="span"
+          aria-hidden
+          sx={pulse ? {
+            display: 'inline-block',
+            animation: 'liveDotPulse 1.6s ease-in-out infinite',
+            '@keyframes liveDotPulse': {
+              '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+              '50%': { opacity: 0.45, transform: 'scale(1.3)' },
+            },
+          } : { display: 'inline-block' }}
+        >
+          {dot}
+        </Box>
+      )}
       {label}
     </Box>
   );
@@ -48,6 +69,9 @@ function TintChip({ tone, label, tip }:
 // empty; offline → `⏸ Last trade $X` dimmed. Never the headline; never freezes a stale value.
 export function LastTradeReadout({ live, streamOffline }:
   { live: LiveUpdate | null; streamOffline: boolean }) {
+  // Flash the live last-trade on a genuine print (live only; frozen when offline / not live).
+  const ltActive = (live?.live ?? false) && !streamOffline;
+  const ltFlash = useFlashOnChange(ltActive ? live?.last_trade ?? null : null, { active: ltActive });
   if (live == null) {
     return <Skeleton variant="text" width={140} data-testid="last-trade-skeleton" sx={{ fontSize: '0.875rem' }} />;
   }
@@ -73,7 +97,7 @@ export function LastTradeReadout({ live, streamOffline }:
   }
   return (
     <Tooltip arrow title={LAST_TRADE_TOOLTIP}>
-      <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }} data-testid="last-trade">
+      <Typography component="span" variant="body2" sx={[{ color: 'text.secondary' }, flashColorSx(ltFlash)]} data-testid="last-trade">
         <Box component="span" sx={{ color: 'info.main' }}>●</Box> Last trade ${lt.toFixed(2)}
       </Typography>
     </Tooltip>
@@ -123,6 +147,14 @@ export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, on
   const connLabel = streamOffline ? '⚠ Live offline — reconnecting…' : ls?.label ?? null;
   const connTip = streamOffline ? OFFLINE_CHIP_TOOLTIP : ls?.tip;
 
+  const reduced = useReducedMotion();
+  // Split a leading ●/○ off the connection label so the live dot can pulse independently of the text.
+  const connDot = connLabel && (connLabel.startsWith('● ') || connLabel.startsWith('○ ')) ? connLabel[0] : undefined;
+  const connText = connDot ? connLabel!.slice(2) : connLabel ?? '';
+  const pulseDot = connDot === '●' && connTone === 'info' && !streamOffline && !reduced; // live only
+  // Headline price flash on a live NBBO-mid change (live only; inert when static/offline).
+  const priceFlash = useFlashOnChange(isLive ? live!.mid : null, { active: isLive && !streamOffline });
+
   return (
     <Box sx={{ mb: 2 }}>
       <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -136,14 +168,16 @@ export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, on
                 label={sig.regime.replace('_', ' ')} tip={REGIME_TIP}
               />
             )}
-            {connLabel && <TintChip tone={connTone} label={connLabel} tip={connTip} />}
+            {connLabel && <TintChip tone={connTone} label={connText} tip={connTip} dot={connDot} pulse={pulseDot} />}
           </Stack>
         )}
 
         {/* Headline ANCHOR (NBBO mid when live, else the static price). The last-trade readout below is
             DISPLAY-ONLY and NEVER feeds this anchor (`live-spot=NBBO-mid`, AC-LastTrade-5). */}
         <Typography variant="h1" sx={{ fontSize: 32, fontWeight: 700, lineHeight: 1.12 }}>
-          {m.ticker} · ${(isLive ? live!.mid : m.price)?.toFixed(2)}
+          <Box component="span" sx={flashColorSx(priceFlash)}>
+            {m.ticker} · ${(isLive ? live!.mid : m.price)?.toFixed(2)}
+          </Box>
           <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1.25, fontWeight: 400 }}>
             (levels @ ${m.gex_spot?.toFixed(2)} · {selected === null ? 'all expirations' : `${selected.length} expiration${selected.length === 1 ? '' : 's'}`})
           </Typography>

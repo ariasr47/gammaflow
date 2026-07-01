@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Card, CardContent, Typography, Stack, Box, Tooltip as MuiTooltip } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import type { StrikeRow } from '@org/api';
 import { typographyTokens } from './tokens';
+import { useReducedMotion } from './ticker/sections/useReducedMotion';
 
 interface Props {
   strikes: StrikeRow[];
@@ -31,6 +32,13 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip, l
   const theme = useTheme();
   const green = theme.palette.success.main;
   const red = theme.palette.error.main;
+
+  // Mount-only bar-grow: animate on the first render, then never again (so the 60s poll / SSE
+  // re-renders don't re-trigger a jarring re-grow). Disabled entirely under reduced motion.
+  const reduced = useReducedMotion();
+  const animatedOnce = useRef(false);
+  const animateBars = !reduced && !animatedOnce.current;
+  useEffect(() => { animatedOnce.current = true; }, []);
 
   const data = useMemo(() => {
     // A readable window around spot, always wide enough to include the walls it labels.
@@ -107,7 +115,7 @@ export function GexProfileChart({ strikes, spot, callWall, putWall, gammaFlip, l
             {liveSpot != null && liveSpot > 0 && (
               <ReferenceLine x={nearest(liveSpot)} stroke={theme.palette.info.main} strokeWidth={2} label={refLabel('live', theme.palette.info.main, 2)} />
             )}
-            <Bar dataKey="net_gex" name="Net GEX" radius={[2, 2, 0, 0]} isAnimationActive={false}>
+            <Bar dataKey="net_gex" name="Net GEX" radius={[2, 2, 0, 0]} isAnimationActive={animateBars} animationDuration={650} animationEasing="ease-out">
               {data.map((s) => (
                 <Cell
                   key={s.strike}

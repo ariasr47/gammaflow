@@ -23,6 +23,7 @@ import { styled } from '@mui/material/styles';
 import { Card, CardContent, Stack, Typography, Tooltip, Skeleton } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { typographyTokens } from '../../tokens';
+import { flashColorSx, type FlashState } from './useFlashOnChange';
 
 /** The mono numeric stack (Figma `font-family/mono`), single-sourced from tokens — figures are mono. */
 const MONO = typographyTokens.monoFontFamily;
@@ -42,6 +43,18 @@ const TileCard = styled(Card, {
     backgroundColor: theme.palette.background.paper,
     borderColor: theme.palette.divider,
     ...(offline ? { opacity: 0.5 } : {}),
+    // Micro-interaction: subtle hover lift + a smooth opacity transition into/out of the offline dim
+    // (never a hard snap). GPU-cheap (transform/opacity/box-shadow/border only). Honors reduced motion.
+    transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, opacity 200ms ease',
+    '&:hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: theme.shadows[4],
+      borderColor: theme.palette.text.disabled,
+    },
+    '@media (prefers-reduced-motion: reduce)': {
+      transition: 'opacity 200ms ease',
+      '&:hover': { transform: 'none' },
+    },
     '&::before': {
       content: '""',
       position: 'absolute',
@@ -73,9 +86,11 @@ export interface StatTileProps {
   accentColor?: string;
   /** Optional color for the value figure (e.g. directional P/L); defaults to text.primary. */
   valueColor?: string;
+  /** Live value-flash pulse (from `useFlashOnChange`) applied to the figure. Null → no flash. */
+  flash?: FlashState | null;
 }
 
-export function StatTile({ label, value, accent, info, offline, accentColor, valueColor }: StatTileProps) {
+export function StatTile({ label, value, accent, info, offline, accentColor, valueColor, flash }: StatTileProps) {
   const tile = (
     <TileCard accent={accent} accentColor={accentColor} offline={offline} variant="outlined">
       <CardContent sx={{ pl: 2.25 }}>
@@ -90,7 +105,7 @@ export function StatTile({ label, value, accent, info, offline, accentColor, val
         )}
         <Typography
           variant="h6"
-          sx={{ fontFamily: MONO, ...(valueColor ? { color: valueColor } : {}) }}
+          sx={[{ fontFamily: MONO, ...(valueColor ? { color: valueColor } : {}) }, flashColorSx(flash ?? null)]}
         >
           {value}
         </Typography>

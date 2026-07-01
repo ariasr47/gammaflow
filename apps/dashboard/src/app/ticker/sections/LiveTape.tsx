@@ -12,6 +12,7 @@
 import { Box, Typography } from '@mui/material';
 import type { LiveUpdate, MarketState } from '@org/api';
 import { StatTile } from './StatTile';
+import { useFlashOnChange } from './useFlashOnChange';
 
 const GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 } as const;
 
@@ -23,6 +24,12 @@ interface Props {
 }
 
 export function LiveTape({ m, live, isLive, streamOffline }: Props) {
+  // Live value-flash on SSE updates — ONLY while genuinely live (frozen on an SSE drop, never a stale
+  // flash) `[live-vs-static-isolation]`. VWAP is a static bundle field (no offline, no flash).
+  const active = isLive && !streamOffline;
+  const netFlowFlash = useFlashOnChange(isLive ? live!.net_flow : null, { active });
+  const spreadFlash = useFlashOnChange(isLive ? live?.spread ?? null : null, { active, tone: 'neutral' });
+  const flipFlash = useFlashOnChange(isLive ? live?.gamma_flip ?? null : null, { active });
   return (
     <Box sx={{ mb: 2 }} data-testid="live-tape">
       <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.08em', display: 'block', mb: 1 }}>
@@ -33,15 +40,15 @@ export function LiveTape({ m, live, isLive, streamOffline }: Props) {
         label={`Net flow (${live ? Math.round(live.flow_window_s / 60) : 5}m)`}
         value={isLive ? `${live!.net_flow >= 0 ? '+' : ''}${live!.net_flow.toLocaleString()}` : '—'}
         accent={!isLive ? 'neutral' : live!.net_flow >= 0 ? 'up' : 'down'}
-        offline={streamOffline}
+        offline={streamOffline} flash={netFlowFlash}
         info="Aggressive buys minus sells over the last few minutes, from the live trade tape. Positive = buyers lifting the ask; negative = sellers hitting the bid." />
       <StatTile label="Spread" value={isLive && live?.spread != null ? `$${live.spread.toFixed(2)}` : '—'} accent="neutral"
-        offline={streamOffline}
+        offline={streamOffline} flash={spreadFlash}
         info="Best ask minus best bid. Wider = a thinner, more volatile market." />
       <StatTile
         label={isLive ? 'Gamma flip (live)' : 'Gamma flip'}
         value={`$${(isLive ? live?.gamma_flip : null) ?? m.gamma_flip}`} accent="neutral"
-        offline={streamOffline}
+        offline={streamOffline} flash={flipFlash}
         info="The price where dealer hedging switches from calming moves to amplifying them. Above it → steadier/range-bound; below it → more volatile/trending." />
       <StatTile label="VWAP" value={m.vwap != null ? `$${m.vwap.toFixed(2)}` : '—'} accent="neutral"
         info="Volume-weighted average price for the session — a common intraday fair-value / mean-reversion reference." />

@@ -18,7 +18,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import {
-  Container, Box, Alert, Button, Skeleton,
+  Container, Box, Alert, Button, Skeleton, Fade,
 } from '@mui/material';
 import { getTicker, streamTicker, TickerBundle, LiveUpdate, RecResponse } from '@org/api';
 import { useGhostTrade } from '../ghost-trade/useGhostTrade';
@@ -49,6 +49,26 @@ const POLL_MS = 60_000; // matches the backend cache TTL
 // A healthy SSE session pushes a payload every ~1.5s even when the market isn't ticking, so an
 // onmessage gap this long means the transport dropped — not a quiet session. Flips "Live offline".
 const STREAM_OFFLINE_MS = 15_000;
+
+// One-time staggered "section reveal": direct children rise+fade in on the first content mount. CSS
+// runs once on mount; the 60s poll re-renders don't remount the container, so it never replays. Fully
+// off under reduced motion (the whole block is gated on `prefers-reduced-motion: no-preference`).
+const revealSx = {
+  '@media (prefers-reduced-motion: no-preference)': {
+    '@keyframes tickerSectionRise': {
+      from: { opacity: 0, transform: 'translateY(10px)' },
+      to: { opacity: 1, transform: 'none' },
+    },
+    '& > *': { animation: 'tickerSectionRise 260ms ease-out both' },
+    '& > *:nth-of-type(2)': { animationDelay: '50ms' },
+    '& > *:nth-of-type(3)': { animationDelay: '100ms' },
+    '& > *:nth-of-type(4)': { animationDelay: '150ms' },
+    '& > *:nth-of-type(5)': { animationDelay: '200ms' },
+    '& > *:nth-of-type(6)': { animationDelay: '250ms' },
+    '& > *:nth-of-type(7)': { animationDelay: '300ms' },
+    '& > *:nth-of-type(8)': { animationDelay: '350ms' },
+  },
+} as const;
 
 // The cold-load stat grid: the full tile structure as shimmer (AC-Skel-1).
 function StatGridSkeleton() {
@@ -241,7 +261,8 @@ export function TickerDashboard() {
       )}
 
       {!noneSelected && m && (
-        <>
+        <Fade in appear timeout={250}>
+          <Box sx={revealSx}>
           {showPrimeBanner && !tradeOpen && (
             <PrimeBanner onSimulate={() => openEntry()} onDismiss={() => setShowPrimeBanner(false)} />
           )}
@@ -311,7 +332,8 @@ export function TickerDashboard() {
           </Box>
 
           <Setups setups={sig?.setups} />
-        </>
+          </Box>
+        </Fade>
       )}
 
       {/* Ghost-trade entry. */}
