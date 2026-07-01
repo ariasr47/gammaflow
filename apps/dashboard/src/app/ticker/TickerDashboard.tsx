@@ -36,7 +36,8 @@ import { StatSkeleton } from './sections/StatTile';
 import { WidgetSelectionProvider } from './sections/WidgetSelectionContext';
 import { ComingSoonBox } from '../ui/ComingSoonBox';
 import { TickerToolbar } from './sections/TickerToolbar';
-import { TickerHeader, LastTradeReadout } from './sections/TickerHeader';
+import { CommandDeck } from './sections/CommandDeck';
+import { LastTradeReadout } from './sections/TickerHeader';
 import { LiveTape } from './sections/LiveTape';
 import { DealerPositioning } from './sections/DealerPositioning';
 import { GexStrikeProfile } from './sections/GexStrikeProfile';
@@ -44,7 +45,6 @@ import { TermStructureCard } from './sections/TermStructure';
 import { FreshPositioning } from './sections/FreshPositioning';
 import { OffExchangeBlocks } from './sections/OffExchangeBlocks';
 import { Setups } from './sections/Setups';
-import { FreshnessLine } from './sections/FreshnessLine';
 import { humanAge } from './sections/copy';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
@@ -200,13 +200,21 @@ export function TickerDashboard() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
-      <TickerToolbar
-        symbol={symbol} onSymbolChange={setSymbol} onSubmitSymbol={onSubmitSymbol}
-        expirations={data?.expirations ?? []} allDates={allDates} selected={selected}
-        checked={checked} onSelectExpirations={setSelected}
-        persona={persona} onOpenCustomize={() => setCustomizeOpen(true)}
-        loading={loading}
-      />
+      {/* Whenever the full deck is NOT shown (cold-load / cold-start error / none-selected) the deck
+          hero has no market state to anchor, so only the control strip renders standalone — the trader
+          can still change ticker/expirations. Once `m` is present AND some expirations are selected,
+          the full CommandDeck (hero + strip + sticky) renders in its place, below. */}
+      {!(m && !noneSelected) && (
+        <Box sx={{ mb: 2 }}>
+          <TickerToolbar
+            symbol={symbol} onSymbolChange={setSymbol} onSubmitSymbol={onSubmitSymbol}
+            expirations={data?.expirations ?? []} allDates={allDates} selected={selected}
+            checked={checked} onSelectExpirations={setSelected}
+            persona={persona} onOpenCustomize={() => setCustomizeOpen(true)}
+            loading={loading}
+          />
+        </Box>
+      )}
 
       {/* Cold-start failure (no bundle ever loaded) is the ONLY blank/error screen: red error + Retry.
           A poll failure AFTER a prior success keeps the whole bundle on screen behind a soft warning. */}
@@ -249,18 +257,23 @@ export function TickerDashboard() {
             <PrimeBanner onSimulate={() => openEntry()} onDismiss={() => setShowPrimeBanner(false)} />
           )}
 
-          {/* Headline ANCHOR + secondary last-trade readout + the persistent "+ Open simulated trade"
-              CTA (right-aligned in the header, so it stays out of the analysis flow). Not a widget. */}
-          <TickerHeader
+          {/* The unified COMMAND DECK — chrome (NOT a widget): the hero identity row (regime +
+              connection chips, the anchor, the meta line folding last-trade + the relocated freshness,
+              the "+ Open simulated trade" CTA), the segmented control strip, a downward hand-off
+              gradient, and a scroll-out sticky condensed bar. Sits above the widget board. */}
+          <CommandDeck
             m={m} sig={sig} live={live} isLive={isLive} streamOffline={streamOffline} selected={selected}
             onOpenTrade={() => openEntry()}
-          />
-
-          {/* REST-bundle freshness caption (static path, NOT live/SSE). Not a widget. */}
-          <FreshnessLine
-            snapshotIso={fresh?.snapshot_iso ?? null}
-            dataAgeSeconds={fresh?.data_age_seconds ?? null}
-            refreshing={loading}
+            freshness={{
+              snapshotIso: fresh?.snapshot_iso ?? null,
+              dataAgeSeconds: fresh?.data_age_seconds ?? null,
+              refreshing: loading,
+            }}
+            symbol={symbol} onSymbolChange={setSymbol} onSubmitSymbol={onSubmitSymbol}
+            expirations={data?.expirations ?? []} allDates={allDates}
+            checked={checked} onSelectExpirations={setSelected}
+            persona={persona} onOpenCustomize={() => setCustomizeOpen(true)}
+            loading={loading}
           />
 
           {/* The widget BENTO board. One-selected-at-a-time selection is provided here (click-outside

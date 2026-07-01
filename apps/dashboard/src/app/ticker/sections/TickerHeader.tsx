@@ -19,6 +19,7 @@ import type { LiveUpdate, MarketState, Signals } from '@org/api';
 import { LAST_TRADE_TOOLTIP, OFFLINE_CHIP_TOOLTIP } from './copy';
 import { useFlashOnChange, flashColorSx } from './useFlashOnChange';
 import { useReducedMotion } from './useReducedMotion';
+import { FreshnessLine } from './FreshnessLine';
 
 const REGIME_TIP =
   'Positive gamma: dealers dampen moves → range-bound, fade extremes. Negative gamma: dealers ' +
@@ -27,7 +28,7 @@ const REGIME_TIP =
 /** Tinted status chip (Figma: colored text on a subtle same-color tint). `neutral` = muted grey.
  *  Optional leading `dot` (the ●/○ split out of the label) that **pulses** when `pulse` — the live
  *  breathing indicator (only in the genuine live state; static otherwise + under reduced motion). */
-function TintChip({ tone, label, tip, dot, pulse }:
+export function TintChip({ tone, label, tip, dot, pulse }:
   { tone: 'success' | 'error' | 'info' | 'warning' | 'neutral'; label: string; tip?: string;
     dot?: string; pulse?: boolean }) {
   const chip = (
@@ -128,6 +129,28 @@ export function liveStatus(live: LiveUpdate | null):
     tip: 'In a covered session but no ticks are arriving — the feed may be lagging, or it is a market holiday.' };
 }
 
+/**
+ * connectionChip — resolves the SINGLE stream-driven connection chip from `live`/`streamOffline`.
+ * The offline warning supersedes the session chip so a stale "live" can never contradict a dropped
+ * transport (`[live-vs-static-isolation]`). Shared by the deck hero AND the sticky condensed bar so
+ * both reflect the exact same live state. `reduced` gates the live-dot pulse (live only).
+ */
+export function connectionChip(
+  live: LiveUpdate | null,
+  streamOffline: boolean,
+  reduced: boolean,
+): { tone: 'info' | 'warning' | 'neutral'; text: string; tip?: string; dot?: string; pulse: boolean } | null {
+  const ls = liveStatus(live);
+  const label = streamOffline ? '⚠ Live offline — reconnecting…' : ls?.label ?? null;
+  if (!label) return null;
+  const tone: 'info' | 'warning' | 'neutral' = streamOffline ? 'warning'
+    : ls?.color === 'info' ? 'info' : ls?.color === 'warning' ? 'warning' : 'neutral';
+  const dot = label.startsWith('● ') || label.startsWith('○ ') ? label[0] : undefined;
+  const text = dot ? label.slice(2) : label;
+  const pulse = dot === '●' && tone === 'info' && !streamOffline && !reduced; // live only
+  return { tone, text, tip: streamOffline ? OFFLINE_CHIP_TOOLTIP : ls?.tip, dot, pulse };
+}
+
 interface TickerHeaderProps {
   m: MarketState;
   sig: Signals | undefined;
@@ -137,30 +160,23 @@ interface TickerHeaderProps {
   selected: string[] | null;
   /** Persistent "+ Open simulated trade" CTA, right-aligned in the header (kept out of the analysis flow). */
   onOpenTrade?: () => void;
+  /** REST-bundle freshness — folded into the deck hero's meta line (relocated `FreshnessLine`). The
+   *  freshness reflects the STATIC path only (never live/SSE) — `[live-vs-static-isolation]`. */
+  freshness?: { snapshotIso: string | null; dataAgeSeconds: number | null; refreshing: boolean };
 }
 
-export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, onOpenTrade }: TickerHeaderProps) {
-  const ls = liveStatus(live);
-  // Exactly one connection chip — the offline warning supersedes the session chip.
-  const connTone: 'info' | 'warning' | 'neutral' = streamOffline ? 'warning'
-    : ls?.color === 'info' ? 'info' : ls?.color === 'warning' ? 'warning' : 'neutral';
-  const connLabel = streamOffline ? '⚠ Live offline — reconnecting…' : ls?.label ?? null;
-  const connTip = streamOffline ? OFFLINE_CHIP_TOOLTIP : ls?.tip;
-
+export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, onOpenTrade, freshness }: TickerHeaderProps) {
   const reduced = useReducedMotion();
-  // Split a leading ●/○ off the connection label so the live dot can pulse independently of the text.
-  const connDot = connLabel && (connLabel.startsWith('● ') || connLabel.startsWith('○ ')) ? connLabel[0] : undefined;
-  const connText = connDot ? connLabel!.slice(2) : connLabel ?? '';
-  const pulseDot = connDot === '●' && connTone === 'info' && !streamOffline && !reduced; // live only
+  const conn = connectionChip(live, streamOffline, reduced);
   // Headline price flash on a live NBBO-mid change (live only; inert when static/offline).
   const priceFlash = useFlashOnChange(isLive ? live!.mid : null, { active: isLive && !streamOffline });
 
   return (
-    <Box sx={{ mb: 2 }}>
+    <Box>
       <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Stack spacing={1} sx={{ minWidth: 0 }}>
         {/* Status row — regime + the stream-driven connection chip (Figma 149:96). */}
-        {(sig?.regime || connLabel) && (
+        {(sig?.regime || conn) && (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
             {sig?.regime && (
               <TintChip
@@ -168,14 +184,14 @@ export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, on
                 label={sig.regime.replace('_', ' ')} tip={REGIME_TIP}
               />
             )}
-            {connLabel && <TintChip tone={connTone} label={connText} tip={connTip} dot={connDot} pulse={pulseDot} />}
+            {conn && <TintChip tone={conn.tone} label={conn.text} tip={conn.tip} dot={conn.dot} pulse={conn.pulse} />}
           </Stack>
         )}
 
         {/* Headline ANCHOR (NBBO mid when live, else the static price). The last-trade readout below is
-            DISPLAY-ONLY and NEVER feeds this anchor (`live-spot=NBBO-mid`, AC-LastTrade-5). */}
+            DISPLAY-ONLY and NEVER feeds this anchor (`live-spot=NBBO-mid`, AC-LastTrade-5). Mono figure. */}
         <Typography variant="h1" sx={{ fontSize: 32, fontWeight: 700, lineHeight: 1.12 }}>
-          <Box component="span" sx={flashColorSx(priceFlash)}>
+          <Box component="span" sx={[{ fontVariantNumeric: 'tabular-nums' }, flashColorSx(priceFlash)]}>
             {m.ticker} · ${(isLive ? live!.mid : m.price)?.toFixed(2)}
           </Box>
           <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1.25, fontWeight: 400 }}>
@@ -183,16 +199,34 @@ export function TickerHeader({ m, sig, live, isLive, streamOffline, selected, on
           </Typography>
         </Typography>
 
-        {/* SECONDARY last-trade line (AC-LastTrade-4) — subordinate to the h1 anchor; degrades WITH the
-            live tiles on a stream drop. */}
-        <LastTradeReadout live={live} streamOffline={streamOffline} />
+        {/* META line — folds the SECONDARY last-trade readout (AC-LastTrade-4) with the relocated
+            REST-bundle freshness ("● Last trade $X · Updated Ns ago"). Both stay subordinate to the h1;
+            last-trade degrades WITH the live tiles on a drop, freshness reflects the static path. */}
+        <Stack
+          direction="row"
+          data-testid="deck-meta"
+          sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 1, rowGap: 0.25 }}
+        >
+          <LastTradeReadout live={live} streamOffline={streamOffline} />
+          {freshness && (
+            <>
+              <Typography component="span" variant="body2" aria-hidden sx={{ color: 'text.disabled' }}>·</Typography>
+              <FreshnessLine
+                snapshotIso={freshness.snapshotIso}
+                dataAgeSeconds={freshness.dataAgeSeconds}
+                refreshing={freshness.refreshing}
+                inline
+              />
+            </>
+          )}
+        </Stack>
         </Stack>
 
         {/* Persistent trade CTA (right-aligned) — primary action kept in the header, out of the
             analysis flow. Opens the shipped simulated-trade entry dialog. */}
         {onOpenTrade && (
           <Button
-            variant="outlined" size="small" onClick={onOpenTrade} data-testid="open-sim-trade"
+            variant="contained" size="small" onClick={onOpenTrade} data-testid="open-sim-trade"
             sx={{ flexShrink: 0, whiteSpace: 'nowrap', mt: 0.5 }}
           >
             + Open simulated trade

@@ -23,6 +23,8 @@ interface Props {
   dataAgeSeconds: number | null;
   /** A background poll is in flight (REST refresh) — shows the quiet "· refreshing…" affordance. */
   refreshing: boolean;
+  /** Inline variant (folded into the deck meta line): render as an inline span, no own block/margin. */
+  inline?: boolean;
 }
 
 /** Live-count seconds since `snapshotIso`; null when no anchor is available. */
@@ -44,14 +46,15 @@ function useAgeSeconds(snapshotIso: string | null): number | null {
   return age;
 }
 
-export function FreshnessLine({ snapshotIso, dataAgeSeconds, refreshing }: Props) {
+export function FreshnessLine({ snapshotIso, dataAgeSeconds, refreshing, inline }: Props) {
   const liveAge = useAgeSeconds(snapshotIso);
   const ageSeconds = liveAge ?? dataAgeSeconds;
   return (
     <Typography
       variant="caption"
+      component={inline ? 'span' : 'p'}
       data-testid="freshness-line"
-      sx={{ color: 'text.disabled', display: 'block', mb: 1 }}
+      sx={{ color: 'text.disabled', display: inline ? 'inline' : 'block', mb: inline ? 0 : 1 }}
     >
       Updated {humanAge(ageSeconds)} ago
       {refreshing && (
