@@ -31,9 +31,14 @@ waiting on a decision), then the per-feature detail (stage · open amendments ·
 want it, and whether the queue is drained. Then await my instruction — or if I say "go", run GATE I
 (Discovery) to pick the next feature.
 
-Throughout the session, watch your own context usage. When it passes **~85% of the window** (or the harness
-signals context is running high), pause at a **safe boundary** — between gateways, never mid-build — fire
-**GATE R** to write/refresh `.claude/RESUME.md`, then **PROPOSE** that I continue in a fresh `/conductor`
-session (which will read that `RESUME.md` at boot and pick up exactly here). Propose, don't force — starting
-the fresh session is mine; the harness's auto-summarization is only a backstop, not a substitute for the
-snapshot. (See ORCHESTRATOR §3 GATE R + §6 "Session continuity.")
+Throughout the session, don't self-report a specific context-window percentage unless an explicit signal
+just gave you one (a harness notice, a tool result, or what my own UI shows me) — you have no reliable
+introspective read on your own token count, and guessing a figure and stating it as measured is a real
+failure mode (never declare "low on context" or "out of memory" from vibes; if asked and you have no such
+signal, say so plainly instead of estimating). When an explicit signal DOES say context is running high — or
+you reach a natural, clean phase boundary in a long multi-lane build (e.g. about to fan out several lanes)
+worth checkpointing on its own merits — pause at a **safe boundary** — between gateways, never mid-build —
+fire **GATE R** to write/refresh `.claude/RESUME.md`, then **PROPOSE** that I continue in a fresh
+`/conductor` session (which will read that `RESUME.md` at boot and pick up exactly here). Propose, don't
+force — starting the fresh session is mine; the harness's auto-summarization is only a backstop, not a
+substitute for the snapshot. (See ORCHESTRATOR §3 GATE R + §6 "Session continuity.")

@@ -250,15 +250,24 @@ Each gateway = an EXIT event. `{FEATURE}` is the kebab folder; `→` is who runs
 - **Route:** back to the owning role; mark the contract `CONTESTED` in the manifest.
 
 ### GATE R — Resume snapshot (long session, fresh tab)
-- **Trigger:** "snapshot to resume / continuing this elsewhere." **OR (proactive, self-fired):** the
-  conductor's own context usage passes **~85% of the window** (or the harness signals context is running
-  high). The conductor does not wait to be asked — it watches its own context and fires GATE R itself.
-- **Proactive context-threshold handoff (the self-fire path):** at ~85%, pause at a **safe boundary**
-  (between gateways, **never mid-build** — finish or cleanly checkpoint the in-flight role/gate first),
-  write/refresh `.claude/RESUME.md`, then **PROPOSE** that the user continue in a fresh `/conductor` session
-  — which reads `.claude/RESUME.md` at boot (§1) and resumes exactly here. **Propose, never force:** starting
-  the fresh session is the user's; harness auto-summarization is a backstop, not a substitute for writing the
-  snapshot. This closes a loop with the boot read: GATE R writes it → the next `/conductor` consumes it.
+- **Trigger:** "snapshot to resume / continuing this elsewhere." **OR (proactive, self-fired):** an
+  EXPLICIT signal that context is running high — a harness-emitted notice naming context/compaction, a
+  tool result that reports actual usage, or the user reporting what their own UI shows. **Never a
+  number the conductor invented.** A conductor has no reliable introspective read on its own token
+  count; a long transcript "feeling large" is a cue to consider a clean checkpoint, not license to state
+  a specific percentage or token count it hasn't verified. If asked how much context is left with no
+  such signal in hand, say so plainly — do not estimate a figure and present it as measured. (A
+  fabricated "we're almost out of context" costs the user a session for nothing, and a wrong number
+  stated with confidence erodes trust in every other number the conductor reports.)
+- **Proactive context-threshold handoff (the self-fire path):** on an explicit high-context signal — OR
+  at a natural, clean phase boundary in a long multi-lane build (e.g. about to fan out several lanes, or
+  a GATE S just closed) worth checkpointing on its own merits regardless of context — pause at a **safe
+  boundary** (between gateways, **never mid-build** — finish or cleanly checkpoint the in-flight
+  role/gate first), write/refresh `.claude/RESUME.md`, then **PROPOSE** that the user continue in a fresh
+  `/conductor` session — which reads `.claude/RESUME.md` at boot (§1) and resumes exactly here.
+  **Propose, never force:** starting the fresh session is the user's; harness auto-summarization is a
+  backstop, not a substitute for writing the snapshot. This closes a loop with the boot read: GATE R
+  writes it → the next `/conductor` consumes it.
 - **Compress:** Compressor **#4** (Session-Resume).
 - **Write:** the session-level snapshot goes to `.claude/RESUME.md` (top level); a feature-scoped resume of
   one in-flight build may instead go to `{FEATURE}/RESUME.md`. Contents: objective, done + files changed,
@@ -417,11 +426,16 @@ NEXT      : <role(s) to launch> — launch prompt below
   every AC point-by-point and **repairs nothing**; a failing AC bounces via GATE Z and GATE Q re-runs
   on the fix. (Run QA on a different model where possible — de-correlates blind spots, system-6.)
 - **Session continuity (the resume loop):** the conductor reads `.claude/RESUME.md` at boot if present (an
-  overlay on the reconstructed canon — reconcile + flag divergence, never a replacement), and when its own
-  context passes **~85% of the window** it proactively fires **GATE R** (write/refresh `.claude/RESUME.md`)
-  at a **safe boundary** (between gateways, never mid-build) and **PROPOSES** continuing in a fresh
-  `/conductor` session. Propose, never force; harness auto-summarization is a backstop, not a substitute for
-  the written snapshot. The two halves form one loop — GATE R writes it, the next boot consumes it.
+  overlay on the reconstructed canon — reconcile + flag divergence, never a replacement). On an EXPLICIT
+  signal that context is running high (a harness notice, a tool result, or what the user reports their own
+  UI shows — **never a number the conductor invents**) — or at a clean phase boundary worth checkpointing
+  on its own merits regardless of context — it proactively fires **GATE R** (write/refresh
+  `.claude/RESUME.md`) at a **safe boundary** (between gateways, never mid-build) and **PROPOSES**
+  continuing in a fresh `/conductor` session. Propose, never force; harness auto-summarization is a
+  backstop, not a substitute for the written snapshot. The conductor has no reliable introspective read on
+  its own token count and never states a specific context percentage it hasn't just verified from an actual
+  signal — a guessed number presented as measured is a real failure mode, not a harmless approximation. The
+  two halves form one loop — GATE R writes it, the next boot consumes it.
 - Frontend writes target `frontend.dir`, backend writes target `backend.dir` (both from `project.json`);
   contracts always live in `.claude/contracts/` at the workspace root.
 - **Communicate for every audience (§7):** every user-facing report, signal, and question leads with a

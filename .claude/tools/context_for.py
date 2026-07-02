@@ -3,13 +3,13 @@
 
 Decouples per-session token cost from total system size. Instead of re-reading the whole
 project context file every session, a role loads only the **minimal context pack** a feature needs:
-the always-load invariant floor + the widgets relevant to the feature's tags. As more features ship
+the always-load invariant floor + the sections relevant to the feature's tags. As more features ship
 and the canon grows, the savings grow with it.
 
 Logical-slice (not a physical split): the project context file stays the single source. Each `## N.`
-section carries an inline `<!-- shard: tags=...; always -->` annotation; this tool selects widgets by
-relevance. **Binding invariant: invariant-bearing widgets are `always` — sharding never drops a rule
-a feature could violate** (the math-constraint + key-decision/promoted-invariant widgets are always-load).
+section carries an inline `<!-- shard: tags=...; always -->` annotation; this tool selects sections by
+relevance. **Binding invariant: invariant-bearing sections are `always` — sharding never drops a rule
+a feature could violate** (the math-constraint + key-decision/promoted-invariant sections are always-load).
 
 The context filename is read from `.claude/project.json` (`context_file`, default `PROJECT_CONTEXT.md`)
 — the single per-project seam. With no config the tool falls back to that default, so it runs in a
