@@ -472,6 +472,15 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   visibly; not blocking.
 
 ### C. Strategic / blocked (high value, gated on a decision or heavy lift)
+- **Business viability / monetization de-risking** — `RAISED 2026-06-30 (owner; carried from RESUME 7m
+  closeout)`. Before monetizing (freemium SaaS, serious-small-business ambition), 3 cheap de-risk actions,
+  research done: (1) get **Databento/ORATS commercial derived-data redistribution** terms — the current
+  Massive/Polygon license **forbids** the redistribution a paid product needs (the hard blocker); (2) a
+  **securities-counsel consult** on the AI-rec framing (impersonal-advice / publisher's-exclusion posture);
+  (3) a landing-page **waitlist demand test** (cheapest signal, do first, pairs with the §B prerender/SEO
+  item). *Impact:* determines whether/how the product can be sold at all. *Value H · Effort S–M (mostly
+  legal/comms, not build).* **Decision-impact cull N/A** (business/strategy class). **Blocked-on:** owner
+  pursuing the vendor-license + counsel conversations — a decision/diligence gate before any monetization build.
 - **Data-vendor decision + overnight coverage** — Massive vs Databento (Blue Ocean overnight, full
   OPRA) vs Webull (cheap overnight underlying, no options). *Impact:* unlocks the overnight price gap
   — the core coverage hole. *Value H · Effort L.* **Blocked-on:** the cost/eval decision itself

@@ -499,6 +499,51 @@ header, input ergonomics. **Known non-blocker:** a >500kB JS chunk-size build ad
 **Owner Figma follow-up (design file, not code):** publish the re-themed MUI kit → update the library → set
 screen frames to dark mode (per `THEME_TOKENS.md`).
 
+## 7m. Ticker UX-polish program + ai-rec structured display (SHIPPED + ARCHIVED — FE-only, catch-up QA)
+Contract archived at `.claude/contracts/_archive/ticker-microinteractions/` (the only folder; `ticker-widgets`
++ `ticker-command-deck` were GATE-V fast-paths with no folder of their own). A post-`convexa-redesign` **Ticker
+UX-polish program** — three stacked FE branches, developed as owner-approved GATE-V passes, fast-forwarded to
+`main` (the planned pre-merge consolidation QA was skipped), **plus** one post-merge external-pipeline commit.
+**Shipped:**
+- **`ticker-microinteractions` (418315a):** live motion — value flash-on-tick (LiveTape + header, gated
+  `isLive && !streamOffline`), pulsing live dot, one-time **staggered section reveal**, StatTile hover-lift, GEX
+  mount-only bar-grow; shared `useReducedMotion` + `useFlashOnChange` hooks. (GEX live-line "glide" deferred —
+  SVG x-attr animation unreliable.)
+- **`ticker-widgets` (9c66d2e→75b967e):** shared `<Widget>` shell + `WidgetSelectionContext` → all 8 data
+  sections wrapped into a bento board; feature-detected/reduced-motion-guarded/token-only cutting-edge CSS
+  (container queries, `:has()`, `color-mix()`, `@property` selected-ring, View-Transition expand-peek,
+  content-visibility); grip/⋮/add are **affordance-only coming-soon** (only expand functional) — the explicit
+  seam for future real widget functionality.
+- **`ticker-command-deck` (c481c38):** `CommandDeck.tsx` unifies toolbar + header + freshness into one chrome
+  deck + a scroll-condensed sticky bar (shared `connectionChip()` keeps the sticky price/chip live-correct).
+- **`c93dddc` (ai-rec structured display + dev seed, FE + additive BE):** structured AI-rec render (verdict hero
+  + bundle-sourced "levels in play" + Why bullets + re-engage list) off additive `summary`/`key_points`/
+  `reengage_when` LLM-schema fields (bounded/nullable in `_coerce_strategy`); availability fix (a BYO-key user on
+  a keyless deployment is no longer blocked); `anthropic` SDK added to requirements; a **gated dev demo-account
+  seed** (`SEED_TEST_ACCOUNT` default-off, **refuses postgres**, idempotent, `demo_seed` in who-am-i for login
+  pre-fill — null in prod); a cosmetic `personas.assemble()` `sections`→`widgets` dead-key rename (no wire
+  impact); the `ticker/sections/`→`ticker/widgets/` folder rename.
+**Catch-up QA (GATE Q)** on a fresh de-correlated qa-verify (Sonnet): 15 PASS / **1 FAIL** — FRONTEND_EXECUTION_
+CONTRACT §3's **staggered section reveal had silently regressed** (shipped in 418315a, dropped by 9c66d2e's bento
+restructure; **zero test covered it**, so it passed a green suite). **GATE Z bounce → conductor inline fix**
+(`Widget` `revealIndex` → inline `--widget-reveal-delay` → `widgetRise` `animation-delay`; removed the displacing
+`@supports (animation-timeline: view())` scroll override; board feeds 0..7; **4 new guarding tests**) → **GATE Q
+RE-RUN PASS 16/16** (nx test dashboard 486/486, tsc/lint/build green, render pass confirmed the 0→385ms cascade
+in Chromium; runtime conformance 11/11; score/tier/`state_fingerprint` byte-identity re-proven cold==warm).
+Commit `11e8ec3`, pushed to `main`. **GATE S:** no new graduation (all touched keys already canon; each gained
+an instance); the AC↔test-traceability lesson (system-10) reinforced — a visual/motion AC with no named test is
+where a later refactor silently regresses.
+**Deferred seams (named, not built):**
+- **Real widget functionality** — drag-reorder + resize + add/remove + per-widget config + persistence, hung on
+  the `<Widget>` shell + `WidgetSelectionContext` seam (affordances exist; wire them). Owner-framed as the seam.
+- **Deferred Ticker UX quick wins** (BACKLOG §B): distance-to-level tiles (highest value), recent-ticker
+  quick-pick chips, sticky-header refinements, input ergonomics. (Big-number formatting + freshness line already
+  shipped in the redesign.)
+- **AI-rec "Accept" → tracked position — full build-out** (BACKLOG §B, raised 2026-07-01): Accept currently opens
+  a pre-filled entry dialog; the full read→track loop (map rec structure/strikes/expiry/stop/target into a
+  tracked `Position`, mandatory confirm, decision-record linkage, no_trade/absent-Accept rules) is its own
+  feature. Held OUT of the structured-display change by owner.
+
 ## 8. Smaller deferred items (proposed, not implemented)
 - **Live gamma-flip anchoring:** when not in RTH, anchor the flip search to `gex_spot` (the
   close) instead of the live mid, for consistency with the bundle and to avoid a gapped

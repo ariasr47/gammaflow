@@ -123,6 +123,32 @@
 | `no-secrets-in-image` | deploy | S | the image is **pushed to a registry for real** (Railway) — every secret (`DATABASE_URL`, `API_ORIGIN`, `MASSIVE/ANTHROPIC` keys, `AI_KEY_ENCRYPTION_KEY`/`AUTH_SESSION_SIGNING_KEY`, `METRICS_SECRET_TOKEN`) lives only in Railway Variables / Pages env, never in the repo/image; the Pages Function reads `API_ORIGIN` from env (no hardcoded URL); secret-scan clean. **3rd instance → GRADUATES** | yes |
 | `additive-keeps-score-byte-identical` | deploy | S | deploy config + the 3 HIGH security guards (metrics token-gate, the fail-open public rate-limit leaf, the startup stable-key warning) change no scoring/engine/`state_fingerprint`; the limiter is a leaf outside the scoring path; in-memory conformance PASS, no regression | yes |
 
+> Note (GATE S, ticker-ux-polish program + c93dddc, 2026-07-01): a **catch-up GATE Q** over the three
+> already-merged ticker FE branches (`ticker-microinteractions` 418315a, `ticker-widgets` 9c66d2e→75b967e,
+> `ticker-command-deck` c481c38) **plus** the post-merge external-pipeline commit `c93dddc` (ai-rec
+> structured recommendation display + gated dev demo-account seed). The consolidation QA the prior session
+> named as the pre-merge gate had been skipped (the stack fast-forwarded to `main`); this pass ran it
+> retroactively on a **fresh de-correlated qa-verify (Sonnet)**. **No new graduation** — every touched key is
+> already Promoted canon and gained an instance: `additive-keeps-score-byte-identical` (the ticker stack is
+> `apps/api`-diff-empty; `c93dddc`'s backend delta never touches the scoring modules — AST 0/4, live cold==warm
+> byte-identity re-proven), `best-effort-isolated-or-null` (the gated `SEED_TEST_ACCOUNT` dev seed is
+> off-by-default + refuses postgres + never crashes boot; the additive AI-rec `summary`/`key_points`/
+> `reengage_when` fields are bounded/nullable), `live-vs-static-isolation` (the new live motion/flash freezes
+> on an SSE drop; reduced-motion honored), `no-real-order-path` (widget grip/⋮/add are affordance-only
+> coming-soon; the dev seed's positions are client-local sim), `operator-vs-trader-path-separation` (untouched).
+> Runtime interface conformance **11/11** across 4 specs; the `personas.assemble()` `sections`→`widgets` rename
+> confirmed **dead-key/cosmetic** (no endpoint returns it, no FE consumer reads it); `demo_seed` additive +
+> null-safe. **The one QA FAIL was a real regression, not a doc nit:** FRONTEND_EXECUTION_CONTRACT §3's
+> staggered section reveal shipped in 418315a and was **silently dropped by 9c66d2e** when the sections were
+> restructured into the bento/`Widget` grid — with **zero test covering the stagger**, so it regressed through
+> a green suite. Bounced (GATE Z) + fixed inline by the conductor (`revealIndex` → inline `--widget-reveal-delay`
+> → `widgetRise` delay; removed the displacing scroll-timeline override; 4 new guarding tests) → **GATE Q
+> RE-RUN PASS 16/16** (nx test dashboard 486/486, tsc/lint/build green, render pass confirms the 0→385ms
+> cascade in Chromium, commit `11e8ec3` pushed to `main`). **Lesson reinforced (system-10, AC↔test
+> traceability):** a motion/visual AC with no named test is exactly where a later refactor silently regresses
+> — the render pass caught it, and the fix adds the missing test. `theme-token-discipline` (watch list) held
+> again (zero hardcoded hex across the changed ticker scope).
+
 > Note (GATE S, convexa-redesign, 2026-06-30): the full **presentation-only** FE re-skin to the Figma DS
 > (all surfaces + theme/token bridge + app-wide contained-button treatment), merged to `main`. **No new
 > graduation** — it is FE-only (`apps/api` diff vs main EMPTY), so `additive-keeps-score-byte-identical` is

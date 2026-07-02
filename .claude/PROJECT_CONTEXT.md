@@ -428,6 +428,25 @@ computed bundle also feeds an **external** downstream AI that produces risk-firs
   `#4f9cff` accent unchanged). `NO_BACKEND_CHANGE` — score/tier/`state_fingerprint` byte-identical; QA PASS
   (nx test 425/425, `nx build` green). The full-page `/auth` route was owner-dropped (modal stays). See
   OPEN_THREADS §7l.
+- **Ticker UX-polish program (FE-only, shipped 2026-07-01 → `main`)** — three stacked GATE-V passes on the
+  Ticker page, plus one post-merge ai-rec commit, all now on `main`. **`ticker-microinteractions`:** tasteful
+  live motion — value flash-on-tick (LiveTape + header, gated `isLive && !streamOffline`), pulsing live dot,
+  StatTile hover-lift, GEX mount-only bar-grow, and the **one-time staggered section reveal** (shared
+  `useReducedMotion`/`useFlashOnChange` hooks). **`ticker-widgets`:** the shared `<Widget>` shell +
+  `WidgetSelectionContext` wraps all 8 data sections into a bento board (feature-detected container queries /
+  `:has()` / `color-mix()` / View-Transition expand-peek, all reduced-motion-guarded + token-only); the
+  grip/⋮/add controls are **affordance-only coming-soon** (only expand is functional) — the declared seam for
+  future real widget functionality (drag/resize/add/persist). **`ticker-command-deck`:** `CommandDeck.tsx`
+  unifies the toolbar + header + freshness line into one chrome deck with a scroll-condensed sticky bar.
+  **`c93dddc` (ai-rec, FE + additive BE):** the AI-rec panel now renders a structured read (verdict hero +
+  bundle-sourced "levels in play" + Why bullets + re-engage list) off additive `summary`/`key_points`/
+  `reengage_when` LLM-schema fields; an availability fix so a BYO-key user on a keyless deployment isn't
+  blocked; the `anthropic` SDK added to requirements; and a **gated dev demo-account seed** (`SEED_TEST_ACCOUNT`,
+  default off, **refuses postgres**, `demo_seed` advertised in who-am-i for login pre-fill — null in prod).
+  `NO_BACKEND_CHANGE` for the ticker stack; `c93dddc`'s backend delta never touches scoring — score/tier/
+  `state_fingerprint` byte-identical, conformance 11/11. **Catch-up QA PASS** (fresh de-correlated Sonnet;
+  one §3 stagger regression caught + fixed → GATE Q re-run 16/16, nx test 486/486, commit `11e8ec3`). See
+  OPEN_THREADS §7m.
 - Explanatory hover tooltips on every jargon stat/chip/chart.
 
 ## 7. Conventions
