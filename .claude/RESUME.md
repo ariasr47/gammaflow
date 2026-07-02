@@ -20,13 +20,23 @@
    expired, good-til, rec→order→position provenance); v1 trigger = underlying_above|below on live NBBO
    mid ONLY; backend `ScenarioLLMProvider` (deterministic, keyless, default-OFF env flag). PM answered
    all ten §12 questions (D1–D10; Orders on BOTH pages; honest "waiting for live data" coverage state);
-   48 ACs. **UX lane IN FLIGHT** (background) writing UX_BLUEPRINT + the 3-file split (interface must
-   use the STANDALONE conformance-spec convention → `.claude/tools/conformance/ai_rec_backtest_orders.json`).
-   **When it lands:** `contract_lint.py ai-rec-backtest-orders` → verify the standalone spec exists →
-   dispatch BOTH executioner lanes (backend: scenario provider; frontend: orders store/engine/widget —
-   fresh delivery-* subagents, "EXECUTE NOW not plan mode" framing, no commits, conductor verifies) →
-   GATE Q on a fresh de-correlated qa-verify (different model, e.g. sonnet) incl. conformance +
-   byte-identity → conductor render pass → commit/push → GATE S (archive 1/2+3/4 folders together).
+   48 ACs. **GATE U·X ✅ DONE** (`68fc23b`, lint clean): UX_BLUEPRINT + INTERFACE (purely additive on
+   the 2 existing ai-rec endpoints — `scenario_id?`/`scenario?`/`RecStatus.scenarios` always-present,
+   flag `AI_REC_SCENARIOS_ENABLED` default OFF, refusals `scenario_unavailable`/`scenario_error`; NO
+   order endpoints) + standalone spec `.claude/tools/conformance/ai_rec_backtest_orders.json` +
+   BACKEND (`ai_scenarios.py` + 9-scenario registry, 9 runtime proofs) + FRONTEND (`orders/` module,
+   `convexa.orders.v1`, pure live-cross engine, Act flow via an additive order variant of
+   `trading/TradeEntryDialog`, AC→named-test floor) all LOCKED.
+   **NEXT (the fresh session's first move):** dispatch BOTH executioner lanes IN PARALLEL off their
+   execution contracts (fresh `delivery-backend` + `delivery-frontend` subagents; "EXECUTE NOW — you
+   are NOT in plan mode" framing; no commits; each reports files + gate outputs) → conductor verifies
+   (nx test dashboard [baseline 492] · tsc · lint · build · backend boot + `interface_conformance.py
+   --contract .claude/contracts/ai-rec-backtest-orders/INTERFACE_CONTRACT.md --url
+   http://127.0.0.1:8000` · score/tier/fingerprint byte-identity) → GATE Q on a fresh de-correlated
+   qa-verify (different model, e.g. sonnet; AC↔test traceability over the 48 ACs) → conductor render
+   pass (both pages, both themes, flag OFF default + ON scenario picker) → commit/push → GATE S
+   (archive light-mode-parity[no folder—note only]/sim-entry-unification/ai-rec-backtest-orders;
+   ledger rows; then `scanner` opens with its BRIEF → architect).
 5. **`scanner`** — BRIEF written (`.claude/contracts/scanner/BRIEF.md`), queued after 4.
    Architect must re-justify the locked single-ticker decision with a perf design.
 
