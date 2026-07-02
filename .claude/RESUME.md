@@ -9,17 +9,24 @@
    panelRaised call sites themed (both dialogs, positions pills/group headers), mode-aware ticker
    chrome (StatTile/CommandDeck/TickerToolbar/Widget). Dark verified byte-identical; light verified
    on :4300 (landing/scanner/positions/ticker). 486/486, tsc/lint/build green.
-2+3. **`sim-entry-unification`** — lane IN FLIGHT (delivery-frontend, background). Contract:
-   `.claude/contracts/sim-entry-unification/FRONTEND_EXECUTION_CONTRACT.md`. One shared dialog in
-   `app/trading/TradeEntryDialog.tsx` (redesigned ghost-trade skin canonical + absorbed
-   PositionEntryDialog capabilities; both pages launch it; old two deleted), provable dead-code sweep
-   (suspect: `GhostTradePanel`), `app/README.md` directory map. Durable stores + `apps/api` untouchable.
-4. **`ai-rec-backtest-orders`** — ARCHITECTURE_CONTRACT ✅ LOCKED (GATE A·X, lint clean; manifest
-   added). Shape: client-local durable `convexa.orders.v1` SimOrder store (waiting→triggered→filled/
-   cancelled/expired, good-til bound, rec-fingerprint→order→position provenance); v1 trigger grammar =
-   underlying_above|below on live NBBO mid ONLY; backend `ScenarioLLMProvider` behind the LLMProvider
-   seam (deterministic, keyless, default-OFF env flag). **PM lane IN FLIGHT** (background) answering
-   the architect's §12 ten open questions → PRODUCT_CONTRACT.md. Then UX → GATE U·X split → lanes.
+2+3. **`sim-entry-unification`** — ✅ SHIPPED (`d704193`, pushed): ONE shared
+   `app/trading/TradeEntryDialog.tsx` on both pages (7 specs migrated + 6 new incl. the two flow
+   tests); deleted ghost-trade/TradeEntryDialog + positions/PositionEntryDialog + GhostTradePanel +
+   app.module.css (zero-importer proven); `app/README.md` map added. Conductor re-ran gates
+   (tsc/492/lint/build) + render pass (same testid both pages; anonymous gate correct; light surface
+   via extrasFor). Manifest updated. Folder ready to archive at the program's GATE S.
+4. **`ai-rec-backtest-orders`** — ARCHITECTURE + PRODUCT ✅ LOCKED (committed `3eb0f8a`; lint clean).
+   Shape: client-local durable `convexa.orders.v1` SimOrder store (waiting→triggered→filled/cancelled/
+   expired, good-til, rec→order→position provenance); v1 trigger = underlying_above|below on live NBBO
+   mid ONLY; backend `ScenarioLLMProvider` (deterministic, keyless, default-OFF env flag). PM answered
+   all ten §12 questions (D1–D10; Orders on BOTH pages; honest "waiting for live data" coverage state);
+   48 ACs. **UX lane IN FLIGHT** (background) writing UX_BLUEPRINT + the 3-file split (interface must
+   use the STANDALONE conformance-spec convention → `.claude/tools/conformance/ai_rec_backtest_orders.json`).
+   **When it lands:** `contract_lint.py ai-rec-backtest-orders` → verify the standalone spec exists →
+   dispatch BOTH executioner lanes (backend: scenario provider; frontend: orders store/engine/widget —
+   fresh delivery-* subagents, "EXECUTE NOW not plan mode" framing, no commits, conductor verifies) →
+   GATE Q on a fresh de-correlated qa-verify (different model, e.g. sonnet) incl. conformance +
+   byte-identity → conductor render pass → commit/push → GATE S (archive 1/2+3/4 folders together).
 5. **`scanner`** — BRIEF written (`.claude/contracts/scanner/BRIEF.md`), queued after 4.
    Architect must re-justify the locked single-ticker decision with a perf design.
 
