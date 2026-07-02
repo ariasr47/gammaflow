@@ -18,6 +18,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { AuthError } from '@org/api';
 import { useAuth } from './AuthContext';
 import { AUTH_COPY } from './copy';
+import { TEST_ACCOUNT_PASSWORD } from '../positions/testSeed';
 import { extras } from '../tokens';
 import { GoogleButton } from './GoogleButton';
 import { isLikelyEmail, validationFieldCopy } from './validation';
@@ -49,9 +50,19 @@ export function AuthDialog({ open, mode, onClose, onModeChange, onSuccess, reaso
   const [errors, setErrors] = useState<FieldErrors>({});
 
   // Reset transient state whenever the dialog opens or the mode flips (never carry a password over).
+  // DEV convenience: when the backend advertises a seeded test account (SEED_TEST_ACCOUNT; null in
+  // prod), pre-fill the LOGIN form with it so it needn't be retyped. Signup is never pre-filled.
   useEffect(() => {
-    if (open) { setPassword(''); setErrors({}); setSubmitting(false); }
-  }, [open, mode]);
+    if (!open) return;
+    setErrors({});
+    setSubmitting(false);
+    if (mode === 'login' && auth.demoSeed) {
+      setEmail(auth.demoSeed.email);
+      setPassword(TEST_ACCOUNT_PASSWORD);
+    } else {
+      setPassword('');
+    }
+  }, [open, mode, auth.demoSeed]);
 
   const c = mode === 'signup' ? AUTH_COPY.signup : AUTH_COPY.login;
   // Title matches the Figma AuthModal ("Welcome back" on login; the copy source's `login.title`

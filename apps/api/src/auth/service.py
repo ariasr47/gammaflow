@@ -82,6 +82,14 @@ class ResolvedSession:
 class AuthService:
     def __init__(self, stores: AuthStores):
         self.stores = stores
+        # DEV-ONLY hint: the email of a seeded fixed test account (set by main.py's gated seed) so
+        # who-am-I can advertise it and the login form can pre-fill it. None in production (postgres
+        # skips seeding), so `demo_seed` is null there and no pre-fill ever shows.
+        self._demo_seed_email: Optional[str] = None
+
+    def set_demo_seed_hint(self, email: str) -> None:
+        """Record the seeded test-account email (dev-only; surfaced in the who-am-I `demo_seed`)."""
+        self._demo_seed_email = (email or "").strip() or None
 
     # ------------------------------------------------------------------ identity shape
 
@@ -93,12 +101,16 @@ class AuthService:
         except Exception:
             google_avail = False  # absent/broken config ⇒ unavailable, never a crash (AC-G2)
 
+        # DEV-ONLY: advertise a seeded test account so the login form can pre-fill it. Null in prod.
+        demo_seed = {"email": self._demo_seed_email} if self._demo_seed_email else None
+
         if user is None:
             return {
                 "authenticated": False,
                 "user": None,
                 "google_available": google_avail,
                 "settings": None,
+                "demo_seed": demo_seed,
             }
         settings = self.stores.settings.get(user.id)
         return {
@@ -111,6 +123,7 @@ class AuthService:
             },
             "google_available": google_avail,
             "settings": settings.to_wire() if settings else None,
+            "demo_seed": demo_seed,
         }
 
     # ------------------------------------------------------------------ session resolution
@@ -170,7 +183,7 @@ class AuthService:
         except Exception:
             logger.warning("auth: session_status failed; returning anonymous", exc_info=False)
             return {"authenticated": False, "user": None,
-                    "google_available": False, "settings": None}
+                    "google_available": False, "settings": None, "demo_seed": None}
 
     # ------------------------------------------------------------------ signup / login / logout
 
@@ -216,6 +229,28 @@ class AuthService:
         self.stores.users.mark_login(user.id, time.time())
         sid = self._new_session(user.id)
         return self._identity_shape(user), sid
+
+    def ensure_account(self, *, email: str, password: str,
+                       display_name: str | None) -> bool:
+        """
+        Idempotently ensure a (dev/test) account exists with these credentials. Returns True when it
+        creates the account, False when it already existed. Creates the settings row on create and
+        does NOT open a session. Used ONLY by the gated dev seed at boot (main.py `_seed_test_account`)
+        — never on a request path. Bypasses the signup validation floor by design (operator seed, not
+        user input). No AI key is attached here (seeded accounts set the BYO key via the Settings UI).
+        """
+        if self.stores.users.get_by_email(email) is not None:
+            return False
+        pw_hash = passwords.hash_password(password)  # plaintext is never retained past this call
+        try:
+            user = self.stores.users.create(
+                email=email, password_hash=pw_hash,
+                display_name=(display_name or None), google_sub=None)
+        except errors.AuthError:
+            # A concurrent create won the unique-email race — treat as already present (idempotent).
+            return False
+        self.stores.settings.upsert_defaults(user.id)
+        return True
 
     def logout(self, cookie_value: str | None) -> None:
         """Revoke the session row server-side (idempotent — AC-D1). Never raises."""

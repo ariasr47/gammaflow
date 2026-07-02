@@ -74,7 +74,10 @@ AND ai_eval.state_fingerprint not in <fingerprints you've already evaluated>
   "exit_plan": { "target": 0.0, "stop": 0.0 },
   "time_horizon": "expected holding period",
   "confidence": "low | medium | high",
-  "rationale": "why, citing the specific Convexa levels (walls, flip, magnet, IV/HV)"
+  "summary": "ONE plain-English sentence: the verdict + the single most important reason (no jargon dump)",
+  "key_points": ["2-5 short bullets, each citing a specific level (walls, flip, magnet, IV/HV, VWAP)"],
+  "reengage_when": ["1-3 concrete conditions that would change the call"],
+  "rationale": "the full reasoning, citing the specific Convexa levels (walls, flip, magnet, IV/HV)"
 }
 \`\`\``;
 

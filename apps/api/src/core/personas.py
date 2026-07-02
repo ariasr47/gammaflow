@@ -175,7 +175,7 @@ def _framing_block(prompt_key: str, persona: dict) -> str:
 def assemble(prompt_key: str, persona: dict | None) -> dict:
     """
     REFERENCE assembly of one hand-off prompt (`entry` | `reassessment`) for a persona (or None ⇒
-    Default). Returns `{text, sections}` where `sections` are `{id, kind, label}` for FIXED/PERSONA
+    Default). Returns `{text, widgets}` where `widgets` are `{id, kind, label}` for FIXED/PERSONA
     badging. Best-effort: any failure falls back to the byte-identical Default body. This mirrors
     what the FE does client-side; it is NOT a server overlay and never touches the bundle.
     """
@@ -194,11 +194,11 @@ def assemble(prompt_key: str, persona: dict | None) -> dict:
             {"id": "fixed_tail", "kind": "fixed",
              "label": "Output / verdict schema" if prompt_key == "reassessment" else "Required output schema"},
         ]
-        return {"text": text, "sections": sections}
+        return {"text": text, "widgets": sections}
     except Exception:
         logger.debug("personas: assemble failed; falling back to Default body", exc_info=True)
         return {"text": _TEMPLATES[prompt_key]["default_text"],
-                "sections": [{"id": "default", "kind": "fixed", "label": "Default one-size prompt"}]}
+                "widgets": [{"id": "default", "kind": "fixed", "label": "Default one-size prompt"}]}
 
 
 def get_persona(persona_id: str | None) -> dict | None:

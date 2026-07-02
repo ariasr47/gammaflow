@@ -364,6 +364,17 @@ Cull verdicts (so the next discovery doesn't re-litigate):
   (`OPEN_THREADS` §7)
 
 ### B. Ready candidates (feasible, small, unscheduled)
+- **AI-rec "Accept" → tracked position — full build-out** — `RAISED 2026-07-01 (owner; during the AI-rec
+  structured-display polish)`. Wire the AI recommendation card's **Accept into ghost trade** action into the
+  positions/ghost-trade tracker end-to-end. Today Accept opens a pre-filled entry dialog (`AiRecPanel` →
+  `onAccept` → `prefill.ts` → the positions entry dialog); the full flow — mapping the rec's structure /
+  strikes / expiration / stop / target into a real tracked `Position`, the mandatory confirm, a decision
+  record linking the rec `pinned_fingerprint` to the opened position, and the no_trade / absent-Accept rule —
+  needs to be built out and QA'd as its own feature. **Held OUT of the structured-display change** (owner:
+  "don't wire Accept yet"). Sim-side precursor to §D "Ghost-trade → real path". *Value H (closes the
+  read→track loop) · Effort M.* Decision-impact cull: passes (turns an AI read into a tracked, reviewable
+  paper position). **Invariant watch:** `no-real-order-path` (sim-only), `additive-keeps-score-byte-identical`,
+  `best-effort-isolated-or-null`.
 - **Convexa-redesign — full FE re-skin program** — `✓ SHIPPED + ARCHIVED (2026-06-30)` → `_archive/convexa-redesign/`; merged to `main` (GATE S). All surfaces re-skinned to the Figma DS + theme/token bridge + app-wide contained-button treatment; `NO_BACKEND_CHANGE`; QA PASS (nx test 425/425, `nx build` green, invariants hold). Owner-dropped the `/auth` full-page route. Deferred quick wins → §B "Ticker UX quick wins". Owner Figma follow-up (publish/update the MUI kit + dark-mode frames) is design-file work, not code. Seams → OPEN_THREADS §7l. *(historical scope notes below, retained:)*
   The `convexa-redesign` branch now re-skins the **Ticker** surface to the Figma DS in code: `TickerDashboard`
   componentized into `ticker/sections/*` (Toolbar, Header, LiveTape, DealerPositioning, GexStrikeProfile,

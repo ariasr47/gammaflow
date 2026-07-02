@@ -100,7 +100,7 @@ You can read the full project schema at `node_modules/nx/schemas/nx-schema.json`
 # Read the full nx.json
 cat nx.json
 
-# Or use jq for specific sections
+# Or use jq for specific widgets
 cat nx.json | jq '.targetDefaults'
 cat nx.json | jq '.namedInputs'
 cat nx.json | jq '.plugins'

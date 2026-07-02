@@ -290,6 +290,9 @@ export interface SessionStatus {
   user: AuthUser | null;        // null when anonymous
   google_available: boolean;    // D9 config flag — drives present-disabled↔present-enabled
   settings: UserSettings | null; // null when anonymous (FE uses client-local stores instead)
+  // DEV-ONLY: present (with the seeded email) when the backend seeded a fixed test account
+  // (SEED_TEST_ACCOUNT, non-postgres); null in production. Lets the login form pre-fill it.
+  demo_seed?: { email: string } | null;
 }
 
 /** The auth-class error codes the FE maps to copy (INTERFACE §2). `auth_required` is the gated-action
@@ -635,7 +638,11 @@ export interface RecStrategy {
   exit_plan: { target: number | null; stop: number | null };
   time_horizon: string | null;
   confidence: RecConfidence | null;
-  rationale: string;
+  // Structured reasoning (additive/optional — a rec may omit them; the FE degrades gracefully).
+  summary?: string | null;         // one-line verdict lead the reader scans first
+  key_points?: string[];           // short scannable bullets, each citing a specific level
+  reengage_when?: string[];        // concrete conditions that would change the call
+  rationale: string;               // the full prose (the "show full analysis" body)
 }
 
 export interface RecPersona { id: string | null; name: string; }

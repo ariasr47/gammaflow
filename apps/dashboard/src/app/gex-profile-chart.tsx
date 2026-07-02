@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import type { StrikeRow } from '@org/api';
 import { typographyTokens } from './tokens';
-import { useReducedMotion } from './ticker/sections/useReducedMotion';
+import { useReducedMotion } from './ticker/widgets/useReducedMotion';
 
 interface Props {
   strikes: StrikeRow[];

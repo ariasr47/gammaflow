@@ -29,6 +29,18 @@ export const COPY = {
     title: 'No trade — sit this one out',
     caption: "No entry to Accept — a 'no trade' read is a complete, correct answer.",
   },
+  // Structured-reasoning section labels (the redesigned read: scannable verdict + why + re-engage,
+  // full prose behind a toggle). Sentence-case, verbatim.
+  reasoning: {
+    keyPoints: 'Why',
+    reengage: 'Re-engage when',
+    manage: 'Manage the trade',
+    levels: 'Levels in play',
+    fullRead: 'Analyst read',
+    rationale: 'Rationale',
+    showMore: 'Show full analysis',
+    showLess: 'Show less',
+  },
   unavailable: {
     title: 'AI unavailable — try again',
     body: "Couldn't get a read right now. This didn't affect the rest of the dashboard.",

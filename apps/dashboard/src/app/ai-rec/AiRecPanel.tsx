@@ -11,10 +11,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Stack, Typography, Button, Chip, Tooltip, Alert, Box, Divider,
+  Stack, Typography, Button, Chip, Tooltip, Alert, Box, Divider, Collapse,
   FormControl, Select, MenuItem, CircularProgress,
 } from '@mui/material';
-import { Widget } from '../ticker/sections/Widget';
+import { Widget } from '../ticker/widgets/Widget';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { PersonaDefinition, RecResponse, RecStrategy, TickerBundle } from '@org/api';
 import { fetchPersonas } from '@org/api';
@@ -450,6 +450,147 @@ function Field({ label, value, tip }: { label: string; value: React.ReactNode; t
 
 const fmtNum = (n: number | null | undefined) => (n == null ? '—' : String(n));
 
+// ---- Structured reasoning (the redesigned read) ----------------------------------------------
+/** Split off the first sentence as a lead; the remainder is the "rest". No lookbehind (portable). */
+export function leadAndRest(text: string): { lead: string; rest: string } {
+  const t = (text || '').trim();
+  if (!t) return { lead: '', rest: '' };
+  const m = t.match(/^[\s\S]*?[.!?](?:\s|$)/);
+  if (!m) return { lead: t, rest: '' };
+  return { lead: m[0].trim(), rest: t.slice(m[0].length).trim() };
+}
+
+/** Derive the display parts from a strategy: a one-line lead, the detail body behind the toggle, and
+ *  the key-points / re-engage lists. `summary` wins as the lead; otherwise the first sentence of the
+ *  rationale is the lead and the remaining sentences become the detail (so nothing is shown twice). */
+export function deriveReasoning(
+  s: Pick<RecStrategy, 'summary' | 'key_points' | 'reengage_when' | 'rationale'>,
+) {
+  const summary = (s.summary ?? '').trim() || null;
+  const { lead: first, rest } = leadAndRest(s.rationale ?? '');
+  return {
+    lead: summary ?? first,
+    detail: summary ? (s.rationale ?? '').trim() : rest,
+    keyPoints: (s.key_points ?? []).map((x) => x.trim()).filter(Boolean),
+    reengage: (s.reengage_when ?? []).map((x) => x.trim()).filter(Boolean),
+  };
+}
+
+const fmtCompact = (n: number): string => {
+  const a = Math.abs(n); const sign = n < 0 ? '-' : '';
+  if (a >= 1e9) return `${sign}${(a / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${sign}${(a / 1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `${sign}${(a / 1e3).toFixed(1)}K`;
+  return `${sign}${Math.round(a)}`;
+};
+
+/** A small uppercase section label (the panel's existing caption idiom). */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Typography variant="caption" sx={{ display: 'block', color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, fontWeight: 500, mb: 0.5 }}>
+      {children}
+    </Typography>
+  );
+}
+
+/** "Levels in play" — chips sourced straight from the cached bundle (no recompute, no new fetch).
+ *  Context, not a signal; omitted when the bundle isn't present. */
+export function LevelsStrip({ bundle }: { bundle: TickerBundle | null }) {
+  const m = bundle?.market_state;
+  if (!m) return null;
+  const items: { k: string; v: string }[] = [];
+  const add = (k: string, v: number | null | undefined, fmt: (n: number) => string = (n) => String(n)) => {
+    if (v != null) items.push({ k, v: fmt(v) });
+  };
+  add('call wall', m.call_wall);
+  add('gamma flip', m.gamma_flip);
+  add('put wall', m.put_wall);
+  add('max pain', m.max_pain);
+  add('net GEX', m.net_gex, fmtCompact);
+  add('IV/HV', m.iv_hv_ratio, (n) => n.toFixed(2));
+  add('VWAP', m.vwap);
+  if (!items.length) return null;
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <SectionLabel>{COPY.reasoning.levels}</SectionLabel>
+      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+        {items.map(({ k, v }) => (
+          <Box key={k} sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.75, px: 1, py: 0.5, borderRadius: 2, bgcolor: 'action.hover' }}>
+            <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 11 }}>{k}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.primary', fontFamily: MONO }}>{v}</Typography>
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
+/** Full reasoning prose, split into readable paragraphs with a constrained measure. */
+function ReasoningProse({ text }: { text: string }) {
+  const paras = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const list = paras.length ? paras : [text.trim()];
+  return (
+    <>
+      {list.map((p, i) => (
+        <Typography key={i} variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.7, maxWidth: '64ch', mb: i < list.length - 1 ? 1 : 0 }}>
+          {p}
+        </Typography>
+      ))}
+    </>
+  );
+}
+
+/** Structured reasoning: (optional lead) · Why bullets · Re-engage list · collapsible full read.
+ *  `suppressLead` is set when a verdict hero already shows the lead (the no_trade card). */
+export function ReasoningSection({ strategy, suppressLead = false, reengageLabel = COPY.reasoning.reengage }: { strategy: RecStrategy; suppressLead?: boolean; reengageLabel?: string }) {
+  const { lead, detail, keyPoints, reengage } = deriveReasoning(strategy);
+  const [open, setOpen] = useState(false);
+  return (
+    <Stack spacing={1.5}>
+      {!suppressLead && lead && <Field label={COPY.reasoning.rationale} value={lead} />}
+      {keyPoints.length > 0 && (
+        <Box>
+          <SectionLabel>{COPY.reasoning.keyPoints}</SectionLabel>
+          <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2.5 }}>
+            {keyPoints.map((k, i) => (
+              <Typography key={i} component="li" variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{k}</Typography>
+            ))}
+          </Stack>
+        </Box>
+      )}
+      {reengage.length > 0 && (
+        <Box>
+          <SectionLabel>{reengageLabel}</SectionLabel>
+          <Stack spacing={0.5}>
+            {reengage.map((r, i) => (
+              <Stack key={i} direction="row" spacing={0.75} sx={{ alignItems: 'flex-start' }}>
+                <Box component="span" aria-hidden sx={{ color: 'text.disabled', lineHeight: 1.6 }}>→</Box>
+                <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{r}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+      )}
+      {detail && (
+        <Box>
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <SectionLabel>{COPY.reasoning.fullRead}</SectionLabel>
+            <Button
+              size="small" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+              sx={{ p: 0, minWidth: 0, textTransform: 'none', fontWeight: 500 }}
+            >
+              {open ? COPY.reasoning.showLess : COPY.reasoning.showMore}
+            </Button>
+          </Stack>
+          <Collapse in={open}>
+            <Box sx={{ mt: 0.5 }}><ReasoningProse text={detail} /></Box>
+          </Collapse>
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
 // ---- The rendered rec (produced + no_trade) --------------------------------------------------
 function RecResult({
   rec, stale, dataAge, bundle, onAccept, onDismiss, onViewExport, onFresh, freshDisabled,
@@ -462,6 +603,7 @@ function RecResult({
   const isNoTrade = s.decision === 'no_trade';
   const dteMin = bundle?.market_state.dte_min;
   const dteMax = bundle?.market_state.dte_max;
+  const heroLead = deriveReasoning(s).lead;
 
   return (
     <Box>
@@ -483,17 +625,43 @@ function RecResult({
 
       <Provenance rec={rec} />
 
+      <LevelsStrip bundle={bundle} />
+
       {isNoTrade ? (
         <Box>
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <InfoOutlinedIcon color="info" sx={{ fontSize: 18 }} />
-            <Typography variant="subtitle1">{COPY.noTrade.title}</Typography>
-          </Stack>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>{s.rationale}</Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>{COPY.noTrade.caption}</Typography>
+          {/* Verdict hero — the answer at a glance (calm/info, never red), with the one-line lead. */}
+          <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'action.hover', mb: 1.5 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+              <InfoOutlinedIcon color="info" sx={{ fontSize: 18 }} />
+              <Typography variant="subtitle1">{COPY.noTrade.title}</Typography>
+              {s.confidence && (
+                <Chip size="small" variant="outlined" label={`conviction · ${s.confidence}`} />
+              )}
+            </Stack>
+            {heroLead && (
+              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.75, lineHeight: 1.6 }}>
+                {heroLead}
+              </Typography>
+            )}
+          </Box>
+          <ReasoningSection strategy={s} suppressLead />
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>{COPY.noTrade.caption}</Typography>
         </Box>
       ) : (
         <Stack spacing={1.5}>
+          {/* Verdict header — decision + direction at a glance + the one-line lead (structure and the
+              rest sit in the plan below; risk stays first among the detail tiles). */}
+          <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'action.hover' }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <InfoOutlinedIcon color="primary" sx={{ fontSize: 18 }} />
+              <Typography variant="subtitle1">{`Trade · ${s.bias}`}</Typography>
+            </Stack>
+            {heroLead && (
+              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.75, lineHeight: 1.6 }}>
+                {heroLead}
+              </Typography>
+            )}
+          </Box>
           {/* 2. RISK FIRST (foremost). Upgraded-tile chrome: rounded surface + error-tinted LEFT
               accent bar (risk = the most-important field), clipped to the radius. */}
           <Box sx={{
@@ -510,8 +678,6 @@ function RecResult({
           </Box>
           {/* 3. Plan. */}
           <Stack direction="row" spacing={4} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-            <Field label="Decision" value="Trade" />
-            <Field label="Bias" value={s.bias} />
             <Field label="Structure" value={s.structure ?? '—'} />
             <Field label="Strike(s)" value={s.strikes.length ? s.strikes.map((x) => `$${x}`).join(' / ') : '—'} />
             <Field label="Expiration"
@@ -540,7 +706,9 @@ function RecResult({
               <Chip size="small" label={s.confidence ?? '—'} />
             </Box>
           </Stack>
-          <Field label="Rationale" value={s.rationale} />
+          {/* 7. Reasoning — Why bullets + Manage list + collapsible full read (the lead is shown in
+              the verdict header above). Degrades gracefully when the model omits structure. */}
+          <ReasoningSection strategy={s} suppressLead reengageLabel={COPY.reasoning.manage} />
         </Stack>
       )}
 

@@ -66,11 +66,19 @@ faster only on a real-time tier.
   "exit_plan": { "target": 0.0, "stop": 0.0 },
   "time_horizon": "expected holding period",
   "confidence": "low | medium | high",
-  "rationale": "why, citing the specific Convexa levels (walls, flip, magnet, IV/HV)"
+  "summary": "ONE plain-English sentence: the verdict + the single most important reason (no jargon dump)",
+  "key_points": ["2-5 short bullets, each citing a specific level (walls, flip, magnet, IV/HV, VWAP)"],
+  "reengage_when": ["1-3 concrete conditions that would change the call"],
+  "rationale": "the full reasoning, citing the specific Convexa levels (walls, flip, magnet, IV/HV)"
 }
 ```
 
-When `decision` is `no_trade`, set the trade fields to `null` and explain why in
+Always fill `summary`, `key_points`, and `reengage_when` — they are how the reader scans the
+call before reading the full `rationale`. Keep `summary` to one sentence, `key_points` to short
+one-idea bullets, and `reengage_when` to concrete conditions.
+
+When `decision` is `no_trade`, set the trade fields to `null` but still fill `summary`,
+`key_points`, and `reengage_when` (what you'd need to see to take the trade), and explain fully in
 `rationale`.
 
 <!--PERSONA_DECOMP_START-->

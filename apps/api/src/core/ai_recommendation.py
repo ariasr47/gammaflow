@@ -333,6 +333,25 @@ _STRATEGY_TOOL_SCHEMA = {
         },
         "time_horizon": {"type": ["string", "null"]},
         "confidence": {"type": ["string", "null"], "enum": ["low", "medium", "high", None]},
+        "summary": {
+            "type": ["string", "null"],
+            "description": "ONE plain-English sentence a trader reads at a glance: the verdict plus "
+                           "the single most important reason. No jargon dump, no numbers-only shorthand.",
+        },
+        "key_points": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "2-5 short, scannable bullets that justify the decision, each citing a "
+                           "specific Convexa level (call/put wall, gamma flip, magnet/max pain, IV/HV, "
+                           "VWAP). One idea per bullet — not full paragraphs.",
+        },
+        "reengage_when": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "1-3 concrete conditions that would change the call. For no_trade: what "
+                           "you'd need to see to take the trade. For a trade: what would invalidate "
+                           "or let you scale it.",
+        },
         "rationale": {"type": "string"},
     },
     "required": ["decision", "bias", "strikes", "exit_plan", "rationale"],
@@ -396,6 +415,18 @@ def _coerce_strategy(raw: dict) -> dict:
     def _str_or_none(v):
         return v if isinstance(v, str) and v != "" else None
 
+    def _str_list(v, cap):
+        """A bounded list of non-empty trimmed strings (drops non-strings/blanks; caps length)."""
+        if not isinstance(v, list):
+            return []
+        out = []
+        for x in v:
+            if isinstance(x, str) and x.strip():
+                out.append(x.strip())
+            if len(out) >= cap:
+                break
+        return out
+
     strategy = {
         "decision": decision,
         "bias": bias,
@@ -409,6 +440,11 @@ def _coerce_strategy(raw: dict) -> dict:
         "exit_plan": {"target": _num_or_none(target), "stop": _num_or_none(stop)},
         "time_horizon": _str_or_none(raw.get("time_horizon")),
         "confidence": confidence,
+        # Structured reasoning (additive) — kept for BOTH trade and no_trade (they're the reasoning,
+        # not trade fields), so the no_trade nulling below never clears them.
+        "summary": _str_or_none(raw.get("summary")),
+        "key_points": _str_list(raw.get("key_points"), 5),
+        "reengage_when": _str_list(raw.get("reengage_when"), 3),
         "rationale": raw.get("rationale") if isinstance(raw.get("rationale"), str) else "",
     }
     if decision == "no_trade":
@@ -680,8 +716,16 @@ def status_payload(ai_eval: dict | None, resolved: ResolvedKey | None = None) ->
     identity = (resolved.metering_identity if resolved and resolved.metering_identity
                 else "_global")
     snap = _rate.snapshot(identity)
+    # In-app availability is TRUE when the deployment has a shared key OR the requesting user has a
+    # usable resolved key (own_key / shared_admin). Without the second clause a BYO user on a
+    # deployment with NO shared key sees "in-app AI not configured" and can never trigger their own
+    # key — the FE disables the Get button straight off this flag (useAiRecommendation → in_app_enabled).
+    # The operator kill-switch (IN_APP_ENABLED_FLAG) still gates it; anonymous reads (resolved=None)
+    # are unchanged (fall back to the shared-key check).
+    user_has_usable_key = bool(resolved and resolved.key_source in ("own_key", "shared_admin"))
+    in_app = in_app_enabled() or (IN_APP_ENABLED_FLAG and user_has_usable_key)
     payload = {
-        "availability": {"in_app_enabled": in_app_enabled()},
+        "availability": {"in_app_enabled": in_app},
         "gate": derive_gate(ai_eval, identity),
         "cap": snap["cap"],
         "remaining_free_uses": None,

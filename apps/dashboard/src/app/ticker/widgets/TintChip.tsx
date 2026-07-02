@@ -1,5 +1,5 @@
 /**
- * TintChip — the small tinted status pill from the Figma ticker sections (colored text on a subtle
+ * TintChip — the small tinted status pill from the Figma ticker widgets (colored text on a subtle
  * same-color tint): proximity chips (Off-Exchange Blocks), conviction tags (Setups), etc. `neutral`
  * renders a muted grey. Non-directional by design — the tone is chosen by the caller.
  */

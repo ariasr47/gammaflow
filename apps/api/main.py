@@ -565,6 +565,45 @@ except Exception:
     logger.warning("auth: service init deferred (will retry on first request)", exc_info=False)
 
 
+def _seed_test_account() -> None:
+    """
+    DEV-ONLY: seed a stable, always-available test account for manual testing. GATED — runs ONLY when
+    SEED_TEST_ACCOUNT is truthy AND ACCOUNT_STORE != postgres, so a fixed-credential account is NEVER
+    auto-created in the persistent/deployed backend. Idempotent + best-effort (never crashes boot).
+    Credentials are dev defaults, overridable via env; NO AI key is seeded (set it via the Settings
+    UI after signing in). The in-memory store resets on restart, so this re-seeds each boot → the
+    account is "always available" in local dev.
+    """
+    def _truthy(v: str) -> bool:
+        return v.strip().lower() in ("1", "true", "yes", "on")
+
+    if not _truthy(os.getenv("SEED_TEST_ACCOUNT", "")):
+        return
+    if os.getenv("ACCOUNT_STORE", "memory").strip().lower() == "postgres":
+        logger.warning("SEED_TEST_ACCOUNT ignored: refusing to seed a fixed-credential test account "
+                       "into ACCOUNT_STORE=postgres (dev-only feature).")
+        return
+    email = os.getenv("TEST_ACCOUNT_EMAIL", "demo@convexa.io").strip()
+    password = os.getenv("TEST_ACCOUNT_PASSWORD", "convexa-test-2026")
+    display_name = (os.getenv("TEST_ACCOUNT_DISPLAY_NAME", "Demo (test account)").strip() or None)
+    try:
+        created = auth.get_service().ensure_account(
+            email=email, password=password, display_name=display_name)
+    except Exception:
+        logger.warning("seed: test-account seed faulted (skipping)", exc_info=False)
+        return
+    try:
+        # Advertise the seeded account in who-am-I so the login form can pre-fill it (dev-only).
+        auth.get_service().set_demo_seed_hint(email)
+    except Exception:
+        pass
+    logger.info("seed: test account '%s' %s (dev-only; set the AI key via Settings after sign-in).",
+                email, "created" if created else "already present")
+
+
+_seed_test_account()
+
+
 def _resolve_auth(request: Request):
     """
     Resolve the (optional) session cookie → ResolvedSession for a GATED action. BEST-EFFORT in the

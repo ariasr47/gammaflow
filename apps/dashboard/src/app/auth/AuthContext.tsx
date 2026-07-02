@@ -22,6 +22,7 @@ import {
   getSession, login as apiLogin, signup as apiSignup, logout as apiLogout, saveSettings as apiSave,
   type SessionStatus, type AuthUser, type UserSettings, type LoginRequest, type SignupRequest,
 } from '@org/api';
+import { seedTestPositionsIfNeeded } from '../positions/testSeed';
 
 export interface AuthState {
   /** false until the first who-am-I resolves (drives the account-control loading placeholder ONLY). */
@@ -32,6 +33,9 @@ export interface AuthState {
   googleAvailable: boolean;
   /** Server settings when signed in; null when anonymous (the FE then uses client-local stores). */
   settings: UserSettings | null;
+  /** DEV-ONLY: the seeded test account the backend advertises (SEED_TEST_ACCOUNT); null in prod.
+   *  Lets the login form pre-fill it so it needn't be typed each time. */
+  demoSeed: { email: string } | null;
   /** Transient: who-am-I failed/unreachable ⇒ treat as anonymous AND surface the degraded copy on
    *  gated actions only (NEVER the trader path). */
   subsystemDegraded: boolean;
@@ -52,7 +56,7 @@ export interface AuthApi extends AuthState {
 
 const ANON: AuthState = {
   ready: false, authenticated: false, user: null, googleAvailable: false, settings: null,
-  subsystemDegraded: false,
+  demoSeed: null, subsystemDegraded: false,
 };
 
 const AuthContext = createContext<AuthApi | null>(null);
@@ -64,6 +68,7 @@ function applySession(s: SessionStatus): AuthState {
     user: s.user,
     googleAvailable: s.google_available,
     settings: s.settings,
+    demoSeed: s.demo_seed ?? null,
     subsystemDegraded: false,
   };
 }
@@ -84,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (seq.current === id) {
         setState({
           ready: true, authenticated: false, user: null, googleAvailable: false, settings: null,
-          subsystemDegraded: true,
+          demoSeed: null, subsystemDegraded: true,
         });
       }
     }
@@ -92,6 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // One who-am-I on mount. Children render immediately (anonymous-capable) while it's in flight.
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // DEV/TEST convenience: when the always-available test account signs in, seed a simulated
+  // portfolio into the client-local positions store (once, non-destructively). A no-op for every
+  // other account and best-effort — it never blocks or breaks the auth path.
+  useEffect(() => {
+    if (state.authenticated) seedTestPositionsIfNeeded(state.user?.email);
+  }, [state.authenticated, state.user?.email]);
 
   const signIn = useCallback(async (body: LoginRequest) => {
     const s = await apiLogin(body); // throws AuthError on failure (form maps the code)

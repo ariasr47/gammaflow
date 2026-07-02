@@ -1,7 +1,7 @@
 /**
  * Ticker viewer — recomposed from reusable section components (convexa-redesign Ticker re-skin +
  * componentize). The monolith's stat-tile grid, headline, toolbar, term-structure card, fresh
- * positioning, off-exchange blocks, setups, and GEX chart are now the `ticker/sections/*` components
+ * positioning, off-exchange blocks, setups, and GEX chart are now the `ticker/widgets/*` components
  * (StatTile · TickerToolbar · TickerHeader · LiveTape · DealerPositioning · GexStrikeProfile ·
  * TermStructureCard · FreshPositioning · OffExchangeBlocks · Setups). This file is the COMPOSITION +
  * data wiring only.
@@ -32,20 +32,20 @@ import { StateExportDrawer } from '../ai-rec/StateExportDrawer';
 import { recToPrefill } from '../ai-rec/prefill';
 import { COPY } from '../ai-rec/copy';
 
-import { StatSkeleton } from './sections/StatTile';
-import { WidgetSelectionProvider } from './sections/WidgetSelectionContext';
+import { StatSkeleton } from './widgets/StatTile';
+import { WidgetSelectionProvider } from './widgets/WidgetSelectionContext';
 import { ComingSoonBox } from '../ui/ComingSoonBox';
-import { TickerToolbar } from './sections/TickerToolbar';
-import { CommandDeck } from './sections/CommandDeck';
-import { LastTradeReadout } from './sections/TickerHeader';
-import { LiveTape } from './sections/LiveTape';
-import { DealerPositioning } from './sections/DealerPositioning';
-import { GexStrikeProfile } from './sections/GexStrikeProfile';
-import { TermStructureCard } from './sections/TermStructure';
-import { FreshPositioning } from './sections/FreshPositioning';
-import { OffExchangeBlocks } from './sections/OffExchangeBlocks';
-import { Setups } from './sections/Setups';
-import { humanAge } from './sections/copy';
+import { TickerToolbar } from './widgets/TickerToolbar';
+import { CommandDeck } from './widgets/CommandDeck';
+import { LastTradeReadout } from './widgets/TickerHeader';
+import { LiveTape } from './widgets/LiveTape';
+import { DealerPositioning } from './widgets/DealerPositioning';
+import { GexStrikeProfile } from './widgets/GexStrikeProfile';
+import { TermStructureCard } from './widgets/TermStructure';
+import { FreshPositioning } from './widgets/FreshPositioning';
+import { OffExchangeBlocks } from './widgets/OffExchangeBlocks';
+import { Setups } from './widgets/Setups';
+import { humanAge } from './widgets/copy';
 
 const POLL_MS = 60_000; // matches the backend cache TTL
 // A healthy SSE session pushes a payload every ~1.5s even when the market isn't ticking, so an
