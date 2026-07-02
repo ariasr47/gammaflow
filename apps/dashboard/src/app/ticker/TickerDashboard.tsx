@@ -21,8 +21,8 @@ import {
   Container, Box, Alert, Button, Skeleton, Fade, Tooltip, Typography,
 } from '@mui/material';
 import { getTicker, streamTicker, TickerBundle, LiveUpdate, RecResponse } from '@org/api';
-import { useGhostTrade } from '../ghost-trade/useGhostTrade';
-import { TradeEntryDialog, EntryPrefill } from '../ghost-trade/TradeEntryDialog';
+import { useGhostTrade, NewTradeForm } from '../ghost-trade/useGhostTrade';
+import { TradeEntryDialog, EntryPrefill, TradeEntrySubmit } from '../trading/TradeEntryDialog';
 import { PrimeBanner, tierMeta } from '../ghost-trade/OpportunityTier';
 import { usePersona } from '../personas/usePersona';
 import { PersonaCustomizeForm } from '../personas/components';
@@ -364,7 +364,11 @@ export function TickerDashboard() {
         </Fade>
       )}
 
-      {/* Ghost-trade entry. */}
+      {/* Ghost-trade entry — the SHARED sim-entry dialog (`trading/TradeEntryDialog`). The single-
+          trade engine has no resting-limit lifecycle (no `restingLimit`), so the mode-tagged submit
+          maps onto the existing `NewTradeForm`: manual/limit open immediately at the typed price
+          (basis `manual`, the shipped behavior); market opens at the resolved snapshot/theoretical
+          fill. `useGhostTrade.openTrade` is unchanged. */}
       <TradeEntryDialog
         open={entryOpen && !tradeOpen}
         ticker={ticker}
@@ -373,7 +377,15 @@ export function TickerDashboard() {
         spot={m?.price ?? 0}
         prefill={entryPrefill}
         onClose={() => setEntryOpen(false)}
-        onConfirm={(form) => { gt.openTrade(form); setEntryOpen(false); }}
+        onConfirm={(s: TradeEntrySubmit) => {
+          const base = { expiration: s.expiration, strike: s.strike, right: s.right, qty: s.qty, stop: s.stop, target: s.target };
+          const form: NewTradeForm =
+            s.entryMode === 'market'
+              ? { ...base, entryMark: s.resolvedMark, entryBasis: s.resolvedBasis }
+              : { ...base, entryMark: s.entryMode === 'manual' ? s.price : s.limitPrice, entryBasis: 'manual' };
+          gt.openTrade(form);
+          setEntryOpen(false);
+        }}
       />
 
       {/* Persona customize — presentation-only, off the compute path. */}

@@ -1,6 +1,15 @@
 # sim-entry-unification — pipeline manifest
 Entry:        owner-directed (items 2+3 of the 2026-07-01 five-item program; GATE V/refactor fast-path)
-Stage:        FRONTEND_EXECUTION_CONTRACT written — delivery-frontend lane dispatched
+Stage:        ✅ BUILT + VERIFIED — lane delivered app/trading/TradeEntryDialog (one shared dialog,
+              7 old specs migrated + 6 new incl. the two contract-mandated flow tests), deleted
+              ghost-trade/TradeEntryDialog + positions/PositionEntryDialog(+spec) + GhostTradePanel +
+              app.module.css (zero-importer proofs), added app/README.md map. Conductor independent
+              gates: tsc clean · nx test 492/492 · lint 0 err · build green. Render pass (:4300):
+              Ticker + Positions open the SAME [data-testid=trade-entry-dialog] (SIMULATED, 3 fill
+              modes, panel-raised #1c2330 dark); anonymous Positions correctly shows the sign-in gate;
+              demo sign-in exercises the server gate then opens the dialog. Light-mode surface bound
+              via extrasFor(theme).panelRaised (same mechanism render-proven on the positions pills;
+              the one "dark dialog in light" reading was server-wins-signed-in theme, correct behavior).
 Branch:       main (working tree; conductor commits after gates + render pass)
 Repos:        frontend (NO_BACKEND_CHANGE, NO_INTERFACE_CHANGE)
 Brief:        n/a (owner-directed; this contract is the spec)

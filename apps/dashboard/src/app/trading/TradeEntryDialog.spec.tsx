@@ -1,13 +1,15 @@
 /**
- * Component — the 3-mode entry dialog (S6). Mocks ONLY the network boundary (`fetch` via the @org/api
- * client) and asserts the observable fill preview + confirm payload per mode. Covers AC-12..AC-16.
+ * Component — the SHARED 3-mode sim-entry dialog (sim-entry-unification). Mocks ONLY the network
+ * boundary (`fetch` via the @org/api client) and asserts the observable fill preview + confirm
+ * payload per mode. MIGRATED from `positions/PositionEntryDialog.spec.tsx` (AC-12..AC-17 — every case
+ * kept, none dropped) + the ticker-posture cases the redesigned ghost-trade dialog carried
+ * (immediate-limit semantics, SIMULATED chip, AI prefill seeding).
  */
 import { render, screen, within, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackedContract } from '@org/api';
-import { PositionEntryDialog } from './PositionEntryDialog';
-import type { OpenPositionInput } from './usePortfolio';
+import { TradeEntryDialog, TradeEntrySubmit } from './TradeEntryDialog';
 
 const contract: TrackedContract = {
   ticker: 'TSLA', expiration: '2026-07-17', strike: 250, right: 'call',
@@ -27,10 +29,14 @@ function installFetch(result: TrackedContract | null | 'notfound' | 'throw') {
   }));
 }
 
-function renderDialog(onConfirm: (i: OpenPositionInput) => void) {
+function renderDialog(
+  onConfirm: (s: TradeEntrySubmit) => void,
+  { restingLimit = true, prefill }: { restingLimit?: boolean; prefill?: Parameters<typeof TradeEntryDialog>[0]['prefill'] } = {},
+) {
   return render(
-    <PositionEntryDialog
+    <TradeEntryDialog
       open ticker="TSLA" expirations={['2026-07-17']} strikes={[250]} spot={250}
+      restingLimit={restingLimit} prefill={prefill}
       onClose={() => undefined} onConfirm={onConfirm}
     />,
   );
@@ -50,7 +56,7 @@ describe('Manual mode (AC-12, AC-13)', () => {
     expect(await screen.findByText(/Opens at your price \$7\.50/)).toBeInTheDocument();
     expect(screen.getByText('user-entered price')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open simulated position' }));
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ entryMode: 'manual', price: 7.5 }));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ entryMode: 'manual', price: 7.5, ticker: 'TSLA' }));
   });
 
   it('succeeds even when the chain is unavailable (404) — caption + entry still works', async () => {
@@ -102,7 +108,7 @@ describe('Market mode (AC-14, AC-15, AC-16)', () => {
   });
 });
 
-describe('Limit mode (AC-17)', () => {
+describe('Limit mode — resting host (Positions, AC-17)', () => {
   it('rests as a limit order with the Place limit order label + the resting preview', async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
@@ -123,5 +129,63 @@ describe('Limit mode (AC-17)', () => {
     await user.click(screen.getByRole('button', { name: 'Limit' }));
     await user.type(screen.getByLabelText('Limit price'), '6'); // 5 <= 6 ⇒ already crossable
     await waitFor(() => expect(screen.getByText(/already at or below your limit/)).toBeInTheDocument());
+  });
+});
+
+describe('Limit mode — immediate host (Ticker, no resting lifecycle)', () => {
+  it('opens immediately at your limit price with the ghost-trade preview + confirm label', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    installFetch(contract);
+    renderDialog(onConfirm, { restingLimit: false });
+    await user.click(screen.getByRole('button', { name: 'Limit' }));
+    await user.type(screen.getByLabelText('Limit price'), '4');
+    // The shipped ghost-trade limit semantics: an immediate open at your price, not a resting order.
+    expect(await screen.findByText(/Fills at your limit \$4\.00 · Cost \$400 \(price × 100 × qty\)/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Place limit order' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Open simulated position' }));
+    // Same mode-tagged payload either way — the HOST decides what a limit means.
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ entryMode: 'limit', limitPrice: 4 }));
+  });
+});
+
+describe('shared skin + prefill seam', () => {
+  it('mounts the canonical dialog (trade-entry-dialog testid, SIMULATED chip, mandatory confirm)', async () => {
+    installFetch(contract);
+    renderDialog(vi.fn());
+    const dlg = await screen.findByTestId('trade-entry-dialog');
+    expect(within(dlg).getByText('SIMULATED')).toBeInTheDocument();
+    expect(within(dlg).getByText(/Open simulated position · TSLA/)).toBeInTheDocument();
+    expect(within(dlg).getByText(/Paper trade — no broker, no real money/)).toBeInTheDocument();
+    // Nothing is emitted without an explicit confirm; the default (manual, no price) can't confirm.
+    expect(within(dlg).getByRole('button', { name: 'Open simulated position' })).toBeDisabled();
+  });
+
+  it('seeds every EntryPrefill field editable + renders provenance and sizing copy', async () => {
+    installFetch(contract);
+    renderDialog(vi.fn(), {
+      prefill: {
+        expiration: '2026-07-17', strike: 250, right: 'put', qty: 2, stop: 6, target: 12.5,
+        provenance: 'Pre-filled from AI read · Default (no persona)', sizingNote: 'Suggested size from the AI read — adjust freely.',
+      },
+    });
+    const dlg = await screen.findByTestId('trade-entry-dialog');
+    expect(within(dlg).getByText('Pre-filled from AI read · Default (no persona)')).toBeInTheDocument();
+    expect(within(dlg).getByText(/Suggested size from the AI read/)).toBeInTheDocument();
+    expect((within(dlg).getByLabelText('Quantity') as HTMLInputElement).value).toBe('2');
+    expect((within(dlg).getByLabelText('Stop (optional)') as HTMLInputElement).value).toBe('6');
+    expect((within(dlg).getByLabelText('Target (optional)') as HTMLInputElement).value).toBe('12.5');
+  });
+
+  it('keeps the Manual and Limit typed prices mode-scoped (absorbed capability)', async () => {
+    const user = userEvent.setup();
+    installFetch(contract);
+    renderDialog(vi.fn());
+    await user.type(screen.getByLabelText('Manual price'), '7.5');
+    await user.click(screen.getByRole('button', { name: 'Limit' }));
+    expect((screen.getByLabelText('Limit price') as HTMLInputElement).value).toBe(''); // not carried over
+    await user.type(screen.getByLabelText('Limit price'), '4');
+    await user.click(screen.getByRole('button', { name: 'Manual price' }));
+    expect((screen.getByLabelText('Manual price') as HTMLInputElement).value).toBe('7.5'); // remembered
   });
 });

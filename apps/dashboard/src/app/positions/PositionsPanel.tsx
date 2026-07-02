@@ -21,7 +21,7 @@ import type { DerivedRow } from './derive';
 import type { PositionStatus } from './types';
 import { PositionsView } from './PositionsView';
 import { CustomizationToolbar } from './CustomizationToolbar';
-import { PositionEntryDialog, EntryPrefill } from './PositionEntryDialog';
+import { TradeEntryDialog, EntryPrefill } from '../trading/TradeEntryDialog';
 import type { RowContext } from './PositionRow';
 import { SignInPrompt } from '../auth/SignInPrompt';
 import { AUTH_COPY } from '../auth/copy';
@@ -123,13 +123,18 @@ export function PositionsPanel({
         onCancel={pf.cancelLimit}
       />
 
-      <PositionEntryDialog
+      {/* The SHARED sim-entry dialog (`trading/TradeEntryDialog`, also the Ticker page's). Positions
+          rests a limit `pending` (fills only on a live cross via the existing resolver lifecycle), so
+          `restingLimit` is on. Its mode-tagged submit is structurally an `OpenPositionInput`; confirm
+          stays the server-gated write upstream (`useGate` → POST /api/positions/sim-trade/gate). */}
+      <TradeEntryDialog
         open={entryOpen}
         ticker={ticker}
         expirations={expirations}
         strikes={strikeList}
         spot={m?.price ?? 0}
         prefill={entryPrefill}
+        restingLimit
         onClose={() => onEntryOpen(false)}
         onConfirm={onConfirm}
       />

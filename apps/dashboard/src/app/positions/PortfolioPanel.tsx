@@ -18,7 +18,7 @@ import type { TickerBundle, LiveUpdate } from '@org/api';
 import { usePortfolio, OpenPositionInput } from './usePortfolio';
 import { PositionsPanel } from './PositionsPanel';
 import { LiveTabPanel } from './LiveTabPanel';
-import { EntryPrefill } from './PositionEntryDialog';
+import { EntryPrefill } from '../trading/TradeEntryDialog';
 import { useGate } from '../auth/useGate';
 import { AUTH_COPY } from '../auth/copy';
 
